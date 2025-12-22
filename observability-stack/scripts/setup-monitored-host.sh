@@ -6,14 +6,20 @@
 #
 # This script is IDEMPOTENT - safe to run multiple times.
 #
-# Usage: ./setup-monitored-host.sh <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS> [--force]
-# Example: ./setup-monitored-host.sh 10.0.0.5 https://mentat.arewel.com loki mypassword
+# Usage:
+#   ./setup-monitored-host.sh <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS>
+#   ./setup-monitored-host.sh --uninstall [--purge]
+#
+# Example:
+#   ./setup-monitored-host.sh 10.0.0.5 https://mentat.arewel.com loki mypassword
 #===============================================================================
 
 set -euo pipefail
 
-# Force mode flag
+# Mode flags
 FORCE_MODE=false
+UNINSTALL_MODE=false
+PURGE_DATA=false
 
 # Colors
 RED='\033[0;31m'
@@ -29,7 +35,7 @@ MYSQLD_EXPORTER_VERSION="0.15.1"
 PHPFPM_EXPORTER_VERSION="2.2.0"
 PROMTAIL_VERSION="2.9.3"
 
-# Script arguments (parse --force from any position)
+# Script arguments (parse flags from any position)
 OBSERVABILITY_IP=""
 LOKI_URL=""
 LOKI_USER=""
@@ -40,8 +46,15 @@ for arg in "$@"; do
         --force|-f)
             FORCE_MODE=true
             ;;
+        --uninstall|--rollback)
+            UNINSTALL_MODE=true
+            ;;
+        --purge)
+            PURGE_DATA=true
+            ;;
         --help|-h)
-            echo "Usage: $0 <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS> [--force]"
+            echo "Usage: $0 <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS> [OPTIONS]"
+            echo "       $0 --uninstall [--purge]"
             echo ""
             echo "Arguments:"
             echo "  OBSERVABILITY_VPS_IP  - IP address of the observability server"
@@ -51,6 +64,8 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --force, -f           - Force reinstall everything from scratch"
+            echo "  --uninstall           - Remove all monitoring agents"
+            echo "  --purge               - Used with --uninstall to remove configs too"
             echo "  --help, -h            - Show this help message"
             exit 0
             ;;
@@ -138,6 +153,149 @@ is_phpfpm_exporter_installed() {
 
 is_promtail_installed() {
     check_binary_version "/usr/local/bin/promtail" "$PROMTAIL_VERSION" "-version"
+}
+
+#===============================================================================
+# UNINSTALL FUNCTIONS
+#===============================================================================
+
+uninstall_node_exporter() {
+    log_info "Uninstalling Node Exporter..."
+
+    systemctl stop node_exporter 2>/dev/null || true
+    systemctl disable node_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/node_exporter.service
+    rm -f /usr/local/bin/node_exporter
+
+    userdel node_exporter 2>/dev/null || true
+    groupdel node_exporter 2>/dev/null || true
+
+    log_success "Node Exporter uninstalled"
+}
+
+uninstall_nginx_exporter() {
+    log_info "Uninstalling Nginx Exporter..."
+
+    systemctl stop nginx_exporter 2>/dev/null || true
+    systemctl disable nginx_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/nginx_exporter.service
+    rm -f /usr/local/bin/nginx-prometheus-exporter
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -f /etc/nginx/conf.d/stub_status.conf
+        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    fi
+
+    userdel nginx_exporter 2>/dev/null || true
+    groupdel nginx_exporter 2>/dev/null || true
+
+    log_success "Nginx Exporter uninstalled"
+}
+
+uninstall_mysqld_exporter() {
+    log_info "Uninstalling MySQL Exporter..."
+
+    systemctl stop mysqld_exporter 2>/dev/null || true
+    systemctl disable mysqld_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/mysqld_exporter.service
+    rm -f /usr/local/bin/mysqld_exporter
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -rf /etc/mysqld_exporter
+    fi
+
+    userdel mysqld_exporter 2>/dev/null || true
+    groupdel mysqld_exporter 2>/dev/null || true
+
+    log_success "MySQL Exporter uninstalled"
+}
+
+uninstall_phpfpm_exporter() {
+    log_info "Uninstalling PHP-FPM Exporter..."
+
+    systemctl stop phpfpm_exporter 2>/dev/null || true
+    systemctl disable phpfpm_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/phpfpm_exporter.service
+    rm -f /usr/local/bin/php-fpm_exporter
+
+    userdel phpfpm_exporter 2>/dev/null || true
+    groupdel phpfpm_exporter 2>/dev/null || true
+
+    log_success "PHP-FPM Exporter uninstalled"
+}
+
+uninstall_promtail() {
+    log_info "Uninstalling Promtail..."
+
+    systemctl stop promtail 2>/dev/null || true
+    systemctl disable promtail 2>/dev/null || true
+
+    rm -f /etc/systemd/system/promtail.service
+    rm -f /usr/local/bin/promtail
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -rf /etc/promtail
+        rm -rf /var/lib/promtail
+    fi
+
+    userdel promtail 2>/dev/null || true
+    groupdel promtail 2>/dev/null || true
+
+    log_success "Promtail uninstalled"
+}
+
+remove_firewall_rules() {
+    log_info "Removing firewall rules for exporters..."
+
+    # Remove rules for exporter ports
+    for port in 9100 9113 9104 9253; do
+        ufw delete allow from any to any port "$port" proto tcp 2>/dev/null || true
+    done
+
+    log_success "Firewall rules removed"
+}
+
+run_uninstall() {
+    echo ""
+    echo "=========================================="
+    echo -e "${RED}Uninstalling Monitoring Agents${NC}"
+    echo "=========================================="
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        echo -e "${RED}>>> PURGE MODE: Configs will be deleted! <<<${NC}"
+    else
+        echo -e "${YELLOW}>>> Configs will be preserved <<<${NC}"
+    fi
+    echo ""
+
+    check_root
+
+    uninstall_promtail
+    uninstall_phpfpm_exporter
+    uninstall_mysqld_exporter
+    uninstall_nginx_exporter
+    uninstall_node_exporter
+    remove_firewall_rules
+
+    systemctl daemon-reload
+
+    echo ""
+    echo "=========================================="
+    echo -e "${GREEN}Uninstallation Complete${NC}"
+    echo "=========================================="
+    if [[ "$PURGE_DATA" != "true" ]]; then
+        echo ""
+        echo "Configuration preserved:"
+        echo "  /etc/promtail/         - Promtail config"
+        echo "  /etc/mysqld_exporter/  - MySQL exporter credentials"
+        echo ""
+        echo "To completely remove configs, run:"
+        echo "  $0 --uninstall --purge"
+    fi
+    echo ""
 }
 
 check_root() {
@@ -738,6 +896,12 @@ print_summary() {
 #===============================================================================
 
 main() {
+    # Handle uninstall mode
+    if [[ "$UNINSTALL_MODE" == "true" ]]; then
+        run_uninstall
+        exit 0
+    fi
+
     echo ""
     echo "=========================================="
     echo "Monitored Host Agent Setup"

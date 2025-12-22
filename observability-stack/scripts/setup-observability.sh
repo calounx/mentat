@@ -8,17 +8,26 @@
 #   - Skips installation of already installed components (at correct version)
 #   - Skips firewall configuration if already configured
 #   - Renews SSL certificates only if expired or expiring within 7 days
+#   - Creates backups before modifying configuration files
 #   - Always updates configuration files to reflect latest settings
 #
 # Usage:
-#   ./setup-observability.sh           # Normal run (idempotent)
-#   ./setup-observability.sh --force   # Force reinstall everything from scratch
+#   ./setup-observability.sh                    # Normal run (idempotent)
+#   ./setup-observability.sh --force            # Force reinstall everything
+#   ./setup-observability.sh --uninstall        # Remove all components
+#   ./setup-observability.sh --uninstall --purge # Remove including data
 #===============================================================================
 
 set -euo pipefail
 
-# Force mode flag
+# Mode flags
 FORCE_MODE=false
+UNINSTALL_MODE=false
+PURGE_DATA=false
+
+# Backup directory
+BACKUP_DIR="/var/backups/observability-stack"
+BACKUP_TIMESTAMP=""
 
 # Parse command line arguments
 parse_args() {
@@ -28,12 +37,28 @@ parse_args() {
                 FORCE_MODE=true
                 shift
                 ;;
+            --uninstall|--rollback)
+                UNINSTALL_MODE=true
+                shift
+                ;;
+            --purge)
+                PURGE_DATA=true
+                shift
+                ;;
             --help|-h)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  --force, -f    Force reinstall everything from scratch"
-                echo "  --help, -h     Show this help message"
+                echo "  --force, -f        Force reinstall everything from scratch"
+                echo "  --uninstall        Remove all observability components (keeps data)"
+                echo "  --purge            Used with --uninstall to also remove all data"
+                echo "  --help, -h         Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0                           # Install/update (idempotent)"
+                echo "  $0 --force                   # Force complete reinstall"
+                echo "  $0 --uninstall               # Uninstall, keep data for recovery"
+                echo "  $0 --uninstall --purge       # Complete removal including data"
                 exit 0
                 ;;
             *)
@@ -114,6 +139,268 @@ check_root() {
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root"
     fi
+}
+
+#===============================================================================
+# BACKUP FUNCTIONS
+#===============================================================================
+
+init_backup() {
+    BACKUP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    mkdir -p "${BACKUP_DIR}/${BACKUP_TIMESTAMP}"
+    log_info "Backup directory: ${BACKUP_DIR}/${BACKUP_TIMESTAMP}"
+}
+
+backup_file() {
+    local src="$1"
+    local name="${2:-$(basename "$src")}"
+
+    if [[ -f "$src" ]]; then
+        cp "$src" "${BACKUP_DIR}/${BACKUP_TIMESTAMP}/${name}"
+        log_info "Backed up: $src"
+    fi
+}
+
+backup_dir() {
+    local src="$1"
+    local name="${2:-$(basename "$src")}"
+
+    if [[ -d "$src" ]]; then
+        cp -r "$src" "${BACKUP_DIR}/${BACKUP_TIMESTAMP}/${name}"
+        log_info "Backed up directory: $src"
+    fi
+}
+
+create_backup() {
+    log_info "Creating backup of existing configuration..."
+    init_backup
+
+    # Backup Prometheus configs
+    backup_file "/etc/prometheus/prometheus.yml"
+    backup_dir "/etc/prometheus/rules" "prometheus_rules"
+
+    # Backup Alertmanager configs
+    backup_file "/etc/alertmanager/alertmanager.yml"
+    backup_dir "/etc/alertmanager/templates" "alertmanager_templates"
+
+    # Backup Loki config
+    backup_file "/etc/loki/loki-config.yaml"
+
+    # Backup Grafana configs
+    backup_file "/etc/grafana/grafana.ini"
+    backup_dir "/etc/grafana/provisioning" "grafana_provisioning"
+    backup_file "/etc/grafana/.secret_key" "grafana_secret_key"
+
+    # Backup Nginx configs
+    backup_file "/etc/nginx/sites-available/observability"
+    backup_file "/etc/nginx/.htpasswd_prometheus"
+    backup_file "/etc/nginx/.htpasswd_loki"
+
+    # Backup systemd service files
+    for service in prometheus node_exporter alertmanager loki; do
+        backup_file "/etc/systemd/system/${service}.service"
+    done
+
+    log_success "Backup created at ${BACKUP_DIR}/${BACKUP_TIMESTAMP}"
+}
+
+list_backups() {
+    echo "Available backups:"
+    if [[ -d "$BACKUP_DIR" ]]; then
+        ls -la "$BACKUP_DIR" 2>/dev/null || echo "  No backups found"
+    else
+        echo "  No backups found"
+    fi
+}
+
+#===============================================================================
+# UNINSTALL FUNCTIONS
+#===============================================================================
+
+uninstall_prometheus() {
+    log_info "Uninstalling Prometheus..."
+
+    systemctl stop prometheus 2>/dev/null || true
+    systemctl disable prometheus 2>/dev/null || true
+
+    rm -f /etc/systemd/system/prometheus.service
+    rm -f /usr/local/bin/prometheus /usr/local/bin/promtool
+    rm -rf /etc/prometheus
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -rf /var/lib/prometheus
+        log_info "  Purged Prometheus data"
+    fi
+
+    userdel prometheus 2>/dev/null || true
+    groupdel prometheus 2>/dev/null || true
+
+    log_success "Prometheus uninstalled"
+}
+
+uninstall_node_exporter() {
+    log_info "Uninstalling Node Exporter..."
+
+    systemctl stop node_exporter 2>/dev/null || true
+    systemctl disable node_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/node_exporter.service
+    rm -f /usr/local/bin/node_exporter
+
+    userdel node_exporter 2>/dev/null || true
+    groupdel node_exporter 2>/dev/null || true
+
+    log_success "Node Exporter uninstalled"
+}
+
+uninstall_alertmanager() {
+    log_info "Uninstalling Alertmanager..."
+
+    systemctl stop alertmanager 2>/dev/null || true
+    systemctl disable alertmanager 2>/dev/null || true
+
+    rm -f /etc/systemd/system/alertmanager.service
+    rm -f /usr/local/bin/alertmanager /usr/local/bin/amtool
+    rm -rf /etc/alertmanager
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -rf /var/lib/alertmanager
+        log_info "  Purged Alertmanager data"
+    fi
+
+    userdel alertmanager 2>/dev/null || true
+    groupdel alertmanager 2>/dev/null || true
+
+    log_success "Alertmanager uninstalled"
+}
+
+uninstall_loki() {
+    log_info "Uninstalling Loki..."
+
+    systemctl stop loki 2>/dev/null || true
+    systemctl disable loki 2>/dev/null || true
+
+    rm -f /etc/systemd/system/loki.service
+    rm -f /usr/local/bin/loki
+    rm -rf /etc/loki
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -rf /var/lib/loki
+        log_info "  Purged Loki data"
+    fi
+
+    userdel loki 2>/dev/null || true
+    groupdel loki 2>/dev/null || true
+
+    log_success "Loki uninstalled"
+}
+
+uninstall_grafana() {
+    log_info "Uninstalling Grafana..."
+
+    systemctl stop grafana-server 2>/dev/null || true
+    systemctl disable grafana-server 2>/dev/null || true
+
+    apt-get remove -y grafana 2>/dev/null || true
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        apt-get purge -y grafana 2>/dev/null || true
+        rm -rf /var/lib/grafana
+        rm -rf /etc/grafana
+        log_info "  Purged Grafana data"
+    fi
+
+    rm -f /etc/apt/sources.list.d/grafana.list
+    rm -f /usr/share/keyrings/grafana.key
+
+    log_success "Grafana uninstalled"
+}
+
+uninstall_nginx_config() {
+    log_info "Removing Nginx observability configuration..."
+
+    rm -f /etc/nginx/sites-enabled/observability
+    rm -f /etc/nginx/sites-available/observability
+    rm -f /etc/nginx/.htpasswd_prometheus
+    rm -f /etc/nginx/.htpasswd_loki
+
+    # Restore default site if it exists
+    if [[ -f /etc/nginx/sites-available/default ]]; then
+        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+    fi
+
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+
+    log_success "Nginx configuration removed"
+}
+
+uninstall_ssl() {
+    log_info "Removing SSL certificates..."
+
+    if [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+        certbot delete --cert-name "${GRAFANA_DOMAIN}" --non-interactive 2>/dev/null || true
+        log_info "  Removed certificate for ${GRAFANA_DOMAIN}"
+    fi
+
+    rm -rf /var/www/certbot
+
+    log_success "SSL certificates removed"
+}
+
+run_uninstall() {
+    echo ""
+    echo "=========================================="
+    echo -e "${RED}Uninstalling Observability Stack${NC}"
+    echo "=========================================="
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        echo -e "${RED}>>> PURGE MODE: All data will be deleted! <<<${NC}"
+    else
+        echo -e "${YELLOW}>>> Data will be preserved for potential recovery <<<${NC}"
+    fi
+    echo ""
+
+    check_root
+
+    # Try to parse config for domain name (for SSL removal)
+    if [[ -f "$CONFIG_FILE" ]]; then
+        GRAFANA_DOMAIN=$(yaml_get_nested "$CONFIG_FILE" "network" "grafana_domain") || true
+    fi
+
+    # Create backup before uninstall (unless purging)
+    if [[ "$PURGE_DATA" != "true" ]]; then
+        create_backup
+    fi
+
+    # Uninstall in reverse order of installation
+    uninstall_ssl
+    uninstall_nginx_config
+    uninstall_grafana
+    uninstall_loki
+    uninstall_alertmanager
+    uninstall_node_exporter
+    uninstall_prometheus
+
+    # Reload systemd
+    systemctl daemon-reload
+
+    echo ""
+    echo "=========================================="
+    echo -e "${GREEN}Uninstallation Complete${NC}"
+    echo "=========================================="
+    if [[ "$PURGE_DATA" != "true" ]]; then
+        echo ""
+        echo "Data directories preserved:"
+        echo "  /var/lib/prometheus  - Prometheus metrics data"
+        echo "  /var/lib/loki        - Loki log data"
+        echo "  /var/lib/grafana     - Grafana dashboards and settings"
+        echo "  /var/lib/alertmanager - Alertmanager state"
+        echo ""
+        echo "Backup location: ${BACKUP_DIR}/${BACKUP_TIMESTAMP}"
+        echo ""
+        echo "To completely remove all data, run:"
+        echo "  $0 --uninstall --purge"
+    fi
+    echo ""
 }
 
 #===============================================================================
@@ -937,7 +1224,29 @@ final_setup() {
 # MAIN
 #===============================================================================
 
+validate_config() {
+    local missing=""
+
+    [[ -z "${GRAFANA_DOMAIN:-}" ]] && missing="$missing GRAFANA_DOMAIN"
+    [[ -z "${LETSENCRYPT_EMAIL:-}" ]] && missing="$missing LETSENCRYPT_EMAIL"
+    [[ -z "${GRAFANA_ADMIN_PASS:-}" ]] && missing="$missing GRAFANA_ADMIN_PASS"
+    [[ -z "${PROMETHEUS_USER:-}" ]] && missing="$missing PROMETHEUS_USER"
+    [[ -z "${PROMETHEUS_PASS:-}" ]] && missing="$missing PROMETHEUS_PASS"
+
+    if [[ -n "$missing" ]]; then
+        log_error "Missing required configuration values:$missing"
+    fi
+
+    log_success "Configuration validated"
+}
+
 main() {
+    # Handle uninstall mode
+    if [[ "$UNINSTALL_MODE" == "true" ]]; then
+        run_uninstall
+        exit 0
+    fi
+
     echo ""
     echo "=========================================="
     echo "Observability Stack Setup for Debian 13"
@@ -950,6 +1259,12 @@ main() {
     check_root
     check_config
     parse_config
+    validate_config
+
+    # Create backup before making changes (if configs exist)
+    if [[ -f "/etc/prometheus/prometheus.yml" ]] || [[ -f "/etc/grafana/grafana.ini" ]]; then
+        create_backup
+    fi
 
     prepare_system
     configure_firewall
