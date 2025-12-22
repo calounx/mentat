@@ -4,11 +4,16 @@
 # Installs: node_exporter, nginx-prometheus-exporter, mysqld_exporter,
 #           php-fpm_exporter, promtail
 #
-# Usage: ./setup-monitored-host.sh <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS>
+# This script is IDEMPOTENT - safe to run multiple times.
+#
+# Usage: ./setup-monitored-host.sh <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS> [--force]
 # Example: ./setup-monitored-host.sh 10.0.0.5 https://mentat.arewel.com loki mypassword
 #===============================================================================
 
 set -euo pipefail
+
+# Force mode flag
+FORCE_MODE=false
 
 # Colors
 RED='\033[0;31m'
@@ -24,11 +29,45 @@ MYSQLD_EXPORTER_VERSION="0.15.1"
 PHPFPM_EXPORTER_VERSION="2.2.0"
 PROMTAIL_VERSION="2.9.3"
 
-# Script arguments
-OBSERVABILITY_IP="${1:-}"
-LOKI_URL="${2:-}"
-LOKI_USER="${3:-}"
-LOKI_PASS="${4:-}"
+# Script arguments (parse --force from any position)
+OBSERVABILITY_IP=""
+LOKI_URL=""
+LOKI_USER=""
+LOKI_PASS=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --force|-f)
+            FORCE_MODE=true
+            ;;
+        --help|-h)
+            echo "Usage: $0 <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS> [--force]"
+            echo ""
+            echo "Arguments:"
+            echo "  OBSERVABILITY_VPS_IP  - IP address of the observability server"
+            echo "  LOKI_URL              - URL for Loki (e.g., https://mentat.arewel.com)"
+            echo "  LOKI_USER             - Loki basic auth username"
+            echo "  LOKI_PASS             - Loki basic auth password"
+            echo ""
+            echo "Options:"
+            echo "  --force, -f           - Force reinstall everything from scratch"
+            echo "  --help, -h            - Show this help message"
+            exit 0
+            ;;
+        *)
+            # Assign positional arguments
+            if [[ -z "$OBSERVABILITY_IP" ]]; then
+                OBSERVABILITY_IP="$arg"
+            elif [[ -z "$LOKI_URL" ]]; then
+                LOKI_URL="$arg"
+            elif [[ -z "$LOKI_USER" ]]; then
+                LOKI_USER="$arg"
+            elif [[ -z "$LOKI_PASS" ]]; then
+                LOKI_PASS="$arg"
+            fi
+            ;;
+    esac
+done
 
 #===============================================================================
 # UTILITY FUNCTIONS
@@ -42,6 +81,10 @@ log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
+log_skip() {
+    echo -e "${GREEN}[SKIP]${NC} $1"
+}
+
 log_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
@@ -49,6 +92,52 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
     exit 1
+}
+
+#===============================================================================
+# VERSION CHECK FUNCTIONS
+#===============================================================================
+
+check_binary_version() {
+    local binary="$1"
+    local expected_version="$2"
+    local version_flag="${3:---version}"
+
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        return 1
+    fi
+
+    if [[ ! -x "$binary" ]]; then
+        return 1
+    fi
+
+    local current_version
+    current_version=$("$binary" "$version_flag" 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+    if [[ "$current_version" == "$expected_version" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+is_node_exporter_installed() {
+    check_binary_version "/usr/local/bin/node_exporter" "$NODE_EXPORTER_VERSION"
+}
+
+is_nginx_exporter_installed() {
+    check_binary_version "/usr/local/bin/nginx-prometheus-exporter" "$NGINX_EXPORTER_VERSION"
+}
+
+is_mysqld_exporter_installed() {
+    check_binary_version "/usr/local/bin/mysqld_exporter" "$MYSQLD_EXPORTER_VERSION"
+}
+
+is_phpfpm_exporter_installed() {
+    check_binary_version "/usr/local/bin/php-fpm_exporter" "$PHPFPM_EXPORTER_VERSION"
+}
+
+is_promtail_installed() {
+    check_binary_version "/usr/local/bin/promtail" "$PROMTAIL_VERSION" "-version"
 }
 
 check_root() {
@@ -82,23 +171,38 @@ get_hostname() {
 prepare_system() {
     log_info "Preparing system..."
 
-    apt-get update
-    apt-get install -y wget curl unzip ufw
+    apt-get update -qq
+    apt-get install -y -qq wget curl unzip ufw
 
-    log_success "System packages installed"
+    log_success "System packages verified/installed"
 }
 
 configure_firewall() {
     log_info "Configuring firewall..."
 
-    # Allow SSH
+    # Force mode resets firewall
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Force mode: resetting firewall..."
+        ufw --force reset
+    fi
+
+    # Allow SSH (idempotent - ufw handles duplicates)
     ufw allow 22/tcp
 
     # Allow Prometheus scraping from observability VPS
-    ufw allow from "$OBSERVABILITY_IP" to any port 9100 proto tcp  # node_exporter
-    ufw allow from "$OBSERVABILITY_IP" to any port 9113 proto tcp  # nginx_exporter
-    ufw allow from "$OBSERVABILITY_IP" to any port 9104 proto tcp  # mysqld_exporter
-    ufw allow from "$OBSERVABILITY_IP" to any port 9253 proto tcp  # phpfpm_exporter
+    # Check if rules already exist to avoid duplicate warnings
+    if ! ufw status | grep -q "$OBSERVABILITY_IP.*9100"; then
+        ufw allow from "$OBSERVABILITY_IP" to any port 9100 proto tcp  # node_exporter
+    fi
+    if ! ufw status | grep -q "$OBSERVABILITY_IP.*9113"; then
+        ufw allow from "$OBSERVABILITY_IP" to any port 9113 proto tcp  # nginx_exporter
+    fi
+    if ! ufw status | grep -q "$OBSERVABILITY_IP.*9104"; then
+        ufw allow from "$OBSERVABILITY_IP" to any port 9104 proto tcp  # mysqld_exporter
+    fi
+    if ! ufw status | grep -q "$OBSERVABILITY_IP.*9253"; then
+        ufw allow from "$OBSERVABILITY_IP" to any port 9253 proto tcp  # phpfpm_exporter
+    fi
 
     # Enable firewall if not already enabled
     ufw --force enable
@@ -111,9 +215,16 @@ configure_firewall() {
 #===============================================================================
 
 install_node_exporter() {
+    if is_node_exporter_installed; then
+        log_skip "Node Exporter ${NODE_EXPORTER_VERSION} already installed"
+        systemctl is-active --quiet node_exporter || systemctl start node_exporter
+        return
+    fi
+
     log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
-    useradd --no-create-home --shell /bin/false node_exporter || true
+    systemctl stop node_exporter 2>/dev/null || true
+    useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
 
     cd /tmp
     wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
@@ -147,7 +258,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable node_exporter
-    systemctl start node_exporter
+    systemctl restart node_exporter
 
     log_success "Node Exporter installed (port 9100)"
 }
@@ -157,15 +268,22 @@ EOF
 #===============================================================================
 
 install_nginx_exporter() {
-    log_info "Installing Nginx Prometheus Exporter ${NGINX_EXPORTER_VERSION}..."
-
     # Check if nginx is installed
     if ! command -v nginx &> /dev/null; then
         log_warn "Nginx not found, skipping nginx_exporter"
         return
     fi
 
-    useradd --no-create-home --shell /bin/false nginx_exporter || true
+    if is_nginx_exporter_installed; then
+        log_skip "Nginx Exporter ${NGINX_EXPORTER_VERSION} already installed"
+        systemctl is-active --quiet nginx_exporter || systemctl start nginx_exporter
+        return
+    fi
+
+    log_info "Installing Nginx Prometheus Exporter ${NGINX_EXPORTER_VERSION}..."
+
+    systemctl stop nginx_exporter 2>/dev/null || true
+    useradd --no-create-home --shell /bin/false nginx_exporter 2>/dev/null || true
 
     cd /tmp
     wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
@@ -177,7 +295,8 @@ install_nginx_exporter() {
     rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
 
     # Enable nginx stub_status if not already enabled
-    if ! grep -q "stub_status" /etc/nginx/sites-enabled/* 2>/dev/null; then
+    if ! grep -q "stub_status" /etc/nginx/sites-enabled/* 2>/dev/null && \
+       ! grep -q "stub_status" /etc/nginx/conf.d/* 2>/dev/null; then
         log_info "Enabling Nginx stub_status..."
         cat > /etc/nginx/conf.d/stub_status.conf << 'EOF'
 server {
@@ -217,7 +336,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable nginx_exporter
-    systemctl start nginx_exporter
+    systemctl restart nginx_exporter
 
     log_success "Nginx Exporter installed (port 9113)"
 }
@@ -227,15 +346,21 @@ EOF
 #===============================================================================
 
 install_mysqld_exporter() {
-    log_info "Installing MySQL Exporter ${MYSQLD_EXPORTER_VERSION}..."
-
     # Check if MySQL/MariaDB is installed
     if ! command -v mysql &> /dev/null && ! command -v mariadb &> /dev/null; then
         log_warn "MySQL/MariaDB not found, skipping mysqld_exporter"
         return
     fi
 
-    useradd --no-create-home --shell /bin/false mysqld_exporter || true
+    if is_mysqld_exporter_installed; then
+        log_skip "MySQL Exporter ${MYSQLD_EXPORTER_VERSION} already installed"
+        return
+    fi
+
+    log_info "Installing MySQL Exporter ${MYSQLD_EXPORTER_VERSION}..."
+
+    systemctl stop mysqld_exporter 2>/dev/null || true
+    useradd --no-create-home --shell /bin/false mysqld_exporter 2>/dev/null || true
 
     cd /tmp
     wget -q "https://github.com/prometheus/mysqld_exporter/releases/download/v${MYSQLD_EXPORTER_VERSION}/mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
@@ -246,25 +371,18 @@ install_mysqld_exporter() {
 
     rm -rf "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64" "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
 
-    # Create MySQL user for exporter if it doesn't exist
-    log_info "Creating MySQL exporter user..."
-    cat << 'MYSQL_SCRIPT'
--- Run these commands in MySQL/MariaDB as root:
--- CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY 'CHANGE_ME_EXPORTER_PASSWORD';
--- GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';
--- FLUSH PRIVILEGES;
-MYSQL_SCRIPT
-
-    # Create credentials file
+    # Create credentials file only if it doesn't exist
     mkdir -p /etc/mysqld_exporter
-    cat > /etc/mysqld_exporter/.my.cnf << 'EOF'
+    if [[ ! -f /etc/mysqld_exporter/.my.cnf ]]; then
+        cat > /etc/mysqld_exporter/.my.cnf << 'EOF'
 [client]
 user=exporter
 password=CHANGE_ME_EXPORTER_PASSWORD
 host=localhost
 EOF
-    chmod 600 /etc/mysqld_exporter/.my.cnf
-    chown mysqld_exporter:mysqld_exporter /etc/mysqld_exporter/.my.cnf
+        chmod 600 /etc/mysqld_exporter/.my.cnf
+        chown mysqld_exporter:mysqld_exporter /etc/mysqld_exporter/.my.cnf
+    fi
 
     cat > /etc/systemd/system/mysqld_exporter.service << 'EOF'
 [Unit]
@@ -321,15 +439,22 @@ EOF
 #===============================================================================
 
 install_phpfpm_exporter() {
-    log_info "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
-
     # Check if PHP-FPM is installed
     if ! systemctl list-units --type=service | grep -q "php.*fpm"; then
         log_warn "PHP-FPM not found, skipping phpfpm_exporter"
         return
     fi
 
-    useradd --no-create-home --shell /bin/false phpfpm_exporter || true
+    if is_phpfpm_exporter_installed; then
+        log_skip "PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION} already installed"
+        systemctl is-active --quiet phpfpm_exporter || systemctl start phpfpm_exporter
+        return
+    fi
+
+    log_info "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
+
+    systemctl stop phpfpm_exporter 2>/dev/null || true
+    useradd --no-create-home --shell /bin/false phpfpm_exporter 2>/dev/null || true
 
     cd /tmp
     wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
@@ -392,7 +517,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable phpfpm_exporter
-    systemctl start phpfpm_exporter
+    systemctl restart phpfpm_exporter
 
     log_success "PHP-FPM Exporter installed (port 9253)"
 }
@@ -402,14 +527,21 @@ EOF
 #===============================================================================
 
 install_promtail() {
-    log_info "Installing Promtail ${PROMTAIL_VERSION}..."
-
     if [[ -z "$LOKI_URL" ]]; then
         log_warn "LOKI_URL not provided, skipping Promtail"
         return
     fi
 
-    useradd --no-create-home --shell /bin/false promtail || true
+    if is_promtail_installed; then
+        log_skip "Promtail ${PROMTAIL_VERSION} already installed"
+        systemctl is-active --quiet promtail || systemctl start promtail
+        return
+    fi
+
+    log_info "Installing Promtail ${PROMTAIL_VERSION}..."
+
+    systemctl stop promtail 2>/dev/null || true
+    useradd --no-create-home --shell /bin/false promtail 2>/dev/null || true
 
     mkdir -p /etc/promtail
     mkdir -p /var/lib/promtail
@@ -540,7 +672,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable promtail
-    systemctl start promtail
+    systemctl restart promtail
 
     log_success "Promtail installed and configured"
 }
@@ -610,6 +742,9 @@ main() {
     echo "=========================================="
     echo "Monitored Host Agent Setup"
     echo "=========================================="
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        echo -e "${YELLOW}>>> FORCE MODE: Reinstalling everything from scratch <<<${NC}"
+    fi
     echo ""
 
     check_root

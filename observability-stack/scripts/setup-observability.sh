@@ -3,9 +3,50 @@
 # Observability Stack Setup Script for Debian 13
 # Installs: Prometheus, Loki, Grafana, Alertmanager, Nginx (reverse proxy)
 # All configuration is read from global.yaml
+#
+# This script is IDEMPOTENT - safe to run multiple times:
+#   - Skips installation of already installed components (at correct version)
+#   - Skips firewall configuration if already configured
+#   - Renews SSL certificates only if expired or expiring within 7 days
+#   - Always updates configuration files to reflect latest settings
+#
+# Usage:
+#   ./setup-observability.sh           # Normal run (idempotent)
+#   ./setup-observability.sh --force   # Force reinstall everything from scratch
 #===============================================================================
 
 set -euo pipefail
+
+# Force mode flag
+FORCE_MODE=false
+
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|-f)
+                FORCE_MODE=true
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  --force, -f    Force reinstall everything from scratch"
+                echo "  --help, -h     Show this help message"
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# Parse arguments before anything else
+parse_args "$@"
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,6 +72,10 @@ NODE_EXPORTER_VERSION="1.7.0"
 
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_skip() {
+    echo -e "${GREEN}[SKIP]${NC} $1"
 }
 
 log_success() {
@@ -69,6 +114,84 @@ check_root() {
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root"
     fi
+}
+
+#===============================================================================
+# VERSION CHECK FUNCTIONS
+#===============================================================================
+
+# Check if a binary exists and matches expected version
+check_binary_version() {
+    local binary="$1"
+    local expected_version="$2"
+    local version_flag="${3:---version}"
+
+    # Force mode bypasses all checks
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        return 1
+    fi
+
+    if [[ ! -x "$binary" ]]; then
+        return 1
+    fi
+
+    local current_version
+    current_version=$("$binary" "$version_flag" 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+    if [[ "$current_version" == "$expected_version" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# Check if Prometheus is installed at correct version
+is_prometheus_installed() {
+    check_binary_version "/usr/local/bin/prometheus" "$PROMETHEUS_VERSION"
+}
+
+# Check if Node Exporter is installed at correct version
+is_node_exporter_installed() {
+    check_binary_version "/usr/local/bin/node_exporter" "$NODE_EXPORTER_VERSION"
+}
+
+# Check if Alertmanager is installed at correct version
+is_alertmanager_installed() {
+    check_binary_version "/usr/local/bin/alertmanager" "$ALERTMANAGER_VERSION"
+}
+
+# Check if Loki is installed at correct version
+is_loki_installed() {
+    check_binary_version "/usr/local/bin/loki" "$LOKI_VERSION" "-version"
+}
+
+# Check if Grafana is installed
+is_grafana_installed() {
+    # Force mode bypasses all checks
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        return 1
+    fi
+    dpkg -l grafana &>/dev/null
+}
+
+# Check if SSL certificate exists and is valid (not expired within 7 days)
+is_ssl_valid() {
+    local domain="$1"
+    local cert_file="/etc/letsencrypt/live/${domain}/fullchain.pem"
+
+    # Force mode bypasses all checks
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        return 1
+    fi
+
+    if [[ ! -f "$cert_file" ]]; then
+        return 1
+    fi
+
+    # Check if certificate expires within 7 days
+    if openssl x509 -checkend 604800 -noout -in "$cert_file" &>/dev/null; then
+        return 0
+    fi
+    return 1
 }
 
 check_config() {
@@ -131,16 +254,14 @@ prepare_system() {
     log_info "Preparing system..."
 
     # Update package lists
-    apt-get update
+    apt-get update -qq
 
-    # Install required packages
-    apt-get install -y \
-        apt-transport-https \
-        software-properties-common \
+    # Install required packages (apt-get install is idempotent)
+    # Note: apt-transport-https and software-properties-common not needed on Debian 13+
+    apt-get install -y -qq \
         wget \
         curl \
         gnupg \
-        lsb-release \
         ufw \
         apache2-utils \
         nginx \
@@ -149,7 +270,7 @@ prepare_system() {
         jq \
         unzip
 
-    log_success "System packages installed"
+    log_success "System packages verified/installed"
 }
 
 #===============================================================================
@@ -159,8 +280,28 @@ prepare_system() {
 configure_firewall() {
     log_info "Configuring firewall..."
 
-    # Reset UFW
-    ufw --force reset
+    # Check if firewall is already configured with required rules
+    local needs_config=false
+
+    # Force mode always reconfigures
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        needs_config=true
+        log_info "Force mode: resetting firewall..."
+        ufw --force reset
+    elif ! ufw status | grep -q "Status: active"; then
+        needs_config=true
+    elif ! ufw status | grep -qE "22/tcp.*ALLOW"; then
+        needs_config=true
+    elif ! ufw status | grep -qE "80/tcp.*ALLOW"; then
+        needs_config=true
+    elif ! ufw status | grep -qE "443/tcp.*ALLOW"; then
+        needs_config=true
+    fi
+
+    if [[ "$needs_config" == "false" ]]; then
+        log_skip "Firewall already configured"
+        return
+    fi
 
     # Default policies
     ufw default deny incoming
@@ -184,10 +325,21 @@ configure_firewall() {
 #===============================================================================
 
 install_prometheus() {
+    if is_prometheus_installed; then
+        log_skip "Prometheus ${PROMETHEUS_VERSION} already installed"
+        # Ensure directories and user exist
+        useradd --no-create-home --shell /bin/false prometheus 2>/dev/null || true
+        mkdir -p /etc/prometheus/rules /var/lib/prometheus
+        return
+    fi
+
     log_info "Installing Prometheus ${PROMETHEUS_VERSION}..."
 
+    # Stop service if running (important for force mode reinstall)
+    systemctl stop prometheus 2>/dev/null || true
+
     # Create user
-    useradd --no-create-home --shell /bin/false prometheus || true
+    useradd --no-create-home --shell /bin/false prometheus 2>/dev/null || true
 
     # Create directories
     mkdir -p /etc/prometheus/rules
@@ -284,7 +436,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable prometheus
-    systemctl start prometheus
+    systemctl restart prometheus
 
     log_success "Prometheus configured and started"
 }
@@ -294,9 +446,19 @@ EOF
 #===============================================================================
 
 install_node_exporter() {
+    if is_node_exporter_installed; then
+        log_skip "Node Exporter ${NODE_EXPORTER_VERSION} already installed"
+        # Ensure service is running
+        systemctl is-active --quiet node_exporter || systemctl start node_exporter
+        return
+    fi
+
     log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
-    useradd --no-create-home --shell /bin/false node_exporter || true
+    # Stop service if running (important for force mode reinstall)
+    systemctl stop node_exporter 2>/dev/null || true
+
+    useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
 
     cd /tmp
     wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
@@ -330,7 +492,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable node_exporter
-    systemctl start node_exporter
+    systemctl restart node_exporter
 
     log_success "Node Exporter installed and started"
 }
@@ -340,9 +502,20 @@ EOF
 #===============================================================================
 
 install_alertmanager() {
+    if is_alertmanager_installed; then
+        log_skip "Alertmanager ${ALERTMANAGER_VERSION} already installed"
+        # Ensure directories and user exist
+        useradd --no-create-home --shell /bin/false alertmanager 2>/dev/null || true
+        mkdir -p /etc/alertmanager/templates /var/lib/alertmanager
+        return
+    fi
+
     log_info "Installing Alertmanager ${ALERTMANAGER_VERSION}..."
 
-    useradd --no-create-home --shell /bin/false alertmanager || true
+    # Stop service if running (important for force mode reinstall)
+    systemctl stop alertmanager 2>/dev/null || true
+
+    useradd --no-create-home --shell /bin/false alertmanager 2>/dev/null || true
 
     mkdir -p /etc/alertmanager/templates
     mkdir -p /var/lib/alertmanager
@@ -414,7 +587,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable alertmanager
-    systemctl start alertmanager
+    systemctl restart alertmanager
 
     log_success "Alertmanager configured and started"
 }
@@ -424,9 +597,20 @@ EOF
 #===============================================================================
 
 install_loki() {
+    if is_loki_installed; then
+        log_skip "Loki ${LOKI_VERSION} already installed"
+        # Ensure directories and user exist
+        useradd --no-create-home --shell /bin/false loki 2>/dev/null || true
+        mkdir -p /etc/loki /var/lib/loki/{chunks,rules,wal,tsdb-index,tsdb-cache,compactor}
+        return
+    fi
+
     log_info "Installing Loki ${LOKI_VERSION}..."
 
-    useradd --no-create-home --shell /bin/false loki || true
+    # Stop service if running (important for force mode reinstall)
+    systemctl stop loki 2>/dev/null || true
+
+    useradd --no-create-home --shell /bin/false loki 2>/dev/null || true
 
     mkdir -p /etc/loki
     mkdir -p /var/lib/loki/{chunks,rules,wal,tsdb-index,tsdb-cache,compactor}
@@ -474,7 +658,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable loki
-    systemctl start loki
+    systemctl restart loki
 
     log_success "Loki configured and started"
 }
@@ -484,20 +668,40 @@ EOF
 #===============================================================================
 
 install_grafana() {
+    if is_grafana_installed; then
+        log_skip "Grafana already installed"
+        return
+    fi
+
     log_info "Installing Grafana..."
 
     # Add Grafana repository
     wget -q -O /usr/share/keyrings/grafana.key https://apt.grafana.com/gpg.key
     echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
 
-    apt-get update
-    apt-get install -y grafana
+    apt-get update -qq
+
+    # In force mode, reinstall even if already present
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        apt-get install -y -qq --reinstall grafana
+    else
+        apt-get install -y -qq grafana
+    fi
 
     log_success "Grafana installed"
 }
 
 configure_grafana() {
     log_info "Configuring Grafana..."
+
+    # Generate secret key only once (preserve across reruns to keep sessions valid)
+    local secret_key_file="/etc/grafana/.secret_key"
+    if [[ ! -f "$secret_key_file" ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        openssl rand -hex 32 > "$secret_key_file"
+        chmod 600 "$secret_key_file"
+    fi
+    local GRAFANA_SECRET_KEY
+    GRAFANA_SECRET_KEY=$(cat "$secret_key_file")
 
     # Update grafana.ini
     cat > /etc/grafana/grafana.ini << EOF
@@ -518,7 +722,7 @@ provider = file
 [security]
 admin_user = admin
 admin_password = ${GRAFANA_ADMIN_PASS}
-secret_key = $(openssl rand -hex 32)
+secret_key = ${GRAFANA_SECRET_KEY}
 disable_gravatar = true
 
 [users]
@@ -570,7 +774,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable grafana-server
-    systemctl start grafana-server
+    systemctl restart grafana-server
 
     log_success "Grafana configured and started"
 }
@@ -582,15 +786,18 @@ EOF
 configure_nginx() {
     log_info "Configuring Nginx..."
 
-    # Create htpasswd files
-    htpasswd -cb /etc/nginx/.htpasswd_prometheus "$PROMETHEUS_USER" "$PROMETHEUS_PASS"
-    htpasswd -cb /etc/nginx/.htpasswd_loki "$LOKI_USER" "$LOKI_PASS"
+    # Create/update htpasswd files (always update to reflect config changes)
+    htpasswd -cb /etc/nginx/.htpasswd_prometheus "$PROMETHEUS_USER" "$PROMETHEUS_PASS" 2>/dev/null
+    htpasswd -cb /etc/nginx/.htpasswd_loki "$LOKI_USER" "$LOKI_PASS" 2>/dev/null
 
     # Create certbot webroot
     mkdir -p /var/www/certbot
 
-    # Create initial nginx config (HTTP only for certbot)
-    cat > /etc/nginx/sites-available/observability << EOF
+    # Only create initial HTTP config if SSL config doesn't exist yet or force mode
+    # (setup_ssl will handle the full SSL config)
+    if [[ "$FORCE_MODE" == "true" ]] || [[ ! -f "/etc/letsencrypt/live/${GRAFANA_DOMAIN}/fullchain.pem" ]]; then
+        # Create initial nginx config (HTTP only for certbot)
+        cat > /etc/nginx/sites-available/observability << EOF
 server {
     listen 80;
     listen [::]:80;
@@ -606,6 +813,7 @@ server {
     }
 }
 EOF
+    fi
 
     ln -sf /etc/nginx/sites-available/observability /etc/nginx/sites-enabled/
     rm -f /etc/nginx/sites-enabled/default
@@ -618,26 +826,58 @@ EOF
 setup_ssl() {
     log_info "Setting up SSL certificate..."
 
-    # Check if certificate already exists
-    if [[ -f "/etc/letsencrypt/live/${GRAFANA_DOMAIN}/fullchain.pem" ]]; then
-        log_info "SSL certificate already exists"
-    else
-        # Get certificate
-        certbot certonly --webroot \
-            -w /var/www/certbot \
-            -d "${GRAFANA_DOMAIN}" \
-            --email "${LETSENCRYPT_EMAIL}" \
-            --agree-tos \
-            --non-interactive \
-            --expand
+    local need_cert=false
+    local cert_file="/etc/letsencrypt/live/${GRAFANA_DOMAIN}/fullchain.pem"
 
-        if [[ $? -ne 0 ]]; then
+    # Check if certificate exists and is valid
+    if [[ ! -f "$cert_file" ]]; then
+        log_info "SSL certificate not found, obtaining new certificate..."
+        need_cert=true
+    elif ! is_ssl_valid "$GRAFANA_DOMAIN"; then
+        log_info "SSL certificate expired or expiring soon, renewing..."
+        need_cert=true
+    else
+        log_skip "SSL certificate is valid"
+    fi
+
+    if [[ "$need_cert" == "true" ]]; then
+        # Ensure nginx is serving HTTP for certbot challenge
+        if ! grep -q "acme-challenge" /etc/nginx/sites-available/observability 2>/dev/null; then
+            # Create temporary HTTP-only config for certbot
+            cat > /etc/nginx/sites-available/observability << EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${GRAFANA_DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 200 'Waiting for SSL certificate...';
+        add_header Content-Type text/plain;
+    }
+}
+EOF
+            nginx -t && systemctl reload nginx
+        fi
+
+        # Get/renew certificate
+        # Only use --force-renewal in force mode to avoid Let's Encrypt rate limits
+        local certbot_args="--webroot -w /var/www/certbot -d ${GRAFANA_DOMAIN} --email ${LETSENCRYPT_EMAIL} --agree-tos --non-interactive --expand"
+        if [[ "$FORCE_MODE" == "true" ]]; then
+            certbot_args="$certbot_args --force-renewal"
+        fi
+
+        if ! certbot certonly $certbot_args; then
             log_warn "Failed to obtain SSL certificate. Continuing without HTTPS..."
             return
         fi
+        log_success "SSL certificate obtained/renewed"
     fi
 
-    # Now install full nginx config with SSL
+    # Install full nginx config with SSL (always update in case config changed)
     sed -e "s|{{GRAFANA_DOMAIN}}|${GRAFANA_DOMAIN}|g" \
         "${BASE_DIR}/nginx/observability.conf.template" > /etc/nginx/sites-available/observability
 
@@ -702,6 +942,9 @@ main() {
     echo "=========================================="
     echo "Observability Stack Setup for Debian 13"
     echo "=========================================="
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        echo -e "${YELLOW}>>> FORCE MODE: Reinstalling everything from scratch <<<${NC}"
+    fi
     echo ""
 
     check_root
