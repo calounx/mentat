@@ -1021,9 +1021,6 @@ auto_assign_org_role = Viewer
 [auth.anonymous]
 enabled = false
 
-[alerting]
-enabled = true
-
 [unified_alerting]
 enabled = true
 
