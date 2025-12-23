@@ -67,15 +67,6 @@ smtp:
   starttls: true
 
 # =============================================================================
-# ALERTING - SLACK
-# =============================================================================
-slack:
-  enabled: true
-  webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-  channel: "#alerts"
-  username: "Observability Bot"
-
-# =============================================================================
 # RETENTION SETTINGS
 # =============================================================================
 retention:

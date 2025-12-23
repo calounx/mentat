@@ -90,6 +90,7 @@ PROMETHEUS_VERSION="2.48.1"
 ALERTMANAGER_VERSION="0.26.0"
 LOKI_VERSION="2.9.3"
 NODE_EXPORTER_VERSION="1.7.0"
+NGINX_EXPORTER_VERSION="1.1.0"
 
 #===============================================================================
 # UTILITY FUNCTIONS
@@ -510,11 +511,6 @@ parse_config() {
     # Get first email from to_addresses
     SMTP_TO=$(grep -A1 "to_addresses:" "$CONFIG_FILE" | tail -1 | sed 's/.*- *//' | tr -d '"')
 
-    # Slack settings
-    SLACK_WEBHOOK=$(yaml_get_nested "$CONFIG_FILE" "slack" "webhook_url")
-    SLACK_CHANNEL=$(yaml_get_nested "$CONFIG_FILE" "slack" "channel")
-    SLACK_USERNAME=$(yaml_get_nested "$CONFIG_FILE" "slack" "username")
-
     # Retention
     RETENTION_DAYS=$(yaml_get_nested "$CONFIG_FILE" "retention" "metrics_days")
 
@@ -712,7 +708,9 @@ ExecStart=/usr/local/bin/prometheus \\
     --web.console.templates=/etc/prometheus/consoles \\
     --web.console.libraries=/etc/prometheus/console_libraries \\
     --web.enable-lifecycle \\
-    --web.enable-admin-api
+    --web.enable-admin-api \\
+    --web.external-url=https://${GRAFANA_DOMAIN}/prometheus/ \\
+    --web.route-prefix=/
 
 Restart=always
 RestartSec=5
@@ -785,6 +783,81 @@ EOF
 }
 
 #===============================================================================
+# NGINX EXPORTER INSTALLATION
+#===============================================================================
+
+is_nginx_exporter_installed() {
+    check_binary_version "/usr/local/bin/nginx-prometheus-exporter" "$NGINX_EXPORTER_VERSION"
+}
+
+install_nginx_exporter() {
+    if is_nginx_exporter_installed; then
+        log_skip "Nginx Exporter ${NGINX_EXPORTER_VERSION} already installed"
+        systemctl is-active --quiet nginx_exporter || systemctl start nginx_exporter
+        return
+    fi
+
+    log_info "Installing Nginx Exporter ${NGINX_EXPORTER_VERSION}..."
+
+    systemctl stop nginx_exporter 2>/dev/null || true
+    useradd --no-create-home --shell /bin/false nginx_exporter 2>/dev/null || true
+
+    cd /tmp
+    wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+    tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+
+    cp nginx-prometheus-exporter /usr/local/bin/
+    chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
+
+    rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+
+    # Enable nginx stub_status if not already enabled
+    if ! grep -q "stub_status" /etc/nginx/conf.d/* 2>/dev/null; then
+        log_info "Enabling Nginx stub_status..."
+        cat > /etc/nginx/conf.d/stub_status.conf << 'EOF'
+server {
+    listen 127.0.0.1:8080;
+    server_name localhost;
+
+    location /nginx_status {
+        stub_status on;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+}
+EOF
+        nginx -t && systemctl reload nginx
+    fi
+
+    cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
+[Unit]
+Description=Nginx Prometheus Exporter
+Wants=network-online.target
+After=network-online.target nginx.service
+
+[Service]
+User=nginx_exporter
+Group=nginx_exporter
+Type=simple
+ExecStart=/usr/local/bin/nginx-prometheus-exporter \
+    --nginx.scrape-uri=http://127.0.0.1:8080/nginx_status
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable nginx_exporter
+    systemctl restart nginx_exporter
+
+    log_success "Nginx Exporter installed (port 9113)"
+}
+
+#===============================================================================
 # ALERTMANAGER INSTALLATION
 #===============================================================================
 
@@ -831,18 +904,69 @@ configure_alertmanager() {
         SMTP_TLS="false"
     fi
 
-    # Process template
-    sed -e "s|{{SMTP_HOST}}|${SMTP_HOST}|g" \
-        -e "s|{{SMTP_PORT}}|${SMTP_PORT}|g" \
-        -e "s|{{SMTP_FROM}}|${SMTP_FROM}|g" \
-        -e "s|{{SMTP_USERNAME}}|${SMTP_USERNAME}|g" \
-        -e "s|{{SMTP_PASSWORD}}|${SMTP_PASSWORD}|g" \
-        -e "s|{{SMTP_STARTTLS}}|${SMTP_TLS}|g" \
-        -e "s|{{SMTP_TO}}|${SMTP_TO}|g" \
-        -e "s|{{SLACK_WEBHOOK_URL}}|${SLACK_WEBHOOK}|g" \
-        -e "s|{{SLACK_CHANNEL}}|${SLACK_CHANNEL}|g" \
-        -e "s|{{SLACK_USERNAME}}|${SLACK_USERNAME}|g" \
-        "${BASE_DIR}/alertmanager/alertmanager.yml.template" > /etc/alertmanager/alertmanager.yml
+    # Generate email-only alertmanager config
+    cat > /etc/alertmanager/alertmanager.yml << ALERTCFG
+# Alertmanager Configuration
+# Auto-generated from global.yaml
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+  smtp_from: '${SMTP_FROM}'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: ${SMTP_TLS}
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  receiver: 'email-alerts'
+  group_by: ['alertname', 'instance', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical-email'
+      group_wait: 10s
+      repeat_interval: 1h
+    - match:
+        severity: warning
+      receiver: 'warning-email'
+      group_wait: 1m
+      repeat_interval: 4h
+
+receivers:
+  - name: 'email-alerts'
+    email_configs:
+      - to: '${SMTP_TO}'
+        send_resolved: true
+        headers:
+          Subject: '[ALERT] {{ .Status | toUpper }} - {{ .CommonLabels.alertname }}'
+
+  - name: 'critical-email'
+    email_configs:
+      - to: '${SMTP_TO}'
+        send_resolved: true
+        headers:
+          Subject: '[CRITICAL] {{ .CommonLabels.alertname }} on {{ .CommonLabels.instance }}'
+
+  - name: 'warning-email'
+    email_configs:
+      - to: '${SMTP_TO}'
+        send_resolved: true
+        headers:
+          Subject: '[WARNING] {{ .CommonLabels.alertname }} on {{ .CommonLabels.instance }}'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+ALERTCFG
 
     # Copy email template
     sed "s|{{GRAFANA_DOMAIN}}|${GRAFANA_DOMAIN}|g" \
@@ -1268,6 +1392,7 @@ main() {
 
     install_prometheus
     install_node_exporter
+    install_nginx_exporter
     install_alertmanager
     install_loki
     install_grafana

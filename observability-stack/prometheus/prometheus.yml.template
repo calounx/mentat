@@ -53,6 +53,14 @@ scrape_configs:
         labels:
           instance: 'observability-vps'
 
+  # Nginx exporter on observability VPS
+  - job_name: 'observability-nginx'
+    static_configs:
+      - targets: ['localhost:9113']
+        labels:
+          instance: 'observability-vps'
+          environment: 'monitoring'
+
   # ==========================================================================
   # MONITORED HOSTS - Node Exporter (System Metrics)
   # ==========================================================================
