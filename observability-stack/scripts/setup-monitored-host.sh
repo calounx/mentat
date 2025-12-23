@@ -119,12 +119,13 @@ check_config_diff() {
 
     # If file doesn't exist, proceed with creation
     if [[ ! -f "$existing_file" ]]; then
+        log_info "$description: file does not exist, will create"
         return 0
     fi
 
-    # Create temp file with new content
+    # Create temp file with new content (use printf to preserve content)
     local temp_file=$(mktemp)
-    echo "$new_content" > "$temp_file"
+    printf '%s\n' "$new_content" > "$temp_file"
 
     # Check if files are different
     if diff -q "$existing_file" "$temp_file" > /dev/null 2>&1; then
@@ -136,8 +137,8 @@ check_config_diff() {
     # Files are different - show diff and prompt
     echo ""
     log_warn "$description has changes:"
-    echo -e "${YELLOW}--- Current config${NC}"
-    echo -e "${GREEN}+++ New config${NC}"
+    echo -e "${YELLOW}--- Current (deployed)${NC}"
+    echo -e "${GREEN}+++ New (from script)${NC}"
     diff --color=always -u "$existing_file" "$temp_file" 2>/dev/null || diff -u "$existing_file" "$temp_file"
     echo ""
 
@@ -168,7 +169,7 @@ write_config_with_check() {
     local description="$3"
 
     if check_config_diff "$file_path" "$content" "$description"; then
-        echo "$content" > "$file_path"
+        printf '%s\n' "$content" > "$file_path"
         log_success "Updated $description"
         return 0
     fi
