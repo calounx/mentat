@@ -142,6 +142,72 @@ check_root() {
     fi
 }
 
+# Check config file differences and prompt for overwrite
+# Usage: check_config_diff "existing_file" "new_content" "description"
+# Returns: 0 if should overwrite, 1 if should skip
+check_config_diff() {
+    local existing_file="$1"
+    local new_content="$2"
+    local description="$3"
+
+    # If file doesn't exist, proceed with creation
+    if [[ ! -f "$existing_file" ]]; then
+        return 0
+    fi
+
+    # Create temp file with new content
+    local temp_file=$(mktemp)
+    echo "$new_content" > "$temp_file"
+
+    # Check if files are different
+    if diff -q "$existing_file" "$temp_file" > /dev/null 2>&1; then
+        log_skip "$description - no changes needed"
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    # Files are different - show diff and prompt
+    echo ""
+    log_warn "$description has changes:"
+    echo -e "${YELLOW}--- Current config${NC}"
+    echo -e "${GREEN}+++ New config${NC}"
+    diff --color=always -u "$existing_file" "$temp_file" 2>/dev/null || diff -u "$existing_file" "$temp_file"
+    echo ""
+
+    rm -f "$temp_file"
+
+    # In force mode, always overwrite
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Force mode: overwriting $description"
+        return 0
+    fi
+
+    # Prompt user
+    read -p "Overwrite $description? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        log_skip "Keeping existing $description"
+        return 1
+    fi
+
+    return 0
+}
+
+# Write config only if user approves (or force mode)
+# Usage: write_config_with_check "file_path" "content" "description"
+write_config_with_check() {
+    local file_path="$1"
+    local content="$2"
+    local description="$3"
+
+    if check_config_diff "$file_path" "$content" "$description"; then
+        echo "$content" > "$file_path"
+        log_success "Updated $description"
+        return 0
+    fi
+    return 1
+}
+
 #===============================================================================
 # BACKUP FUNCTIONS
 #===============================================================================
@@ -677,12 +743,19 @@ configure_prometheus() {
         fi
     done < "$CONFIG_FILE"
 
-    # Create prometheus.yml from template
-    sed -e "s|{{NODE_EXPORTER_TARGETS}}|${NODE_TARGETS}|g" \
+    # Generate prometheus.yml content from template
+    local prometheus_config
+    prometheus_config=$(sed -e "s|{{NODE_EXPORTER_TARGETS}}|${NODE_TARGETS}|g" \
         -e "s|{{NGINX_EXPORTER_TARGETS}}|${NGINX_TARGETS}|g" \
         -e "s|{{MYSQL_EXPORTER_TARGETS}}|${MYSQL_TARGETS}|g" \
         -e "s|{{PHPFPM_EXPORTER_TARGETS}}|${PHPFPM_TARGETS}|g" \
-        "${BASE_DIR}/prometheus/prometheus.yml.template" > /etc/prometheus/prometheus.yml
+        "${BASE_DIR}/prometheus/prometheus.yml.template")
+
+    # Check and write prometheus.yml
+    local config_changed=false
+    if write_config_with_check "/etc/prometheus/prometheus.yml" "$prometheus_config" "Prometheus config (prometheus.yml)"; then
+        config_changed=true
+    fi
 
     # Copy alert rules
     cp "${BASE_DIR}/prometheus/rules/"*.yml /etc/prometheus/rules/
@@ -690,8 +763,9 @@ configure_prometheus() {
     # Set ownership
     chown -R prometheus:prometheus /etc/prometheus
 
-    # Create systemd service
-    cat > /etc/systemd/system/prometheus.service << EOF
+    # Generate systemd service content
+    local service_content
+    read -r -d '' service_content << EOF || true
 [Unit]
 Description=Prometheus
 Wants=network-online.target
@@ -719,7 +793,12 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
+    # Check and write systemd service
+    if write_config_with_check "/etc/systemd/system/prometheus.service" "$service_content" "Prometheus service"; then
+        config_changed=true
+        systemctl daemon-reload
+    fi
+
     systemctl enable prometheus
     systemctl restart prometheus
 
@@ -905,7 +984,8 @@ configure_alertmanager() {
     fi
 
     # Generate email-only alertmanager config
-    cat > /etc/alertmanager/alertmanager.yml << ALERTCFG
+    local alertmanager_config
+    read -r -d '' alertmanager_config << ALERTCFG || true
 # Alertmanager Configuration
 # Auto-generated from global.yaml
 
@@ -968,13 +1048,18 @@ inhibit_rules:
     equal: ['alertname', 'instance']
 ALERTCFG
 
+    # Check and write alertmanager config
+    write_config_with_check "/etc/alertmanager/alertmanager.yml" "$alertmanager_config" "Alertmanager config"
+
     # Copy email template
     sed "s|{{GRAFANA_DOMAIN}}|${GRAFANA_DOMAIN}|g" \
         "${BASE_DIR}/alertmanager/templates/email.tmpl" > /etc/alertmanager/templates/email.tmpl
 
     chown -R alertmanager:alertmanager /etc/alertmanager /var/lib/alertmanager
 
-    cat > /etc/systemd/system/alertmanager.service << EOF
+    # Generate systemd service
+    local service_content
+    read -r -d '' service_content << EOF || true
 [Unit]
 Description=Alertmanager
 Wants=network-online.target
@@ -996,7 +1081,10 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
+    if write_config_with_check "/etc/systemd/system/alertmanager.service" "$service_content" "Alertmanager service"; then
+        systemctl daemon-reload
+    fi
+
     systemctl enable alertmanager
     systemctl restart alertmanager
 
@@ -1042,12 +1130,17 @@ configure_loki() {
 
     # Update retention in config
     RETENTION_HOURS=$((RETENTION_DAYS * 24))
-    sed "s/retention_period: 360h/retention_period: ${RETENTION_HOURS}h/g" \
-        "${BASE_DIR}/loki/loki-config.yaml" > /etc/loki/loki-config.yaml
+    local loki_config
+    loki_config=$(sed "s/retention_period: 360h/retention_period: ${RETENTION_HOURS}h/g" \
+        "${BASE_DIR}/loki/loki-config.yaml")
+
+    # Check and write loki config
+    write_config_with_check "/etc/loki/loki-config.yaml" "$loki_config" "Loki config"
 
     chown -R loki:loki /etc/loki /var/lib/loki
 
-    cat > /etc/systemd/system/loki.service << 'EOF'
+    local service_content
+    read -r -d '' service_content << 'EOF' || true
 [Unit]
 Description=Loki
 Wants=network-online.target
@@ -1067,7 +1160,10 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
+    if write_config_with_check "/etc/systemd/system/loki.service" "$service_content" "Loki service"; then
+        systemctl daemon-reload
+    fi
+
     systemctl enable loki
     systemctl restart loki
 
@@ -1114,8 +1210,9 @@ configure_grafana() {
     local GRAFANA_SECRET_KEY
     GRAFANA_SECRET_KEY=$(cat "$secret_key_file")
 
-    # Update grafana.ini
-    cat > /etc/grafana/grafana.ini << EOF
+    # Generate grafana.ini content
+    local grafana_config
+    read -r -d '' grafana_config << EOF || true
 [server]
 protocol = http
 http_addr = 127.0.0.1
@@ -1169,12 +1266,20 @@ daily_rotate = true
 max_days = 7
 EOF
 
+    # Check and write grafana.ini (note: contains credentials - diff will show them)
+    write_config_with_check "/etc/grafana/grafana.ini" "$grafana_config" "Grafana config (grafana.ini)"
+
     # Copy provisioning files
     mkdir -p /etc/grafana/provisioning/datasources
     mkdir -p /etc/grafana/provisioning/dashboards
     mkdir -p /var/lib/grafana/dashboards
 
-    cp "${BASE_DIR}/grafana/provisioning/datasources/datasources.yaml" /etc/grafana/provisioning/datasources/
+    # Check and copy datasources
+    local datasources_content
+    datasources_content=$(cat "${BASE_DIR}/grafana/provisioning/datasources/datasources.yaml")
+    write_config_with_check "/etc/grafana/provisioning/datasources/datasources.yaml" "$datasources_content" "Grafana datasources"
+
+    # Copy dashboards provisioning and dashboard files
     cp "${BASE_DIR}/grafana/provisioning/dashboards/dashboards.yaml" /etc/grafana/provisioning/dashboards/
     cp "${BASE_DIR}/grafana/dashboards/"*.json /var/lib/grafana/dashboards/
 

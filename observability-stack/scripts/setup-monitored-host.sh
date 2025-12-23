@@ -109,6 +109,72 @@ log_error() {
     exit 1
 }
 
+# Check config file differences and prompt for overwrite
+# Usage: check_config_diff "existing_file" "new_content" "description"
+# Returns: 0 if should overwrite, 1 if should skip
+check_config_diff() {
+    local existing_file="$1"
+    local new_content="$2"
+    local description="$3"
+
+    # If file doesn't exist, proceed with creation
+    if [[ ! -f "$existing_file" ]]; then
+        return 0
+    fi
+
+    # Create temp file with new content
+    local temp_file=$(mktemp)
+    echo "$new_content" > "$temp_file"
+
+    # Check if files are different
+    if diff -q "$existing_file" "$temp_file" > /dev/null 2>&1; then
+        log_skip "$description - no changes needed"
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    # Files are different - show diff and prompt
+    echo ""
+    log_warn "$description has changes:"
+    echo -e "${YELLOW}--- Current config${NC}"
+    echo -e "${GREEN}+++ New config${NC}"
+    diff --color=always -u "$existing_file" "$temp_file" 2>/dev/null || diff -u "$existing_file" "$temp_file"
+    echo ""
+
+    rm -f "$temp_file"
+
+    # In force mode, always overwrite
+    if [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Force mode: overwriting $description"
+        return 0
+    fi
+
+    # Prompt user
+    read -p "Overwrite $description? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        log_skip "Keeping existing $description"
+        return 1
+    fi
+
+    return 0
+}
+
+# Write config only if user approves (or force mode)
+# Usage: write_config_with_check "file_path" "content" "description"
+write_config_with_check() {
+    local file_path="$1"
+    local content="$2"
+    local description="$3"
+
+    if check_config_diff "$file_path" "$content" "$description"; then
+        echo "$content" > "$file_path"
+        log_success "Updated $description"
+        return 0
+    fi
+    return 1
+}
+
 #===============================================================================
 # VERSION CHECK FUNCTIONS
 #===============================================================================
