@@ -1,6 +1,15 @@
 # Grafana Datasources - Auto-provisioned
 apiVersion: 1
 
+# Delete existing datasources to allow re-provisioning with correct UIDs
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+  - name: Loki
+    orgId: 1
+  - name: Alertmanager
+    orgId: 1
+
 datasources:
   # Prometheus - Metrics
   - name: Prometheus
