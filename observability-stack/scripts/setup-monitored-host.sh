@@ -998,55 +998,136 @@ EOF
 #===============================================================================
 
 print_summary() {
+    # Get host IP for mentat commands
+    local HOST_IP
+    HOST_IP=$(hostname -I | awk '{print $1}')
+
     echo ""
     echo "=========================================="
     echo -e "${GREEN}Monitored Host Setup Complete!${NC}"
     echo "=========================================="
     echo ""
     echo "Host: $HOSTNAME"
+    echo "IP:   $HOST_IP"
     echo ""
     echo "Installed exporters:"
 
+    local HAS_NODE=false HAS_NGINX=false HAS_MYSQL=false HAS_PHPFPM=false HAS_PROMTAIL=false
+    local MYSQL_NEEDS_SETUP=false
+
     if systemctl is-active --quiet node_exporter; then
         echo -e "  ${GREEN}✓${NC} Node Exporter      (port 9100)"
+        HAS_NODE=true
     fi
 
     if systemctl is-active --quiet nginx_exporter; then
         echo -e "  ${GREEN}✓${NC} Nginx Exporter     (port 9113)"
+        HAS_NGINX=true
     fi
 
     if systemctl is-enabled --quiet mysqld_exporter 2>/dev/null; then
         if systemctl is-active --quiet mysqld_exporter; then
-            echo -e "  ${GREEN}✓${NC} MySQL Exporter     (port 9104)"
+            # Check if mysql_up is 1
+            local mysql_up
+            mysql_up=$(curl -s http://localhost:9104/metrics 2>/dev/null | grep "^mysql_up " | awk '{print $2}')
+            if [[ "$mysql_up" == "1" ]]; then
+                echo -e "  ${GREEN}✓${NC} MySQL Exporter     (port 9104)"
+            else
+                echo -e "  ${YELLOW}!${NC} MySQL Exporter     (port 9104) - running but mysql_up=0"
+                MYSQL_NEEDS_SETUP=true
+            fi
+            HAS_MYSQL=true
         else
             echo -e "  ${YELLOW}!${NC} MySQL Exporter     (port 9104) - needs configuration"
+            MYSQL_NEEDS_SETUP=true
+            HAS_MYSQL=true
         fi
     fi
 
     if systemctl is-active --quiet phpfpm_exporter; then
         echo -e "  ${GREEN}✓${NC} PHP-FPM Exporter   (port 9253)"
+        HAS_PHPFPM=true
     fi
 
     if systemctl is-active --quiet promtail; then
         echo -e "  ${GREEN}✓${NC} Promtail           (log shipping)"
+        HAS_PROMTAIL=true
     fi
 
     echo ""
     echo "Firewall:"
     echo "  Allowed connections from: $OBSERVABILITY_IP"
-    echo ""
-    echo "Next steps:"
-    echo "1. Add this host to the observability server's global.yaml"
-    echo "2. Reload Prometheus on the observability server"
-    echo ""
 
-    if systemctl is-enabled --quiet mysqld_exporter 2>/dev/null && ! systemctl is-active --quiet mysqld_exporter; then
-        echo -e "${YELLOW}MySQL Exporter requires additional setup:${NC}"
-        echo "1. Create MySQL user for exporter"
-        echo "2. Update /etc/mysqld_exporter/.my.cnf with credentials"
-        echo "3. Run: systemctl start mysqld_exporter"
+    # MySQL setup instructions
+    if [[ "$MYSQL_NEEDS_SETUP" == "true" ]]; then
         echo ""
+        echo "=========================================="
+        echo -e "${YELLOW}ACTION REQUIRED: MySQL Exporter Setup${NC}"
+        echo "=========================================="
+        echo ""
+        echo "1. Create MySQL user (run as root on this host):"
+        echo ""
+        echo -e "${BLUE}sudo mysql <<'EOF'"
+        echo "CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY 'CHANGE_ME_SECURE_PASSWORD';"
+        echo "CREATE USER IF NOT EXISTS 'exporter'@'127.0.0.1' IDENTIFIED BY 'CHANGE_ME_SECURE_PASSWORD';"
+        echo "GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';"
+        echo "GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'127.0.0.1';"
+        echo "FLUSH PRIVILEGES;"
+        echo -e "EOF${NC}"
+        echo ""
+        echo "2. Update exporter config with the password:"
+        echo ""
+        echo -e "${BLUE}sudo tee /etc/mysqld_exporter/.my.cnf > /dev/null <<'EOF'"
+        echo "[client]"
+        echo "user=exporter"
+        echo "password=CHANGE_ME_SECURE_PASSWORD"
+        echo "host=127.0.0.1"
+        echo -e "EOF${NC}"
+        echo ""
+        echo "3. Restart the exporter:"
+        echo ""
+        echo -e "${BLUE}sudo systemctl restart mysqld_exporter${NC}"
+        echo ""
+        echo "4. Verify it works:"
+        echo ""
+        echo -e "${BLUE}curl -s http://localhost:9104/metrics | grep mysql_up${NC}"
+        echo "# Should show: mysql_up 1"
     fi
+
+    # Mentat commands
+    echo ""
+    echo "=========================================="
+    echo -e "${GREEN}COMMANDS TO RUN ON MENTAT${NC}"
+    echo "=========================================="
+    echo ""
+    echo "Option 1: Use the helper script:"
+    echo ""
+    echo -e "${BLUE}sudo ~/repo/mentat/observability-stack/scripts/add-monitored-host.sh \\"
+    echo "  --name \"$(echo $HOSTNAME | cut -d. -f1)\" \\"
+    echo "  --ip \"$HOST_IP\" \\"
+    echo "  --description \"$(echo $HOSTNAME)\"${NC}"
+    echo ""
+    echo "Option 2: Manual setup:"
+    echo ""
+    echo "a) Add to global.yaml:"
+    echo ""
+    echo -e "${BLUE}cat >> ~/repo/mentat/observability-stack/config/global.yaml <<'EOF'"
+    echo ""
+    echo "  - name: \"$(echo $HOSTNAME | cut -d. -f1)\""
+    echo "    ip: \"$HOST_IP\""
+    echo "    description: \"$HOSTNAME\""
+    echo "    exporters:"
+    [[ "$HAS_NODE" == "true" ]] && echo "      - node_exporter"
+    [[ "$HAS_NGINX" == "true" ]] && echo "      - nginx_exporter"
+    [[ "$HAS_MYSQL" == "true" ]] && echo "      - mysqld_exporter"
+    [[ "$HAS_PHPFPM" == "true" ]] && echo "      - phpfpm_exporter"
+    echo -e "EOF${NC}"
+    echo ""
+    echo "b) Regenerate Prometheus config and reload:"
+    echo ""
+    echo -e "${BLUE}cd ~/repo/mentat/observability-stack/scripts"
+    echo -e "sudo ./setup-observability.sh${NC}"
+    echo ""
 }
 
 #===============================================================================
