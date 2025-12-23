@@ -265,7 +265,7 @@ create_backup() {
     backup_file "/etc/nginx/.htpasswd_loki"
 
     # Backup systemd service files
-    for service in prometheus node_exporter alertmanager loki; do
+    for service in prometheus node_exporter nginx_exporter alertmanager loki; do
         backup_file "/etc/systemd/system/${service}.service"
     done
 
@@ -319,6 +319,25 @@ uninstall_node_exporter() {
     groupdel node_exporter 2>/dev/null || true
 
     log_success "Node Exporter uninstalled"
+}
+
+uninstall_nginx_exporter() {
+    log_info "Uninstalling Nginx Exporter..."
+
+    systemctl stop nginx_exporter 2>/dev/null || true
+    systemctl disable nginx_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/nginx_exporter.service
+    rm -f /usr/local/bin/nginx-prometheus-exporter
+    rm -f /etc/nginx/conf.d/stub_status.conf
+
+    userdel nginx_exporter 2>/dev/null || true
+    groupdel nginx_exporter 2>/dev/null || true
+
+    # Reload nginx to remove stub_status
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+
+    log_success "Nginx Exporter uninstalled"
 }
 
 uninstall_alertmanager() {
@@ -445,6 +464,7 @@ run_uninstall() {
     uninstall_grafana
     uninstall_loki
     uninstall_alertmanager
+    uninstall_nginx_exporter
     uninstall_node_exporter
     uninstall_prometheus
 
@@ -675,18 +695,18 @@ configure_firewall() {
 #===============================================================================
 
 install_prometheus() {
+    local skip_binary=false
+
     if is_prometheus_installed; then
         log_skip "Prometheus ${PROMETHEUS_VERSION} already installed"
-        # Ensure directories and user exist
-        useradd --no-create-home --shell /bin/false prometheus 2>/dev/null || true
-        mkdir -p /etc/prometheus/rules /var/lib/prometheus
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Prometheus ${PROMETHEUS_VERSION}..."
-
-    # Stop service if running (important for force mode reinstall)
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop prometheus 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/prometheus" 2>/dev/null || true
+    sleep 1
 
     # Create user
     useradd --no-create-home --shell /bin/false prometheus 2>/dev/null || true
@@ -695,27 +715,34 @@ install_prometheus() {
     mkdir -p /etc/prometheus/rules
     mkdir -p /var/lib/prometheus
 
-    # Download and extract
-    cd /tmp
-    wget -q "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
-    tar xzf "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Prometheus ${PROMETHEUS_VERSION}..."
 
-    # Install binaries
-    cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /usr/local/bin/
-    cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/
+        # Download and extract
+        cd /tmp
+        wget -q "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+        tar xzf "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
 
-    # Copy console files
-    cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/consoles" /etc/prometheus/
-    cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/console_libraries" /etc/prometheus/
+        # Install binaries
+        cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /usr/local/bin/
+        cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/
 
-    # Cleanup
-    rm -rf "prometheus-${PROMETHEUS_VERSION}.linux-amd64" "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+        # Copy console files
+        cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/consoles" /etc/prometheus/
+        cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/console_libraries" /etc/prometheus/
 
-    # Set ownership
+        # Cleanup
+        rm -rf "prometheus-${PROMETHEUS_VERSION}.linux-amd64" "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+
+        # Set ownership
+        chown prometheus:prometheus /usr/local/bin/prometheus /usr/local/bin/promtool
+
+        log_success "Prometheus binary installed"
+    fi
+
+    # Set ownership on directories
     chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
-    chown prometheus:prometheus /usr/local/bin/prometheus /usr/local/bin/promtool
-
-    log_success "Prometheus installed"
 }
 
 configure_prometheus() {
@@ -811,30 +838,42 @@ EOF
 #===============================================================================
 
 install_node_exporter() {
+    local skip_binary=false
+
     if is_node_exporter_installed; then
         log_skip "Node Exporter ${NODE_EXPORTER_VERSION} already installed"
-        # Ensure service is running
-        systemctl is-active --quiet node_exporter || systemctl start node_exporter
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
-
-    # Stop service if running (important for force mode reinstall)
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop node_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/node_exporter" 2>/dev/null || true
+    sleep 1
 
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
 
-    cd /tmp
-    wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
-    tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
-    cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
-    chown node_exporter:node_exporter /usr/local/bin/node_exporter
+        cd /tmp
+        wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 
-    rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64" "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
+        chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
-    cat > /etc/systemd/system/node_exporter.service << 'EOF'
+        rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64" "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+
+        log_success "Node Exporter binary installed"
+    fi
+
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/node_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Node Exporter service file..."
+        cat > /etc/systemd/system/node_exporter.service << 'EOF'
 [Unit]
 Description=Node Exporter
 Wants=network-online.target
@@ -854,12 +893,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    systemctl daemon-reload
     systemctl enable node_exporter
-    systemctl restart node_exporter
+    systemctl start node_exporter
 
-    log_success "Node Exporter installed and started"
+    log_success "Node Exporter running (port 9100)"
 }
 
 #===============================================================================
@@ -871,27 +911,41 @@ is_nginx_exporter_installed() {
 }
 
 install_nginx_exporter() {
+    local skip_binary=false
+
     if is_nginx_exporter_installed; then
         log_skip "Nginx Exporter ${NGINX_EXPORTER_VERSION} already installed"
-        systemctl is-active --quiet nginx_exporter || systemctl start nginx_exporter
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Nginx Exporter ${NGINX_EXPORTER_VERSION}..."
-
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop nginx_exporter 2>/dev/null || true
+    # Wait for service to fully stop
+    sleep 1
+    # Kill any lingering process using the binary (needed for force mode reinstalls)
+    pkill -f "nginx-prometheus-exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false nginx_exporter 2>/dev/null || true
 
-    cd /tmp
-    wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
-    tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Nginx Exporter ${NGINX_EXPORTER_VERSION}..."
 
-    cp nginx-prometheus-exporter /usr/local/bin/
-    chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
+        cd /tmp
+        wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
 
-    rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        cp nginx-prometheus-exporter /usr/local/bin/
+        chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
 
-    # Enable nginx stub_status if not already enabled
+        rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+
+        log_success "Nginx Exporter binary installed"
+    fi
+
+    # Always ensure stub_status is enabled
     if ! grep -q "stub_status" /etc/nginx/conf.d/* 2>/dev/null; then
         log_info "Enabling Nginx stub_status..."
         cat > /etc/nginx/conf.d/stub_status.conf << 'EOF'
@@ -910,7 +964,10 @@ EOF
         nginx -t && systemctl reload nginx
     fi
 
-    cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/nginx_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Nginx Exporter service file..."
+        cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
 [Unit]
 Description=Nginx Prometheus Exporter
 Wants=network-online.target
@@ -929,12 +986,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    systemctl daemon-reload
     systemctl enable nginx_exporter
-    systemctl restart nginx_exporter
+    systemctl start nginx_exporter
 
-    log_success "Nginx Exporter installed (port 9113)"
+    log_success "Nginx Exporter running (port 9113)"
 }
 
 #===============================================================================
@@ -942,36 +1000,43 @@ EOF
 #===============================================================================
 
 install_alertmanager() {
+    local skip_binary=false
+
     if is_alertmanager_installed; then
         log_skip "Alertmanager ${ALERTMANAGER_VERSION} already installed"
-        # Ensure directories and user exist
-        useradd --no-create-home --shell /bin/false alertmanager 2>/dev/null || true
-        mkdir -p /etc/alertmanager/templates /var/lib/alertmanager
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Alertmanager ${ALERTMANAGER_VERSION}..."
-
-    # Stop service if running (important for force mode reinstall)
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop alertmanager 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/alertmanager" 2>/dev/null || true
+    sleep 1
 
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false alertmanager 2>/dev/null || true
 
+    # Ensure directories exist
     mkdir -p /etc/alertmanager/templates
     mkdir -p /var/lib/alertmanager
 
-    cd /tmp
-    wget -q "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
-    tar xzf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Alertmanager ${ALERTMANAGER_VERSION}..."
 
-    cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /usr/local/bin/
-    cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" /usr/local/bin/
+        cd /tmp
+        wget -q "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+        tar xzf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
 
-    chown alertmanager:alertmanager /usr/local/bin/alertmanager /usr/local/bin/amtool
+        cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /usr/local/bin/
+        cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" /usr/local/bin/
 
-    rm -rf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64" "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+        chown alertmanager:alertmanager /usr/local/bin/alertmanager /usr/local/bin/amtool
 
-    log_success "Alertmanager installed"
+        rm -rf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64" "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+
+        log_success "Alertmanager binary installed"
+    fi
 }
 
 configure_alertmanager() {
@@ -1097,33 +1162,40 @@ EOF
 #===============================================================================
 
 install_loki() {
+    local skip_binary=false
+
     if is_loki_installed; then
         log_skip "Loki ${LOKI_VERSION} already installed"
-        # Ensure directories and user exist
-        useradd --no-create-home --shell /bin/false loki 2>/dev/null || true
-        mkdir -p /etc/loki /var/lib/loki/{chunks,rules,wal,tsdb-index,tsdb-cache,compactor}
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Loki ${LOKI_VERSION}..."
-
-    # Stop service if running (important for force mode reinstall)
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop loki 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/loki" 2>/dev/null || true
+    sleep 1
 
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false loki 2>/dev/null || true
 
+    # Ensure directories exist
     mkdir -p /etc/loki
     mkdir -p /var/lib/loki/{chunks,rules,wal,tsdb-index,tsdb-cache,compactor}
 
-    cd /tmp
-    wget -q "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip"
-    unzip -o loki-linux-amd64.zip
-    chmod +x loki-linux-amd64
-    mv loki-linux-amd64 /usr/local/bin/loki
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Loki ${LOKI_VERSION}..."
 
-    rm -f loki-linux-amd64.zip
+        cd /tmp
+        wget -q "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip"
+        unzip -o loki-linux-amd64.zip
+        chmod +x loki-linux-amd64
+        mv loki-linux-amd64 /usr/local/bin/loki
 
-    log_success "Loki installed"
+        rm -f loki-linux-amd64.zip
+
+        log_success "Loki binary installed"
+    fi
 }
 
 configure_loki() {
@@ -1415,7 +1487,7 @@ final_setup() {
     sleep 5
 
     # Verify all services are running
-    for service in prometheus node_exporter alertmanager loki grafana-server nginx; do
+    for service in prometheus node_exporter nginx_exporter alertmanager loki grafana-server nginx; do
         if systemctl is-active --quiet "$service"; then
             log_success "$service is running"
         else

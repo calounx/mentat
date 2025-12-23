@@ -440,27 +440,42 @@ configure_firewall() {
 #===============================================================================
 
 install_node_exporter() {
+    local skip_binary=false
+
     if is_node_exporter_installed; then
         log_skip "Node Exporter ${NODE_EXPORTER_VERSION} already installed"
-        systemctl is-active --quiet node_exporter || systemctl start node_exporter
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
-
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop node_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/node_exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false node_exporter 2>/dev/null || true
 
-    cd /tmp
-    wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
-    tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
-    cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
-    chown node_exporter:node_exporter /usr/local/bin/node_exporter
+        cd /tmp
+        wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 
-    rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64" "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
+        chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
-    cat > /etc/systemd/system/node_exporter.service << 'EOF'
+        rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64" "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+
+        log_success "Node Exporter binary installed"
+    fi
+
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/node_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Node Exporter service file..."
+        cat > /etc/systemd/system/node_exporter.service << 'EOF'
 [Unit]
 Description=Node Exporter
 Wants=network-online.target
@@ -480,12 +495,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    systemctl daemon-reload
     systemctl enable node_exporter
-    systemctl restart node_exporter
+    systemctl start node_exporter
 
-    log_success "Node Exporter installed (port 9100)"
+    log_success "Node Exporter running (port 9100)"
 }
 
 #===============================================================================
@@ -499,27 +515,39 @@ install_nginx_exporter() {
         return
     fi
 
+    local skip_binary=false
+
     if is_nginx_exporter_installed; then
         log_skip "Nginx Exporter ${NGINX_EXPORTER_VERSION} already installed"
-        systemctl is-active --quiet nginx_exporter || systemctl start nginx_exporter
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Nginx Prometheus Exporter ${NGINX_EXPORTER_VERSION}..."
-
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop nginx_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "nginx-prometheus-exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false nginx_exporter 2>/dev/null || true
 
-    cd /tmp
-    wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
-    tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Nginx Prometheus Exporter ${NGINX_EXPORTER_VERSION}..."
 
-    cp nginx-prometheus-exporter /usr/local/bin/
-    chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
+        cd /tmp
+        wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
 
-    rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        cp nginx-prometheus-exporter /usr/local/bin/
+        chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
 
-    # Enable nginx stub_status if not already enabled
+        rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+
+        log_success "Nginx Exporter binary installed"
+    fi
+
+    # Always ensure stub_status is enabled
     if ! grep -q "stub_status" /etc/nginx/sites-enabled/* 2>/dev/null && \
        ! grep -q "stub_status" /etc/nginx/conf.d/* 2>/dev/null; then
         log_info "Enabling Nginx stub_status..."
@@ -539,7 +567,10 @@ EOF
         nginx -t && systemctl reload nginx
     fi
 
-    cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/nginx_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Nginx Exporter service file..."
+        cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
 [Unit]
 Description=Nginx Prometheus Exporter
 Wants=network-online.target
@@ -558,12 +589,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    systemctl daemon-reload
     systemctl enable nginx_exporter
-    systemctl restart nginx_exporter
+    systemctl start nginx_exporter
 
-    log_success "Nginx Exporter installed (port 9113)"
+    log_success "Nginx Exporter running (port 9113)"
 }
 
 #===============================================================================
@@ -577,27 +609,42 @@ install_mysqld_exporter() {
         return
     fi
 
+    local skip_binary=false
+
     if is_mysqld_exporter_installed; then
         log_skip "MySQL Exporter ${MYSQLD_EXPORTER_VERSION} already installed"
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing MySQL Exporter ${MYSQLD_EXPORTER_VERSION}..."
-
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop mysqld_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/mysqld_exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false mysqld_exporter 2>/dev/null || true
 
-    cd /tmp
-    wget -q "https://github.com/prometheus/mysqld_exporter/releases/download/v${MYSQLD_EXPORTER_VERSION}/mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
-    tar xzf "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
-
-    cp "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64/mysqld_exporter" /usr/local/bin/
-    chown mysqld_exporter:mysqld_exporter /usr/local/bin/mysqld_exporter
-
-    rm -rf "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64" "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
-
-    # Create credentials file only if it doesn't exist
+    # Ensure directories exist
     mkdir -p /etc/mysqld_exporter
+
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing MySQL Exporter ${MYSQLD_EXPORTER_VERSION}..."
+
+        cd /tmp
+        wget -q "https://github.com/prometheus/mysqld_exporter/releases/download/v${MYSQLD_EXPORTER_VERSION}/mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        tar xzf "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
+
+        cp "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64/mysqld_exporter" /usr/local/bin/
+        chown mysqld_exporter:mysqld_exporter /usr/local/bin/mysqld_exporter
+
+        rm -rf "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64" "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
+
+        log_success "MySQL Exporter binary installed"
+    fi
+
+    # Create credentials file only if it doesn't exist (never overwrite user credentials)
     if [[ ! -f /etc/mysqld_exporter/.my.cnf ]]; then
         cat > /etc/mysqld_exporter/.my.cnf << 'EOF'
 [client]
@@ -609,7 +656,10 @@ EOF
         chown mysqld_exporter:mysqld_exporter /etc/mysqld_exporter/.my.cnf
     fi
 
-    cat > /etc/systemd/system/mysqld_exporter.service << 'EOF'
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/mysqld_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating MySQL Exporter service file..."
+        cat > /etc/systemd/system/mysqld_exporter.service << 'EOF'
 [Unit]
 Description=MySQL Exporter
 Wants=network-online.target
@@ -643,20 +693,28 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    systemctl daemon-reload
     systemctl enable mysqld_exporter
 
-    log_warn "MySQL Exporter installed but NOT started"
-    log_warn "Please create the MySQL user and update /etc/mysqld_exporter/.my.cnf"
-    log_warn "Then run: systemctl start mysqld_exporter"
+    # Only show setup instructions if credentials file has placeholder
+    if grep -q "CHANGE_ME_EXPORTER_PASSWORD" /etc/mysqld_exporter/.my.cnf 2>/dev/null; then
+        log_warn "MySQL Exporter installed but NOT started"
+        log_warn "Please create the MySQL user and update /etc/mysqld_exporter/.my.cnf"
+        log_warn "Then run: systemctl start mysqld_exporter"
 
-    echo ""
-    echo "MySQL commands to run as root:"
-    echo "  CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';"
-    echo "  GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';"
-    echo "  FLUSH PRIVILEGES;"
-    echo ""
+        echo ""
+        echo "MySQL commands to run as root:"
+        echo "  CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';"
+        echo "  GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';"
+        echo "  FLUSH PRIVILEGES;"
+        echo ""
+    else
+        # Credentials configured, try to start
+        systemctl start mysqld_exporter || log_warn "MySQL Exporter failed to start - check credentials"
+        log_success "MySQL Exporter running (port 9104)"
+    fi
 }
 
 #===============================================================================
@@ -670,22 +728,34 @@ install_phpfpm_exporter() {
         return
     fi
 
+    local skip_binary=false
+
     if is_phpfpm_exporter_installed; then
         log_skip "PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION} already installed"
-        systemctl is-active --quiet phpfpm_exporter || systemctl start phpfpm_exporter
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
-
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop phpfpm_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/php-fpm_exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false phpfpm_exporter 2>/dev/null || true
 
-    cd /tmp
-    wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
-    mv "php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64" /usr/local/bin/php-fpm_exporter
-    chmod +x /usr/local/bin/php-fpm_exporter
-    chown phpfpm_exporter:phpfpm_exporter /usr/local/bin/php-fpm_exporter
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
+
+        cd /tmp
+        wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
+        mv "php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64" /usr/local/bin/php-fpm_exporter
+        chmod +x /usr/local/bin/php-fpm_exporter
+        chown phpfpm_exporter:phpfpm_exporter /usr/local/bin/php-fpm_exporter
+
+        log_success "PHP-FPM Exporter binary installed"
+    fi
 
     # Find PHP-FPM socket or configure status page
     PHP_FPM_SOCKET=""
@@ -716,7 +786,13 @@ install_phpfpm_exporter() {
         PHP_FPM_STATUS="tcp://127.0.0.1:9000/status"
     fi
 
-    cat > /etc/systemd/system/phpfpm_exporter.service << EOF
+    # Add phpfpm_exporter to www-data group to access socket
+    usermod -a -G www-data phpfpm_exporter 2>/dev/null || true
+
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/phpfpm_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating PHP-FPM Exporter service file..."
+        cat > /etc/systemd/system/phpfpm_exporter.service << EOF
 [Unit]
 Description=PHP-FPM Exporter
 Wants=network-online.target
@@ -736,15 +812,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    # Add phpfpm_exporter to www-data group to access socket
-    usermod -a -G www-data phpfpm_exporter 2>/dev/null || true
-
-    systemctl daemon-reload
     systemctl enable phpfpm_exporter
-    systemctl restart phpfpm_exporter
+    systemctl start phpfpm_exporter
 
-    log_success "PHP-FPM Exporter installed (port 9253)"
+    log_success "PHP-FPM Exporter running (port 9253)"
 }
 
 #===============================================================================
@@ -757,27 +831,40 @@ install_promtail() {
         return
     fi
 
+    local skip_binary=false
+
     if is_promtail_installed; then
         log_skip "Promtail ${PROMTAIL_VERSION} already installed"
-        systemctl is-active --quiet promtail || systemctl start promtail
-        return
+        skip_binary=true
     fi
 
-    log_info "Installing Promtail ${PROMTAIL_VERSION}..."
-
+    # Always stop service and kill process before installation/update (especially in force mode)
     systemctl stop promtail 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/promtail" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
     useradd --no-create-home --shell /bin/false promtail 2>/dev/null || true
 
+    # Ensure directories exist
     mkdir -p /etc/promtail
     mkdir -p /var/lib/promtail
 
-    cd /tmp
-    wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
-    unzip -o promtail-linux-amd64.zip
-    chmod +x promtail-linux-amd64
-    mv promtail-linux-amd64 /usr/local/bin/promtail
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Promtail ${PROMTAIL_VERSION}..."
 
-    rm -f promtail-linux-amd64.zip
+        cd /tmp
+        wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
+        unzip -o promtail-linux-amd64.zip
+        chmod +x promtail-linux-amd64
+        mv promtail-linux-amd64 /usr/local/bin/promtail
+
+        rm -f promtail-linux-amd64.zip
+
+        log_success "Promtail binary installed"
+    fi
 
     # Create Promtail configuration
     cat > /etc/promtail/promtail.yaml << EOF
@@ -876,7 +963,10 @@ EOF
 
     chown -R promtail:promtail /etc/promtail /var/lib/promtail
 
-    cat > /etc/systemd/system/promtail.service << 'EOF'
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/promtail.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Promtail service file..."
+        cat > /etc/systemd/system/promtail.service << 'EOF'
 [Unit]
 Description=Promtail
 Wants=network-online.target
@@ -894,12 +984,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+    fi
 
-    systemctl daemon-reload
     systemctl enable promtail
-    systemctl restart promtail
+    systemctl start promtail
 
-    log_success "Promtail installed and configured"
+    log_success "Promtail running (log shipping to Loki)"
 }
 
 #===============================================================================
