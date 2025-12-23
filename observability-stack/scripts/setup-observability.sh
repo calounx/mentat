@@ -91,6 +91,8 @@ ALERTMANAGER_VERSION="0.26.0"
 LOKI_VERSION="2.9.3"
 NODE_EXPORTER_VERSION="1.7.0"
 NGINX_EXPORTER_VERSION="1.1.0"
+PHPFPM_EXPORTER_VERSION="2.2.0"
+PROMTAIL_VERSION="2.9.3"
 
 #===============================================================================
 # UTILITY FUNCTIONS
@@ -265,9 +267,12 @@ create_backup() {
     backup_file "/etc/nginx/.htpasswd_loki"
 
     # Backup systemd service files
-    for service in prometheus node_exporter nginx_exporter alertmanager loki; do
+    for service in prometheus node_exporter nginx_exporter phpfpm_exporter promtail alertmanager loki; do
         backup_file "/etc/systemd/system/${service}.service"
     done
+
+    # Backup promtail config
+    backup_file "/etc/promtail/promtail.yaml"
 
     log_success "Backup created at ${BACKUP_DIR}/${BACKUP_TIMESTAMP}"
 }
@@ -338,6 +343,42 @@ uninstall_nginx_exporter() {
     nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
 
     log_success "Nginx Exporter uninstalled"
+}
+
+uninstall_phpfpm_exporter() {
+    log_info "Uninstalling PHP-FPM Exporter..."
+
+    systemctl stop phpfpm_exporter 2>/dev/null || true
+    systemctl disable phpfpm_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/phpfpm_exporter.service
+    rm -f /usr/local/bin/php-fpm_exporter
+
+    userdel phpfpm_exporter 2>/dev/null || true
+    groupdel phpfpm_exporter 2>/dev/null || true
+
+    log_success "PHP-FPM Exporter uninstalled"
+}
+
+uninstall_promtail() {
+    log_info "Uninstalling Promtail..."
+
+    systemctl stop promtail 2>/dev/null || true
+    systemctl disable promtail 2>/dev/null || true
+
+    rm -f /etc/systemd/system/promtail.service
+    rm -f /usr/local/bin/promtail
+
+    if [[ "$PURGE_DATA" == "true" ]]; then
+        rm -rf /etc/promtail
+        rm -rf /var/lib/promtail
+        log_info "  Purged Promtail data"
+    fi
+
+    userdel promtail 2>/dev/null || true
+    groupdel promtail 2>/dev/null || true
+
+    log_success "Promtail uninstalled"
 }
 
 uninstall_alertmanager() {
@@ -464,6 +505,8 @@ run_uninstall() {
     uninstall_grafana
     uninstall_loki
     uninstall_alertmanager
+    uninstall_promtail
+    uninstall_phpfpm_exporter
     uninstall_nginx_exporter
     uninstall_node_exporter
     uninstall_prometheus
@@ -996,6 +1039,260 @@ EOF
 }
 
 #===============================================================================
+# PHP-FPM EXPORTER INSTALLATION
+#===============================================================================
+
+is_phpfpm_exporter_installed() {
+    check_binary_version "/usr/local/bin/php-fpm_exporter" "$PHPFPM_EXPORTER_VERSION"
+}
+
+install_phpfpm_exporter() {
+    # Check if PHP-FPM is installed
+    if ! systemctl list-units --type=service | grep -q "php.*fpm"; then
+        log_skip "PHP-FPM not found, skipping phpfpm_exporter"
+        return
+    fi
+
+    local skip_binary=false
+
+    if is_phpfpm_exporter_installed; then
+        log_skip "PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION} already installed"
+        skip_binary=true
+    fi
+
+    # Always stop service and kill process before installation/update
+    systemctl stop phpfpm_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/php-fpm_exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
+    useradd --no-create-home --shell /bin/false phpfpm_exporter 2>/dev/null || true
+
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
+
+        cd /tmp
+        wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
+        mv "php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64" /usr/local/bin/php-fpm_exporter
+        chmod +x /usr/local/bin/php-fpm_exporter
+        chown phpfpm_exporter:phpfpm_exporter /usr/local/bin/php-fpm_exporter
+
+        log_success "PHP-FPM Exporter binary installed"
+    fi
+
+    # Find PHP-FPM socket
+    PHP_FPM_SOCKET=""
+    PHP_FPM_STATUS=""
+
+    for sock in /run/php/php*-fpm.sock /var/run/php*-fpm.sock /run/php-fpm/*.sock; do
+        if [[ -S "$sock" ]]; then
+            PHP_FPM_SOCKET="$sock"
+            break
+        fi
+    done
+
+    if [[ -n "$PHP_FPM_SOCKET" ]]; then
+        log_info "Found PHP-FPM socket: $PHP_FPM_SOCKET"
+        # Enable status page in PHP-FPM pool
+        PHP_FPM_CONF=$(find /etc/php -name "www.conf" 2>/dev/null | head -1)
+        if [[ -n "$PHP_FPM_CONF" ]]; then
+            if ! grep -q "^pm.status_path" "$PHP_FPM_CONF"; then
+                log_info "Enabling PHP-FPM status page..."
+                echo "pm.status_path = /status" >> "$PHP_FPM_CONF"
+                systemctl restart "$(systemctl list-units --type=service | grep "php.*fpm" | awk '{print $1}')"
+            fi
+        fi
+        PHP_FPM_STATUS="unix://${PHP_FPM_SOCKET};/status"
+    else
+        PHP_FPM_STATUS="tcp://127.0.0.1:9000/status"
+    fi
+
+    # Add phpfpm_exporter to www-data group to access socket
+    usermod -a -G www-data phpfpm_exporter 2>/dev/null || true
+
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/phpfpm_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating PHP-FPM Exporter service file..."
+        cat > /etc/systemd/system/phpfpm_exporter.service << EOF
+[Unit]
+Description=PHP-FPM Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=phpfpm_exporter
+Group=phpfpm_exporter
+Type=simple
+ExecStart=/usr/local/bin/php-fpm_exporter server \\
+    --phpfpm.scrape-uri="${PHP_FPM_STATUS}" \\
+    --web.listen-address=":9253"
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload
+    fi
+
+    systemctl enable phpfpm_exporter
+    systemctl start phpfpm_exporter
+
+    log_success "PHP-FPM Exporter running (port 9253)"
+}
+
+#===============================================================================
+# PROMTAIL INSTALLATION (Log Shipper)
+#===============================================================================
+
+is_promtail_installed() {
+    check_binary_version "/usr/local/bin/promtail" "$PROMTAIL_VERSION" "-version"
+}
+
+install_promtail() {
+    local skip_binary=false
+
+    if is_promtail_installed; then
+        log_skip "Promtail ${PROMTAIL_VERSION} already installed"
+        skip_binary=true
+    fi
+
+    # Always stop service and kill process before installation/update
+    systemctl stop promtail 2>/dev/null || true
+    sleep 1
+    pkill -f "/usr/local/bin/promtail" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
+    useradd --no-create-home --shell /bin/false promtail 2>/dev/null || true
+
+    # Ensure directories exist
+    mkdir -p /etc/promtail
+    mkdir -p /var/lib/promtail
+
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Promtail ${PROMTAIL_VERSION}..."
+
+        cd /tmp
+        wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
+        unzip -o promtail-linux-amd64.zip
+        chmod +x promtail-linux-amd64
+        mv promtail-linux-amd64 /usr/local/bin/promtail
+
+        rm -f promtail-linux-amd64.zip
+
+        log_success "Promtail binary installed"
+    fi
+
+    # Get hostname for labels
+    local HOSTNAME
+    HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+
+    # Create Promtail configuration
+    cat > /etc/promtail/promtail.yaml << EOF
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  # Nginx access logs
+  - job_name: nginx_access
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx_access
+          host: ${HOSTNAME}
+          __path__: /var/log/nginx/access.log
+
+  # Nginx error logs
+  - job_name: nginx_error
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx_error
+          host: ${HOSTNAME}
+          __path__: /var/log/nginx/error.log
+
+  # Grafana logs
+  - job_name: grafana
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: grafana
+          host: ${HOSTNAME}
+          __path__: /var/log/grafana/*.log
+
+  # Syslog
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          host: ${HOSTNAME}
+          __path__: /var/log/syslog
+
+  # Auth log
+  - job_name: auth
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: auth
+          host: ${HOSTNAME}
+          __path__: /var/log/auth.log
+EOF
+
+    # Add promtail to adm group to read logs
+    usermod -a -G adm promtail
+    usermod -a -G www-data promtail 2>/dev/null || true
+
+    chown -R promtail:promtail /etc/promtail /var/lib/promtail
+
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/promtail.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Promtail service file..."
+        cat > /etc/systemd/system/promtail.service << 'EOF'
+[Unit]
+Description=Promtail
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=promtail
+Group=promtail
+Type=simple
+ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail/promtail.yaml
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload
+    fi
+
+    systemctl enable promtail
+    systemctl start promtail
+
+    log_success "Promtail running (shipping logs to Loki)"
+}
+
+#===============================================================================
 # ALERTMANAGER INSTALLATION
 #===============================================================================
 
@@ -1487,7 +1784,7 @@ final_setup() {
     sleep 5
 
     # Verify all services are running
-    for service in prometheus node_exporter nginx_exporter alertmanager loki grafana-server nginx; do
+    for service in prometheus node_exporter nginx_exporter phpfpm_exporter promtail alertmanager loki grafana-server nginx; do
         if systemctl is-active --quiet "$service"; then
             log_success "$service is running"
         else
@@ -1571,6 +1868,8 @@ main() {
     install_prometheus
     install_node_exporter
     install_nginx_exporter
+    install_phpfpm_exporter
+    install_promtail
     install_alertmanager
     install_loki
     install_grafana

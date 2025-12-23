@@ -72,7 +72,7 @@ echo "Endpoints (HTTP status):"
 check_endpoint "Grafana (3000)" "http://localhost:3000/api/health"
 check_endpoint "Prometheus (9090)" "http://localhost:9090/-/ready"
 check_endpoint "Loki (3100)" "http://localhost:3100/ready"
-check_endpoint "Alertmanager (9093)" "http://localhost:9093/api/v2/status"
+check_endpoint "Alertmanager (9093)" "http://localhost:9093/alertmanager/-/healthy"
 
 # Exporter Metrics
 echo ""
