@@ -27,6 +27,7 @@ monitored_hosts:
       - nginx_exporter
       - mysqld_exporter
       - phpfpm_exporter
+      - fail2ban_exporter
 
   - name: "webserver-02"
     ip: "MONITORED_HOST_2_IP"
@@ -36,6 +37,7 @@ monitored_hosts:
       - nginx_exporter
       - mysqld_exporter
       - phpfpm_exporter
+      - fail2ban_exporter
 
   - name: "webserver-03"
     ip: "MONITORED_HOST_3_IP"
@@ -45,6 +47,7 @@ monitored_hosts:
       - nginx_exporter
       - mysqld_exporter
       - phpfpm_exporter
+      - fail2ban_exporter
 
 # =============================================================================
 # ALERTING - EMAIL (SMTP via Brevo)
@@ -109,3 +112,4 @@ ports:
   nginx_exporter: 9113
   mysqld_exporter: 9104
   phpfpm_exporter: 9253
+  fail2ban_exporter: 9191

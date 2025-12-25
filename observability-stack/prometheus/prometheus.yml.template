@@ -88,3 +88,10 @@ scrape_configs:
   - job_name: 'phpfpm'
     static_configs:
       {{PHPFPM_EXPORTER_TARGETS}}
+
+  # ==========================================================================
+  # MONITORED HOSTS - Fail2ban Exporter
+  # ==========================================================================
+  - job_name: 'fail2ban'
+    static_configs:
+      {{FAIL2BAN_EXPORTER_TARGETS}}

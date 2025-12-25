@@ -796,6 +796,7 @@ configure_prometheus() {
     NGINX_TARGETS=""
     MYSQL_TARGETS=""
     PHPFPM_TARGETS=""
+    FAIL2BAN_TARGETS=""
 
     # Parse monitored hosts from config
     while IFS= read -r line; do
@@ -809,6 +810,7 @@ configure_prometheus() {
                     NGINX_TARGETS="${NGINX_TARGETS}      - targets: ['${IP}:9113']\n        labels:\n          instance: '${NAME}'\n"
                     MYSQL_TARGETS="${MYSQL_TARGETS}      - targets: ['${IP}:9104']\n        labels:\n          instance: '${NAME}'\n"
                     PHPFPM_TARGETS="${PHPFPM_TARGETS}      - targets: ['${IP}:9253']\n        labels:\n          instance: '${NAME}'\n"
+                    FAIL2BAN_TARGETS="${FAIL2BAN_TARGETS}      - targets: ['${IP}:9191']\n        labels:\n          instance: '${NAME}'\n"
                 fi
             fi
         fi
@@ -820,6 +822,7 @@ configure_prometheus() {
         -e "s|{{NGINX_EXPORTER_TARGETS}}|${NGINX_TARGETS}|g" \
         -e "s|{{MYSQL_EXPORTER_TARGETS}}|${MYSQL_TARGETS}|g" \
         -e "s|{{PHPFPM_EXPORTER_TARGETS}}|${PHPFPM_TARGETS}|g" \
+        -e "s|{{FAIL2BAN_EXPORTER_TARGETS}}|${FAIL2BAN_TARGETS}|g" \
         "${BASE_DIR}/prometheus/prometheus.yml.template")
 
     # Check and write prometheus.yml

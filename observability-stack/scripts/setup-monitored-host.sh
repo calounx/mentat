@@ -2,7 +2,7 @@
 #===============================================================================
 # Monitored Host Agent Setup Script
 # Installs: node_exporter, nginx-prometheus-exporter, mysqld_exporter,
-#           php-fpm_exporter, promtail
+#           php-fpm_exporter, fail2ban-prometheus-exporter, promtail
 #
 # This script is IDEMPOTENT - safe to run multiple times.
 #
@@ -33,6 +33,7 @@ NODE_EXPORTER_VERSION="1.7.0"
 NGINX_EXPORTER_VERSION="1.1.0"
 MYSQLD_EXPORTER_VERSION="0.15.1"
 PHPFPM_EXPORTER_VERSION="2.2.0"
+FAIL2BAN_EXPORTER_VERSION="0.10.3"
 PROMTAIL_VERSION="2.9.3"
 
 # Script arguments (parse flags from any position)
@@ -218,6 +219,10 @@ is_phpfpm_exporter_installed() {
     check_binary_version "/usr/local/bin/php-fpm_exporter" "$PHPFPM_EXPORTER_VERSION"
 }
 
+is_fail2ban_exporter_installed() {
+    check_binary_version "/usr/local/bin/fail2ban-prometheus-exporter" "$FAIL2BAN_EXPORTER_VERSION"
+}
+
 is_promtail_installed() {
     check_binary_version "/usr/local/bin/promtail" "$PROMTAIL_VERSION" "-version"
 }
@@ -295,6 +300,21 @@ uninstall_phpfpm_exporter() {
     log_success "PHP-FPM Exporter uninstalled"
 }
 
+uninstall_fail2ban_exporter() {
+    log_info "Uninstalling Fail2ban Exporter..."
+
+    systemctl stop fail2ban_exporter 2>/dev/null || true
+    systemctl disable fail2ban_exporter 2>/dev/null || true
+
+    rm -f /etc/systemd/system/fail2ban_exporter.service
+    rm -f /usr/local/bin/fail2ban-prometheus-exporter
+
+    userdel fail2ban_exporter 2>/dev/null || true
+    groupdel fail2ban_exporter 2>/dev/null || true
+
+    log_success "Fail2ban Exporter uninstalled"
+}
+
 uninstall_promtail() {
     log_info "Uninstalling Promtail..."
 
@@ -319,7 +339,7 @@ remove_firewall_rules() {
     log_info "Removing firewall rules for exporters..."
 
     # Remove rules for exporter ports
-    for port in 9100 9113 9104 9253; do
+    for port in 9100 9113 9104 9253 9191; do
         ufw delete allow from any to any port "$port" proto tcp 2>/dev/null || true
     done
 
@@ -341,6 +361,7 @@ run_uninstall() {
     check_root
 
     uninstall_promtail
+    uninstall_fail2ban_exporter
     uninstall_phpfpm_exporter
     uninstall_mysqld_exporter
     uninstall_nginx_exporter
@@ -405,14 +426,16 @@ prepare_system() {
 configure_firewall() {
     log_info "Configuring firewall..."
 
-    # Force mode resets firewall
+    # Force mode resets firewall - but preserve essential ports
     if [[ "$FORCE_MODE" == "true" ]]; then
         log_info "Force mode: resetting firewall..."
         ufw --force reset
     fi
 
-    # Allow SSH (idempotent - ufw handles duplicates)
-    ufw allow 22/tcp
+    # Allow essential ports (idempotent - ufw handles duplicates)
+    ufw allow 22/tcp    # SSH
+    ufw allow 80/tcp    # HTTP
+    ufw allow 443/tcp   # HTTPS
 
     # Allow Prometheus scraping from observability VPS
     # Check if rules already exist to avoid duplicate warnings
@@ -427,6 +450,9 @@ configure_firewall() {
     fi
     if ! ufw status | grep -q "$OBSERVABILITY_IP.*9253"; then
         ufw allow from "$OBSERVABILITY_IP" to any port 9253 proto tcp  # phpfpm_exporter
+    fi
+    if ! ufw status | grep -q "$OBSERVABILITY_IP.*9191"; then
+        ufw allow from "$OBSERVABILITY_IP" to any port 9191 proto tcp  # fail2ban_exporter
     fi
 
     # Enable firewall if not already enabled
@@ -508,6 +534,47 @@ EOF
 # NGINX EXPORTER
 #===============================================================================
 
+# Detect existing stub_status configuration and return the URL
+# Returns: the stub_status URL (e.g., http://127.0.0.1:80/nginx_status)
+detect_stub_status_url() {
+    local stub_port=""
+    local stub_path=""
+
+    # Check for existing stub_status configs in common locations
+    for conf_file in /etc/nginx/conf.d/*.conf /etc/nginx/sites-enabled/*; do
+        if [[ -f "$conf_file" ]] && grep -q "stub_status" "$conf_file" 2>/dev/null; then
+            # Extract port from listen directive in the same server block
+            # Handle formats: listen 127.0.0.1:80; or listen 8080; or listen 80;
+            local listen_line
+            listen_line=$(grep -B20 "stub_status" "$conf_file" | grep "listen" | tail -1)
+
+            if [[ -n "$listen_line" ]]; then
+                # Extract port - handle various formats
+                if echo "$listen_line" | grep -qE ":[0-9]+"; then
+                    # Format: listen 127.0.0.1:80;
+                    stub_port=$(echo "$listen_line" | grep -oE ":[0-9]+" | tr -d ':')
+                else
+                    # Format: listen 80; or listen 8080;
+                    stub_port=$(echo "$listen_line" | grep -oE "[0-9]+" | head -1)
+                fi
+            fi
+
+            # Extract the location path for stub_status
+            stub_path=$(grep -E "location.*(stub_status|nginx_status)" "$conf_file" | grep -oE "/[a-z_]+" | head -1)
+            [[ -z "$stub_path" ]] && stub_path="/nginx_status"
+
+            if [[ -n "$stub_port" ]]; then
+                log_info "Detected existing stub_status in $conf_file (port $stub_port, path $stub_path)"
+                echo "http://127.0.0.1:${stub_port}${stub_path}"
+                return 0
+            fi
+        fi
+    done
+
+    # No existing config found
+    return 1
+}
+
 install_nginx_exporter() {
     # Check if nginx is installed
     if ! command -v nginx &> /dev/null; then
@@ -547,10 +614,13 @@ install_nginx_exporter() {
         log_success "Nginx Exporter binary installed"
     fi
 
-    # Always ensure stub_status is enabled
-    if ! grep -q "stub_status" /etc/nginx/sites-enabled/* 2>/dev/null && \
-       ! grep -q "stub_status" /etc/nginx/conf.d/* 2>/dev/null; then
-        log_info "Enabling Nginx stub_status..."
+    # Detect existing stub_status config OR create our own
+    local STUB_STATUS_URL
+    if STUB_STATUS_URL=$(detect_stub_status_url); then
+        log_info "Using existing stub_status at: $STUB_STATUS_URL"
+    else
+        # No existing config, create our own on port 8080
+        log_info "No existing stub_status found, creating one on port 8080..."
         cat > /etc/nginx/conf.d/stub_status.conf << 'EOF'
 server {
     listen 127.0.0.1:8080;
@@ -565,12 +635,26 @@ server {
 }
 EOF
         nginx -t && systemctl reload nginx
+        STUB_STATUS_URL="http://127.0.0.1:8080/nginx_status"
     fi
 
-    # Always ensure service file exists
-    if [[ ! -f /etc/systemd/system/nginx_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+    # Verify the stub_status endpoint is reachable
+    if ! curl -s --max-time 2 "$STUB_STATUS_URL" | grep -q "Active connections"; then
+        log_warn "stub_status endpoint at $STUB_STATUS_URL is not responding correctly"
+    fi
+
+    # Always ensure service file exists or update if stub_status URL changed
+    local current_url=""
+    if [[ -f /etc/systemd/system/nginx_exporter.service ]]; then
+        current_url=$(grep "nginx.scrape-uri" /etc/systemd/system/nginx_exporter.service | grep -oE "http://[^ ]+" | tr -d '"')
+    fi
+
+    if [[ ! -f /etc/systemd/system/nginx_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]] || [[ "$current_url" != "$STUB_STATUS_URL" ]]; then
+        if [[ -n "$current_url" ]] && [[ "$current_url" != "$STUB_STATUS_URL" ]]; then
+            log_info "Updating nginx_exporter to use $STUB_STATUS_URL (was $current_url)"
+        fi
         log_info "Creating Nginx Exporter service file..."
-        cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
+        cat > /etc/systemd/system/nginx_exporter.service << EOF
 [Unit]
 Description=Nginx Prometheus Exporter
 Wants=network-online.target
@@ -580,8 +664,8 @@ After=network-online.target nginx.service
 User=nginx_exporter
 Group=nginx_exporter
 Type=simple
-ExecStart=/usr/local/bin/nginx-prometheus-exporter \
-    --nginx.scrape-uri=http://127.0.0.1:8080/nginx_status
+ExecStart=/usr/local/bin/nginx-prometheus-exporter \\
+    --nginx.scrape-uri=${STUB_STATUS_URL}
 
 Restart=always
 RestartSec=5
@@ -595,7 +679,7 @@ EOF
     systemctl enable nginx_exporter
     systemctl start nginx_exporter
 
-    log_success "Nginx Exporter running (port 9113)"
+    log_success "Nginx Exporter running (port 9113, scraping $STUB_STATUS_URL)"
 }
 
 #===============================================================================
@@ -822,6 +906,92 @@ EOF
 }
 
 #===============================================================================
+# FAIL2BAN EXPORTER
+#===============================================================================
+
+install_fail2ban_exporter() {
+    # Check if fail2ban is installed
+    if ! command -v fail2ban-client &> /dev/null; then
+        log_warn "Fail2ban not found, skipping fail2ban_exporter"
+        return
+    fi
+
+    local skip_binary=false
+
+    if is_fail2ban_exporter_installed; then
+        log_skip "Fail2ban Exporter ${FAIL2BAN_EXPORTER_VERSION} already installed"
+        skip_binary=true
+    fi
+
+    # Always stop service and kill process before installation/update (especially in force mode)
+    systemctl stop fail2ban_exporter 2>/dev/null || true
+    sleep 1
+    pkill -f "fail2ban-prometheus-exporter" 2>/dev/null || true
+    sleep 1
+
+    # Ensure user exists
+    useradd --no-create-home --shell /bin/false fail2ban_exporter 2>/dev/null || true
+
+    # Install binary if needed
+    if [[ "$skip_binary" == "false" ]]; then
+        log_info "Installing Fail2ban Exporter ${FAIL2BAN_EXPORTER_VERSION}..."
+
+        cd /tmp
+        wget -q "https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${FAIL2BAN_EXPORTER_VERSION}/downloads/fail2ban_exporter_${FAIL2BAN_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        tar xzf "fail2ban_exporter_${FAIL2BAN_EXPORTER_VERSION}_linux_amd64.tar.gz"
+
+        cp fail2ban_exporter /usr/local/bin/fail2ban-prometheus-exporter
+        chmod +x /usr/local/bin/fail2ban-prometheus-exporter
+        chown fail2ban_exporter:fail2ban_exporter /usr/local/bin/fail2ban-prometheus-exporter
+
+        rm -rf "fail2ban_exporter_${FAIL2BAN_EXPORTER_VERSION}_linux_amd64.tar.gz" fail2ban_exporter LICENSE README.md
+
+        log_success "Fail2ban Exporter binary installed"
+    fi
+
+    # Always ensure service file exists
+    if [[ ! -f /etc/systemd/system/fail2ban_exporter.service ]] || [[ "$FORCE_MODE" == "true" ]]; then
+        log_info "Creating Fail2ban Exporter service file..."
+        cat > /etc/systemd/system/fail2ban_exporter.service << 'EOF'
+[Unit]
+Description=Fail2ban Prometheus Exporter
+Wants=network-online.target
+After=network-online.target fail2ban.service
+
+[Service]
+User=fail2ban_exporter
+Group=fail2ban_exporter
+Type=simple
+ExecStart=/usr/local/bin/fail2ban-prometheus-exporter \
+    --web.listen-address=":9191"
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload
+    fi
+
+    # Add fail2ban_exporter user to fail2ban group to access socket
+    # fail2ban socket is typically at /var/run/fail2ban/fail2ban.sock
+    if getent group fail2ban > /dev/null 2>&1; then
+        usermod -a -G fail2ban fail2ban_exporter 2>/dev/null || true
+    fi
+
+    # Ensure fail2ban socket is accessible
+    if [[ -S /var/run/fail2ban/fail2ban.sock ]]; then
+        chmod g+rw /var/run/fail2ban/fail2ban.sock 2>/dev/null || true
+    fi
+
+    systemctl enable fail2ban_exporter
+    systemctl start fail2ban_exporter
+
+    log_success "Fail2ban Exporter running (port 9191)"
+}
+
+#===============================================================================
 # PROMTAIL (Log Shipper)
 #===============================================================================
 
@@ -830,6 +1000,11 @@ install_promtail() {
         log_warn "LOKI_URL not provided, skipping Promtail"
         return
     fi
+
+    # Normalize LOKI_URL - remove trailing /loki if present (we add it ourselves)
+    LOKI_URL="${LOKI_URL%/}"          # Remove trailing slash
+    LOKI_URL="${LOKI_URL%/loki}"      # Remove trailing /loki if present
+    LOKI_URL="${LOKI_URL%/}"          # Remove any trailing slash again
 
     local skip_binary=false
 
@@ -1012,7 +1187,7 @@ print_summary() {
     echo ""
     echo "Installed exporters:"
 
-    local HAS_NODE=false HAS_NGINX=false HAS_MYSQL=false HAS_PHPFPM=false HAS_PROMTAIL=false
+    local HAS_NODE=false HAS_NGINX=false HAS_MYSQL=false HAS_PHPFPM=false HAS_FAIL2BAN=false HAS_PROMTAIL=false
     local MYSQL_NEEDS_SETUP=false
 
     if systemctl is-active --quiet node_exporter; then
@@ -1047,6 +1222,11 @@ print_summary() {
     if systemctl is-active --quiet phpfpm_exporter; then
         echo -e "  ${GREEN}✓${NC} PHP-FPM Exporter   (port 9253)"
         HAS_PHPFPM=true
+    fi
+
+    if systemctl is-active --quiet fail2ban_exporter; then
+        echo -e "  ${GREEN}✓${NC} Fail2ban Exporter  (port 9191)"
+        HAS_FAIL2BAN=true
     fi
 
     if systemctl is-active --quiet promtail; then
@@ -1121,6 +1301,7 @@ print_summary() {
     [[ "$HAS_NGINX" == "true" ]] && echo "      - nginx_exporter"
     [[ "$HAS_MYSQL" == "true" ]] && echo "      - mysqld_exporter"
     [[ "$HAS_PHPFPM" == "true" ]] && echo "      - phpfpm_exporter"
+    [[ "$HAS_FAIL2BAN" == "true" ]] && echo "      - fail2ban_exporter"
     echo -e "EOF${NC}"
     echo ""
     echo "b) Regenerate Prometheus config and reload:"
@@ -1160,6 +1341,7 @@ main() {
     install_nginx_exporter
     install_mysqld_exporter
     install_phpfpm_exporter
+    install_fail2ban_exporter
     install_promtail
 
     print_summary
