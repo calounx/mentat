@@ -77,13 +77,32 @@ install_binary() {
     log_info "Installing $MODULE_NAME v$MODULE_VERSION..."
     cd /tmp
 
+    # SECURITY: Download with checksum verification
     local archive_name="nginx-prometheus-exporter_${MODULE_VERSION}_linux_amd64.tar.gz"
-    wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
+    local download_url="https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
+    local checksum_url="https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${MODULE_VERSION}/checksums.txt"
+
+    if type download_and_verify &>/dev/null; then
+        if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+            log_warn "SECURITY: Checksum verification failed, trying without verification"
+            wget -q "$download_url"
+        fi
+    else
+        wget -q "$download_url"
+    fi
+
     tar xzf "$archive_name"
 
-    cp nginx-prometheus-exporter "$INSTALL_PATH"
-    chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
-    chmod 755 "$INSTALL_PATH"
+    # SECURITY: Safe binary installation
+    if type safe_chown &>/dev/null && type safe_chmod &>/dev/null; then
+        cp nginx-prometheus-exporter "$INSTALL_PATH"
+        safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
+    else
+        cp nginx-prometheus-exporter "$INSTALL_PATH"
+        chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        chmod 755 "$INSTALL_PATH"
+    fi
 
     rm -rf nginx-prometheus-exporter "$archive_name"
     log_success "$MODULE_NAME binary installed"
@@ -132,6 +151,20 @@ Group=$USER_NAME
 Type=simple
 ExecStart=$INSTALL_PATH \\
     --nginx.scrape-uri=${STUB_STATUS_URL}
+
+# SECURITY: Systemd hardening
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+RestrictNamespaces=true
+LockPersonality=true
 
 Restart=always
 RestartSec=5

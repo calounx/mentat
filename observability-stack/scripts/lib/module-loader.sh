@@ -198,13 +198,15 @@ module_detect() {
 
     manifest=$(get_module_manifest "$module_name") || return 1
 
-    # Check commands
+    # Check commands (using safe validation instead of eval)
     while IFS= read -r cmd; do
         [[ -z "$cmd" ]] && continue
         ((total_checks++))
-        if eval "$cmd" &>/dev/null; then
+        if validate_and_execute_detection_command "$cmd"; then
             ((matches++))
             log_debug "Module $module_name: command '$cmd' matched"
+        else
+            log_debug "Module $module_name: command '$cmd' did not match or was invalid"
         fi
     done < <(yaml_get_array "$manifest" "detection.commands" 2>/dev/null)
 
@@ -241,8 +243,20 @@ module_detect() {
         max_confidence=$(yaml_get_nested "$manifest" "detection" "confidence")
         max_confidence=${max_confidence:-100}
 
+        # Validate max_confidence bounds (0-100)
+        if [[ $max_confidence -lt 0 ]]; then
+            max_confidence=0
+        elif [[ $max_confidence -gt 100 ]]; then
+            max_confidence=100
+        fi
+
         # Scale to max confidence
         confidence=$((base_confidence * max_confidence / 100))
+
+        # Cap confidence at max_confidence (ensure it never exceeds)
+        if [[ $confidence -gt $max_confidence ]]; then
+            confidence=$max_confidence
+        fi
 
         if [[ $confidence -gt 0 ]]; then
             echo "$confidence"

@@ -86,20 +86,54 @@ install_binary() {
 
     cd /tmp
 
-    # Download
+    # SECURITY: Download with checksum verification
     local archive_name="node_exporter-${MODULE_VERSION}.linux-amd64.tar.gz"
     local download_url="https://github.com/prometheus/node_exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
+    local checksum_url="https://github.com/prometheus/node_exporter/releases/download/v${MODULE_VERSION}/sha256sums.txt"
 
-    log_info "Downloading from $download_url..."
-    wget -q "$download_url" -O "$archive_name"
+    # Use secure download function from common.sh (with fallback for compatibility)
+    if type download_and_verify &>/dev/null; then
+        if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+            log_error "SECURITY: Failed to download and verify $archive_name"
+            return 1
+        fi
+    else
+        log_warn "SECURITY: download_and_verify not available, downloading without verification"
+        if ! wget -q --timeout=60 --tries=3 "$download_url" -O "$archive_name"; then
+            log_error "Failed to download $MODULE_NAME from $download_url"
+            return 1
+        fi
+    fi
 
     # Extract
-    tar xzf "$archive_name"
+    if ! tar xzf "$archive_name"; then
+        log_error "Failed to extract $archive_name"
+        rm -f "$archive_name"
+        return 1
+    fi
 
-    # Install binary
-    cp "node_exporter-${MODULE_VERSION}.linux-amd64/node_exporter" "$INSTALL_PATH"
-    chown "$USER_NAME:$GROUP_NAME" "$INSTALL_PATH"
-    chmod 755 "$INSTALL_PATH"
+    # SECURITY: Install binary with safe ownership functions
+    if ! cp "node_exporter-${MODULE_VERSION}.linux-amd64/node_exporter" "$INSTALL_PATH"; then
+        log_error "Failed to install binary to $INSTALL_PATH"
+        rm -rf "node_exporter-${MODULE_VERSION}.linux-amd64" "$archive_name"
+        return 1
+    fi
+
+    if type safe_chown &>/dev/null && type safe_chmod &>/dev/null; then
+        safe_chown "$USER_NAME:$GROUP_NAME" "$INSTALL_PATH" || {
+            log_error "Failed to set ownership"
+            rm -rf "node_exporter-${MODULE_VERSION}.linux-amd64" "$archive_name" "$INSTALL_PATH"
+            return 1
+        }
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || {
+            log_error "Failed to set permissions"
+            rm -rf "node_exporter-${MODULE_VERSION}.linux-amd64" "$archive_name" "$INSTALL_PATH"
+            return 1
+        }
+    else
+        chown "$USER_NAME:$GROUP_NAME" "$INSTALL_PATH"
+        chmod 755 "$INSTALL_PATH"
+    fi
 
     # Cleanup
     rm -rf "node_exporter-${MODULE_VERSION}.linux-amd64" "$archive_name"
@@ -137,6 +171,44 @@ Type=simple
 ExecStart=$INSTALL_PATH \\
     --collector.systemd \\
     --collector.processes $extra_flags
+
+# SECURITY: Systemd hardening directives
+# Restrict filesystem access
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/
+ReadWritePaths=/proc /sys
+
+# Prevent privilege escalation
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Kernel protection
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+
+# Network restrictions (allow IPv4 and IPv6 only)
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+# System call filtering
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+# Capabilities (node_exporter needs minimal caps)
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Restrict namespaces
+RestrictNamespaces=true
+PrivateDevices=true
+
+# Misc hardening
+LockPersonality=true
+RestrictRealtime=true
+ProtectClock=true
 
 Restart=always
 RestartSec=5
@@ -179,15 +251,6 @@ start_service() {
     fi
 }
 
-verify_metrics() {
-    log_info "Verifying metrics endpoint..."
-
-    if curl -sf "http://localhost:$MODULE_PORT/metrics" | grep -q "node_cpu_seconds_total"; then
-        log_success "Metrics endpoint verified"
-    else
-        log_warn "Could not verify metrics endpoint"
-    fi
-}
 
 #===============================================================================
 # MAIN
@@ -229,3 +292,30 @@ main() {
 }
 
 main "$@"
+verify_metrics() {
+    log_info "Verifying metrics endpoint..."
+
+    local max_attempts=10
+    local attempt=0
+    local success=false
+
+    while [[ $attempt -lt $max_attempts ]]; do
+        ((attempt++))
+        if curl -sf "http://localhost:$MODULE_PORT/metrics" | grep -q "node_cpu_seconds_total"; then
+            log_success "Metrics endpoint verified (attempt $attempt/$max_attempts)"
+            success=true
+            break
+        fi
+        log_info "Waiting for metrics endpoint... (attempt $attempt/$max_attempts)"
+        sleep 1
+    done
+
+    if [[ "$success" != "true" ]]; then
+        log_error "Failed to verify metrics endpoint after $max_attempts attempts"
+        log_info "Service logs:"
+        journalctl -u "$SERVICE_NAME" -n 20 --no-pager || true
+        return 1
+    fi
+
+    return 0
+}

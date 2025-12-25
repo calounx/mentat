@@ -1,0 +1,48 @@
+# Sample Configuration for Testing
+# This file is used by test suites to verify YAML parsing
+
+server:
+  hostname: test-observability-server
+  ip: 192.168.1.100
+  timezone: UTC
+
+prometheus:
+  version: 2.45.0
+  retention_days: 30
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+grafana:
+  version: 10.0.0
+  admin_user: admin
+  admin_password: CHANGE_ME_IN_PRODUCTION
+  port: 3000
+
+loki:
+  version: 2.8.0
+  retention_days: 14
+
+alertmanager:
+  version: 0.25.0
+  port: 9093
+
+modules:
+  - node_exporter
+  - promtail
+  - nginx_exporter
+  - mysqld_exporter
+
+hosts:
+  - hostname: web-server-1
+    ip: 192.168.1.101
+    labels:
+      environment: production
+      datacenter: dc1
+      role: web
+
+  - hostname: db-server-1
+    ip: 192.168.1.201
+    labels:
+      environment: production
+      datacenter: dc1
+      role: database

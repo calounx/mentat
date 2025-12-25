@@ -1,0 +1,50 @@
+# Sample Host Configuration for Testing
+# This represents a typical monitored host setup
+
+host:
+  name: test-server-01
+  ip: 192.168.1.100
+  location: datacenter-1
+  environment: testing
+  tags:
+    - web
+    - testing
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  scrape_interval: 15s
+
+# Enabled modules
+modules:
+  node_exporter:
+    enabled: true
+    config:
+      collectors_enabled:
+        - systemd
+        - processes
+      collectors_disabled: []
+
+  nginx_exporter:
+    enabled: true
+    config:
+      nginx_status_url: "http://localhost/nginx_status"
+
+  promtail:
+    enabled: true
+    config:
+      log_paths:
+        - /var/log/syslog
+        - /var/log/nginx/*.log
+
+  # Disabled module example
+  mysqld_exporter:
+    enabled: false
+    config:
+      data_source_name: ""
+
+# Custom labels for this host
+labels:
+  role: webserver
+  team: platform
+  cost_center: engineering

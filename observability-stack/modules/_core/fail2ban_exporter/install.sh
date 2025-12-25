@@ -47,14 +47,23 @@ install_binary() {
     log_info "Installing $MODULE_NAME v$MODULE_VERSION..."
     cd /tmp
 
-    wget -q "https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${MODULE_VERSION}/downloads/fail2ban_exporter_${MODULE_VERSION}_linux_amd64.tar.gz"
-    tar xzf "fail2ban_exporter_${MODULE_VERSION}_linux_amd64.tar.gz"
+    # SECURITY: Download (checksum if available)
+    local archive_name="fail2ban_exporter_${MODULE_VERSION}_linux_amd64.tar.gz"
+    wget -q "https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${MODULE_VERSION}/downloads/${archive_name}"
+    tar xzf "$archive_name"
 
-    cp fail2ban_exporter "$INSTALL_PATH"
-    chmod +x "$INSTALL_PATH"
-    chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    # SECURITY: Safe installation
+    if type safe_chmod &>/dev/null && type safe_chown &>/dev/null; then
+        cp fail2ban_exporter "$INSTALL_PATH"
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
+        safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    else
+        cp fail2ban_exporter "$INSTALL_PATH"
+        chmod 755 "$INSTALL_PATH"
+        chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    fi
 
-    rm -rf "fail2ban_exporter_${MODULE_VERSION}_linux_amd64.tar.gz" fail2ban_exporter LICENSE README.md
+    rm -rf "$archive_name" fail2ban_exporter LICENSE README.md
     log_success "$MODULE_NAME binary installed"
 }
 

@@ -103,7 +103,12 @@ run_uninstall() {
             local uninstall_script="$module_dir/uninstall.sh"
             if [[ -f "$uninstall_script" ]]; then
                 log_info "Uninstalling $module..."
-                bash "$uninstall_script" $([ "$PURGE_DATA" == "true" ] && echo "--purge")
+                # Properly quote variable expansion - use array for arguments
+                local -a uninstall_args=()
+                if [[ "$PURGE_DATA" == "true" ]]; then
+                    uninstall_args=("--purge")
+                fi
+                bash "$uninstall_script" "${uninstall_args[@]+"${uninstall_args[@]}"}"
             fi
         fi
     done
@@ -206,6 +211,10 @@ install_from_config() {
         modules=$(list_core_modules)
     fi
 
+    # Track installation results
+    local -a successful_modules=()
+    local -a failed_modules=()
+
     # Install each enabled module
     while IFS= read -r module; do
         [[ -z "$module" ]] && continue
@@ -241,9 +250,51 @@ install_from_config() {
             fi
         fi
 
-        install_module "$module" $([ "$FORCE_MODE" == "true" ] && echo "--force")
+        # Properly quote variable expansion - use array for arguments
+        local -a install_args=()
+        if [[ "$FORCE_MODE" == "true" ]]; then
+            install_args=("--force")
+        fi
+
+        # Try to install module and track result
+        if install_module "$module" "${install_args[@]+"${install_args[@]}"}"; then
+            successful_modules+=("$module")
+        else
+            failed_modules+=("$module")
+            log_error "Failed to install $module"
+        fi
         echo ""
     done <<< "$modules"
+
+    # Report summary
+    echo ""
+    echo "=========================================="
+    echo "Installation Summary"
+    echo "=========================================="
+    echo ""
+    if [[ ${#successful_modules[@]} -gt 0 ]]; then
+        echo "Successfully installed (${#successful_modules[@]}):"
+        for mod in "${successful_modules[@]}"; do
+            echo "  - $mod"
+        done
+        echo ""
+    fi
+
+    if [[ ${#failed_modules[@]} -gt 0 ]]; then
+        echo "Failed to install (${#failed_modules[@]}):"
+        for mod in "${failed_modules[@]}"; do
+            echo "  - $mod"
+        done
+        echo ""
+        echo "Next steps:"
+        echo "  1. Check logs for error details: journalctl -xe"
+        echo "  2. Retry failed modules: ./scripts/module-manager.sh install <module>"
+        echo "  3. Review module requirements: ./scripts/module-manager.sh show <module>"
+        echo ""
+        return 1
+    fi
+
+    return 0
 }
 
 install_all_modules() {
@@ -268,7 +319,12 @@ install_all_modules() {
             export LOKI_PASS
         fi
 
-        install_module "$module" $([ "$FORCE_MODE" == "true" ] && echo "--force")
+        # Properly quote variable expansion - use array for arguments
+        local -a install_args=()
+        if [[ "$FORCE_MODE" == "true" ]]; then
+            install_args=("--force")
+        fi
+        install_module "$module" "${install_args[@]+"${install_args[@]}"}"
         echo ""
     done
 }

@@ -98,6 +98,45 @@ PROMTAIL_VERSION="2.9.3"
 # UTILITY FUNCTIONS
 #===============================================================================
 
+safe_download() {
+    local url="$1"
+    local output="${2:--O}"
+    local description="${3:-file}"
+
+    log_info "Downloading $description..."
+    if ! wget -q --timeout=60 --tries=3 "$url" "$output"; then
+        log_error "Failed to download $description from $url"
+        return 1
+    fi
+    return 0
+}
+
+safe_extract() {
+    local archive="$1"
+    local description="${2:-archive}"
+
+    log_info "Extracting $description..."
+    case "$archive" in
+        *.tar.gz)
+            if ! tar xzf "$archive"; then
+                log_error "Failed to extract $archive"
+                return 1
+            fi
+            ;;
+        *.zip)
+            if ! unzip -o "$archive" >/dev/null; then
+                log_error "Failed to extract $archive"
+                return 1
+            fi
+            ;;
+        *)
+            log_error "Unsupported archive format: $archive"
+            return 1
+            ;;
+    esac
+    return 0
+}
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -159,7 +198,13 @@ check_config_diff() {
     fi
 
     # Create temp file with new content (use printf to preserve content)
-    local temp_file=$(mktemp)
+    # Separate declare and assign, check mktemp exit status
+    local temp_file
+    temp_file=$(mktemp)
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to create temporary file"
+        return 1
+    fi
     printf '%s\n' "$new_content" > "$temp_file"
 
     # Check if files are different
@@ -339,8 +384,10 @@ uninstall_nginx_exporter() {
     userdel nginx_exporter 2>/dev/null || true
     groupdel nginx_exporter 2>/dev/null || true
 
-    # Reload nginx to remove stub_status
-    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    # Reload nginx to remove stub_status - proper if-then-else
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+    fi
 
     log_success "Nginx Exporter uninstalled"
 }
@@ -457,7 +504,10 @@ uninstall_nginx_config() {
         ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
     fi
 
-    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    # Proper if-then-else instead of AND-OR chain
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+    fi
 
     log_success "Nginx configuration removed"
 }
@@ -634,9 +684,17 @@ parse_config() {
     SMTP_HOST=$(yaml_get_nested "$CONFIG_FILE" "smtp" "host")
     SMTP_PORT=$(yaml_get_nested "$CONFIG_FILE" "smtp" "port")
     SMTP_USERNAME=$(yaml_get_nested "$CONFIG_FILE" "smtp" "username")
-    SMTP_PASSWORD=$(yaml_get_nested "$CONFIG_FILE" "smtp" "password")
     SMTP_FROM=$(yaml_get_nested "$CONFIG_FILE" "smtp" "from_address")
     SMTP_STARTTLS=$(yaml_get_nested "$CONFIG_FILE" "smtp" "starttls")
+
+    # SECURITY: SMTP password from secrets
+    local smtp_pass_config
+    smtp_pass_config=$(yaml_get_nested "$CONFIG_FILE" "smtp" "password")
+    if [[ "$smtp_pass_config" =~ ^\$\{SECRET:([a-zA-Z0-9_-]+)\}$ ]]; then
+        SMTP_PASSWORD=$(resolve_secret "${BASH_REMATCH[1]}")
+    else
+        SMTP_PASSWORD="$smtp_pass_config"
+    fi
 
     # Get first email from to_addresses
     SMTP_TO=$(grep -A1 "to_addresses:" "$CONFIG_FILE" | tail -1 | sed 's/.*- *//' | tr -d '"')
@@ -644,14 +702,36 @@ parse_config() {
     # Retention
     RETENTION_DAYS=$(yaml_get_nested "$CONFIG_FILE" "retention" "metrics_days")
 
-    # Grafana
-    GRAFANA_ADMIN_PASS=$(yaml_get_nested "$CONFIG_FILE" "grafana" "admin_password")
+    # SECURITY: Grafana admin password from secrets
+    local grafana_pass_config
+    grafana_pass_config=$(yaml_get_nested "$CONFIG_FILE" "grafana" "admin_password")
+    if [[ "$grafana_pass_config" =~ ^\$\{SECRET:([a-zA-Z0-9_-]+)\}$ ]]; then
+        GRAFANA_ADMIN_PASS=$(resolve_secret "${BASH_REMATCH[1]}")
+    else
+        GRAFANA_ADMIN_PASS="$grafana_pass_config"
+    fi
 
-    # Security
+    # Security - usernames from config
     PROMETHEUS_USER=$(yaml_get_nested "$CONFIG_FILE" "security" "prometheus_basic_auth_user")
-    PROMETHEUS_PASS=$(yaml_get_nested "$CONFIG_FILE" "security" "prometheus_basic_auth_password")
     LOKI_USER=$(yaml_get_nested "$CONFIG_FILE" "security" "loki_basic_auth_user")
-    LOKI_PASS=$(yaml_get_nested "$CONFIG_FILE" "security" "loki_basic_auth_password")
+
+    # SECURITY: Passwords from secrets (supports ${SECRET:name} syntax or plaintext fallback)
+    local prometheus_pass_config loki_pass_config
+    prometheus_pass_config=$(yaml_get_nested "$CONFIG_FILE" "security" "prometheus_basic_auth_password")
+    loki_pass_config=$(yaml_get_nested "$CONFIG_FILE" "security" "loki_basic_auth_password")
+
+    # Resolve secret references if present
+    if [[ "$prometheus_pass_config" =~ ^\$\{SECRET:([a-zA-Z0-9_-]+)\}$ ]]; then
+        PROMETHEUS_PASS=$(resolve_secret "${BASH_REMATCH[1]}")
+    else
+        PROMETHEUS_PASS="$prometheus_pass_config"
+    fi
+
+    if [[ "$loki_pass_config" =~ ^\$\{SECRET:([a-zA-Z0-9_-]+)\}$ ]]; then
+        LOKI_PASS=$(resolve_secret "${BASH_REMATCH[1]}")
+    else
+        LOKI_PASS="$loki_pass_config"
+    fi
 
     log_success "Configuration parsed successfully"
     log_info "  Domain: $GRAFANA_DOMAIN"
@@ -764,12 +844,19 @@ install_prometheus() {
 
         # Download and extract
         cd /tmp
-        wget -q "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
-        tar xzf "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+        local archive="prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+        safe_download "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/${archive}" "-O ${archive}" "Prometheus ${PROMETHEUS_VERSION}" || return 1
+        safe_extract "$archive" "Prometheus archive" || return 1
 
         # Install binaries
-        cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /usr/local/bin/
-        cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/
+        if ! cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /usr/local/bin/; then
+            log_error "Failed to copy prometheus binary"
+            return 1
+        fi
+        if ! cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/; then
+            log_error "Failed to copy promtool binary"
+            return 1
+        fi
 
         # Copy console files
         cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/consoles" /etc/prometheus/
@@ -832,7 +919,10 @@ configure_prometheus() {
     fi
 
     # Copy alert rules
-    cp "${BASE_DIR}/prometheus/rules/"*.yml /etc/prometheus/rules/
+    if ! cp "${BASE_DIR}/prometheus/rules/"*.yml /etc/prometheus/rules/ 2>/dev/null; then
+        log_error "Failed to copy Prometheus alert rules from ${BASE_DIR}/prometheus/rules/ to /etc/prometheus/rules/"
+        return 1
+    fi
 
     # Set ownership
     chown -R prometheus:prometheus /etc/prometheus
@@ -905,10 +995,14 @@ install_node_exporter() {
         log_info "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
         cd /tmp
-        wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
-        tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        local archive="node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        safe_download "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/${archive}" "-O ${archive}" "Node Exporter ${NODE_EXPORTER_VERSION}" || return 1
+        safe_extract "$archive" "Node Exporter archive" || return 1
 
-        cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
+        if ! cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/; then
+            log_error "Failed to copy node_exporter binary"
+            return 1
+        fi
         chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
         rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64" "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
@@ -980,10 +1074,14 @@ install_nginx_exporter() {
         log_info "Installing Nginx Exporter ${NGINX_EXPORTER_VERSION}..."
 
         cd /tmp
-        wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
-        tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        local archive="nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
+        safe_download "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/${archive}" "-O ${archive}" "Nginx Exporter ${NGINX_EXPORTER_VERSION}" || return 1
+        safe_extract "$archive" "Nginx Exporter archive" || return 1
 
-        cp nginx-prometheus-exporter /usr/local/bin/
+        if ! cp nginx-prometheus-exporter /usr/local/bin/; then
+            log_error "Failed to copy nginx-prometheus-exporter binary"
+            return 1
+        fi
         chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
 
         rm -rf nginx-prometheus-exporter "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
@@ -1077,8 +1175,12 @@ install_phpfpm_exporter() {
         log_info "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
 
         cd /tmp
-        wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
-        mv "php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64" /usr/local/bin/php-fpm_exporter
+        local binary="php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
+        safe_download "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/${binary}" "-O ${binary}" "PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}" || return 1
+        if ! mv "$binary" /usr/local/bin/php-fpm_exporter; then
+            log_error "Failed to move php-fpm_exporter binary"
+            return 1
+        fi
         chmod +x /usr/local/bin/php-fpm_exporter
         chown phpfpm_exporter:phpfpm_exporter /usr/local/bin/php-fpm_exporter
 
@@ -1181,10 +1283,14 @@ install_promtail() {
         log_info "Installing Promtail ${PROMTAIL_VERSION}..."
 
         cd /tmp
-        wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
-        unzip -o promtail-linux-amd64.zip
+        local archive="promtail-linux-amd64.zip"
+        safe_download "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/${archive}" "-O ${archive}" "Promtail ${PROMTAIL_VERSION}" || return 1
+        safe_extract "$archive" "Promtail archive" || return 1
         chmod +x promtail-linux-amd64
-        mv promtail-linux-amd64 /usr/local/bin/promtail
+        if ! mv promtail-linux-amd64 /usr/local/bin/promtail; then
+            log_error "Failed to move promtail binary"
+            return 1
+        fi
 
         rm -f promtail-linux-amd64.zip
 
@@ -1325,11 +1431,18 @@ install_alertmanager() {
         log_info "Installing Alertmanager ${ALERTMANAGER_VERSION}..."
 
         cd /tmp
-        wget -q "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
-        tar xzf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+        local archive="alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+        safe_download "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/${archive}" "-O ${archive}" "Alertmanager ${ALERTMANAGER_VERSION}" || return 1
+        safe_extract "$archive" "Alertmanager archive" || return 1
 
-        cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /usr/local/bin/
-        cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" /usr/local/bin/
+        if ! cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /usr/local/bin/; then
+            log_error "Failed to copy alertmanager binary"
+            return 1
+        fi
+        if ! cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" /usr/local/bin/; then
+            log_error "Failed to copy amtool binary"
+            return 1
+        fi
 
         chown alertmanager:alertmanager /usr/local/bin/alertmanager /usr/local/bin/amtool
 
@@ -1487,10 +1600,14 @@ install_loki() {
         log_info "Installing Loki ${LOKI_VERSION}..."
 
         cd /tmp
-        wget -q "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip"
-        unzip -o loki-linux-amd64.zip
+        local archive="loki-linux-amd64.zip"
+        safe_download "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/${archive}" "-O ${archive}" "Loki ${LOKI_VERSION}" || return 1
+        safe_extract "$archive" "Loki archive" || return 1
         chmod +x loki-linux-amd64
-        mv loki-linux-amd64 /usr/local/bin/loki
+        if ! mv loki-linux-amd64 /usr/local/bin/loki; then
+            log_error "Failed to move loki binary"
+            return 1
+        fi
 
         rm -f loki-linux-amd64.zip
 
@@ -1556,7 +1673,7 @@ install_grafana() {
     log_info "Installing Grafana..."
 
     # Add Grafana repository
-    wget -q -O /usr/share/keyrings/grafana.key https://apt.grafana.com/gpg.key
+    safe_download "https://apt.grafana.com/gpg.key" "-O /usr/share/keyrings/grafana.key" "Grafana GPG key" || return 1
     echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
 
     apt-get update -qq
@@ -1653,8 +1770,13 @@ EOF
     write_config_with_check "/etc/grafana/provisioning/datasources/datasources.yaml" "$datasources_content" "Grafana datasources"
 
     # Copy dashboards provisioning and dashboard files
-    cp "${BASE_DIR}/grafana/provisioning/dashboards/dashboards.yaml" /etc/grafana/provisioning/dashboards/
-    cp "${BASE_DIR}/grafana/dashboards/"*.json /var/lib/grafana/dashboards/
+    if ! cp "${BASE_DIR}/grafana/provisioning/dashboards/dashboards.yaml" /etc/grafana/provisioning/dashboards/; then
+        log_error "Failed to copy Grafana dashboards provisioning config"
+        return 1
+    fi
+    if ! cp "${BASE_DIR}/grafana/dashboards/"*.json /var/lib/grafana/dashboards/ 2>/dev/null; then
+        log_warn "Failed to copy Grafana dashboard files (this is OK if no dashboards exist)"
+    fi
 
     chown -R grafana:grafana /etc/grafana /var/lib/grafana
 
@@ -1672,9 +1794,10 @@ EOF
 configure_nginx() {
     log_info "Configuring Nginx..."
 
-    # Create/update htpasswd files (always update to reflect config changes)
-    htpasswd -cb /etc/nginx/.htpasswd_prometheus "$PROMETHEUS_USER" "$PROMETHEUS_PASS" 2>/dev/null
-    htpasswd -cb /etc/nginx/.htpasswd_loki "$LOKI_USER" "$LOKI_PASS" 2>/dev/null
+    # SECURITY: Create/update htpasswd files using secure method (password via stdin)
+    # This prevents password exposure in process arguments (visible via ps/top)
+    create_htpasswd_secure "$PROMETHEUS_USER" "$PROMETHEUS_PASS" "/etc/nginx/.htpasswd_prometheus"
+    create_htpasswd_secure "$LOKI_USER" "$LOKI_PASS" "/etc/nginx/.htpasswd_loki"
 
     # Create certbot webroot
     mkdir -p /var/www/certbot

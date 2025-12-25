@@ -1,0 +1,469 @@
+#!/bin/bash
+#===============================================================================
+# Observability Stack - Unified CLI Wrapper
+# Single command for all observability operations
+#
+# Usage:
+#   obs setup [--observability|--monitored-host] [OPTIONS]
+#   obs module <command> [ARGS]
+#   obs host <command> [ARGS]
+#   obs health [--verbose]
+#   obs config validate
+#   obs preflight [--observability-vps|--monitored-host]
+#   obs version
+#   obs help [command]
+#===============================================================================
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="2.0.0"
+
+#===============================================================================
+# HELP FUNCTIONS
+#===============================================================================
+
+show_help() {
+    cat << 'EOF'
+Observability Stack - Unified CLI
+
+USAGE:
+    obs <command> [options]
+
+COMMANDS:
+    setup           Setup observability stack or monitored host
+    module          Manage modules (list, show, install, etc.)
+    host            Manage monitored hosts
+    health          Check health of all services
+    config          Configuration management
+    preflight       Run pre-flight checks
+    version         Show version information
+    help            Show this help or help for specific command
+
+EXAMPLES:
+    # Run pre-flight checks before setup
+    obs preflight --observability-vps
+
+    # Setup observability VPS
+    obs setup --observability
+
+    # Setup monitored host with auto-detection
+    obs setup --monitored-host 203.0.113.10
+
+    # List all available modules
+    obs module list
+
+    # Check system health
+    obs health
+
+    # Validate configuration
+    obs config validate
+
+Run 'obs help <command>' for more information on a command.
+EOF
+}
+
+show_setup_help() {
+    cat << 'EOF'
+obs setup - Setup observability stack or monitored host
+
+USAGE:
+    obs setup --observability [OPTIONS]
+    obs setup --monitored-host <OBSERVABILITY_IP> [OPTIONS]
+
+OPTIONS:
+    --observability         Setup this machine as observability VPS
+    --monitored-host        Setup this machine as monitored host
+    --force, -f             Force reinstall everything
+    --interactive, -i       Interactive configuration mode
+    --uninstall             Uninstall components
+    --purge                 Remove data (with --uninstall)
+    --help, -h              Show this help
+
+EXAMPLES:
+    # Interactive setup for observability VPS
+    obs setup --observability --interactive
+
+    # Setup monitored host (auto-detect services)
+    obs setup --monitored-host 203.0.113.10
+
+    # Force reinstall observability VPS
+    obs setup --observability --force
+
+    # Uninstall monitored host components
+    obs setup --monitored-host --uninstall
+EOF
+}
+
+show_module_help() {
+    cat << 'EOF'
+obs module - Manage monitoring modules
+
+USAGE:
+    obs module <command> [args]
+
+COMMANDS:
+    list [category]         List available modules
+    show <module>           Show module details
+    status                  Show installed module status
+    install <module>        Install a module
+    uninstall <module>      Uninstall a module
+    validate [module]       Validate module manifests
+    enable <module> <host>  Enable module for host
+    disable <module> <host> Disable module for host
+    generate-config         Regenerate Prometheus/Grafana configs
+
+EXAMPLES:
+    # List all core modules
+    obs module list core
+
+    # Show details about nginx_exporter
+    obs module show nginx_exporter
+
+    # Check which modules are installed
+    obs module status
+
+    # Install node_exporter on current host
+    obs module install node_exporter
+EOF
+}
+
+show_host_help() {
+    cat << 'EOF'
+obs host - Manage monitored hosts
+
+USAGE:
+    obs host <command> [args]
+
+COMMANDS:
+    list                    List all configured hosts
+    add <hostname>          Add a new monitored host
+    remove <hostname>       Remove a monitored host
+    show <hostname>         Show host configuration
+    detect                  Auto-detect services on current host
+
+EXAMPLES:
+    # List all monitored hosts
+    obs host list
+
+    # Auto-detect services and generate config
+    obs host detect
+
+    # Show configuration for specific host
+    obs host show webserver-01
+EOF
+}
+
+show_health_help() {
+    cat << 'EOF'
+obs health - Check system health
+
+USAGE:
+    obs health [OPTIONS]
+
+OPTIONS:
+    --verbose, -v           Show detailed health information
+    --json                  Output in JSON format
+    --help, -h              Show this help
+
+EXAMPLES:
+    # Quick health check
+    obs health
+
+    # Detailed health check
+    obs health --verbose
+EOF
+}
+
+show_config_help() {
+    cat << 'EOF'
+obs config - Configuration management
+
+USAGE:
+    obs config <command> [args]
+
+COMMANDS:
+    validate                Validate configuration files
+    show                    Display current configuration
+    edit                    Edit configuration (opens $EDITOR)
+
+EXAMPLES:
+    # Validate all configuration
+    obs config validate
+
+    # Show current configuration
+    obs config show
+EOF
+}
+
+show_preflight_help() {
+    cat << 'EOF'
+obs preflight - Run pre-flight checks
+
+USAGE:
+    obs preflight [OPTIONS]
+
+OPTIONS:
+    --observability-vps     Check requirements for observability VPS
+    --monitored-host        Check requirements for monitored host
+    --fix                   Attempt to fix issues automatically
+    --help, -h              Show this help
+
+CHECKS:
+    - OS compatibility
+    - Disk space (20GB required for VPS, 5GB for hosts)
+    - Memory (2GB required for VPS, 512MB for hosts)
+    - Port availability
+    - DNS resolution (VPS only)
+    - Internet connectivity
+
+EXAMPLES:
+    # Check observability VPS requirements
+    obs preflight --observability-vps
+
+    # Check monitored host requirements and fix issues
+    obs preflight --monitored-host --fix
+EOF
+}
+
+#===============================================================================
+# COMMAND ROUTING
+#===============================================================================
+
+cmd_setup() {
+    local mode=""
+    local args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_setup_help
+                exit 0
+                ;;
+            --observability)
+                mode="observability"
+                shift
+                ;;
+            --monitored-host)
+                mode="monitored-host"
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$mode" ]]; then
+        echo -e "${RED}Error: Must specify --observability or --monitored-host${NC}" >&2
+        echo ""
+        show_setup_help
+        exit 1
+    fi
+
+    if [[ "$mode" == "observability" ]]; then
+        exec "$SCRIPT_DIR/scripts/setup-observability.sh" "${args[@]}"
+    else
+        exec "$SCRIPT_DIR/scripts/setup-monitored-host.sh" "${args[@]}"
+    fi
+}
+
+cmd_module() {
+    if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_module_help
+        exit 0
+    fi
+    exec "$SCRIPT_DIR/scripts/module-manager.sh" "$@"
+}
+
+cmd_host() {
+    if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_host_help
+        exit 0
+    fi
+
+    local subcmd="$1"
+    shift
+
+    case "$subcmd" in
+        list)
+            # List all host configs
+            local config_dir="$SCRIPT_DIR/config/hosts"
+            if [[ -d "$config_dir" ]]; then
+                echo -e "${BOLD}Configured Hosts:${NC}"
+                echo ""
+                for config in "$config_dir"/*.yaml; do
+                    [[ -f "$config" ]] || continue
+                    [[ "$(basename "$config")" == "example-host.yaml.template" ]] && continue
+
+                    local hostname=$(basename "$config" .yaml)
+                    local ip=$(grep "ip:" "$config" | head -1 | awk '{print $2}' | tr -d '"')
+                    local desc=$(grep "description:" "$config" | head -1 | sed 's/.*description: *//' | tr -d '"')
+
+                    echo -e "  ${CYAN}${hostname}${NC}"
+                    echo -e "    IP: ${ip}"
+                    [[ -n "$desc" ]] && echo -e "    Description: ${desc}"
+                    echo ""
+                done
+            else
+                echo "No hosts configured yet."
+            fi
+            ;;
+        add)
+            exec "$SCRIPT_DIR/scripts/add-monitored-host.sh" "$@"
+            ;;
+        detect)
+            exec "$SCRIPT_DIR/scripts/auto-detect.sh" "$@"
+            ;;
+        show)
+            if [[ $# -eq 0 ]]; then
+                echo -e "${RED}Error: hostname required${NC}" >&2
+                exit 1
+            fi
+            local config="$SCRIPT_DIR/config/hosts/$1.yaml"
+            if [[ -f "$config" ]]; then
+                cat "$config"
+            else
+                echo -e "${RED}Error: Host config not found: $1${NC}" >&2
+                exit 1
+            fi
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown host command: $subcmd${NC}" >&2
+            show_host_help
+            exit 1
+            ;;
+    esac
+}
+
+cmd_health() {
+    if [[ $# -gt 0 ]] && [[ "$1" == "--help" || "$1" == "-h" ]]; then
+        show_health_help
+        exit 0
+    fi
+    exec "$SCRIPT_DIR/scripts/health-check.sh" "$@"
+}
+
+cmd_config() {
+    if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_config_help
+        exit 0
+    fi
+
+    local subcmd="$1"
+    shift
+
+    case "$subcmd" in
+        validate)
+            exec "$SCRIPT_DIR/scripts/validate-config.sh" "$@"
+            ;;
+        show)
+            cat "$SCRIPT_DIR/config/global.yaml"
+            ;;
+        edit)
+            ${EDITOR:-nano} "$SCRIPT_DIR/config/global.yaml"
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown config command: $subcmd${NC}" >&2
+            show_config_help
+            exit 1
+            ;;
+    esac
+}
+
+cmd_preflight() {
+    if [[ $# -gt 0 ]] && [[ "$1" == "--help" || "$1" == "-h" ]]; then
+        show_preflight_help
+        exit 0
+    fi
+    exec "$SCRIPT_DIR/scripts/preflight-check.sh" "$@"
+}
+
+cmd_version() {
+    echo "Observability Stack v${VERSION}"
+    echo ""
+    echo "Component versions:"
+
+    # Try to get installed versions
+    if command -v prometheus &>/dev/null; then
+        echo "  Prometheus: $(prometheus --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+    fi
+    if command -v grafana-server &>/dev/null; then
+        echo "  Grafana: $(grafana-server -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    fi
+    if command -v loki &>/dev/null; then
+        echo "  Loki: $(loki -version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    fi
+}
+
+#===============================================================================
+# MAIN
+#===============================================================================
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        show_help
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        setup)
+            cmd_setup "$@"
+            ;;
+        module|modules|mod)
+            cmd_module "$@"
+            ;;
+        host|hosts)
+            cmd_host "$@"
+            ;;
+        health|status)
+            cmd_health "$@"
+            ;;
+        config|cfg)
+            cmd_config "$@"
+            ;;
+        preflight|check)
+            cmd_preflight "$@"
+            ;;
+        version|--version|-v)
+            cmd_version
+            ;;
+        help|--help|-h)
+            if [[ $# -eq 0 ]]; then
+                show_help
+            else
+                case "$1" in
+                    setup) show_setup_help ;;
+                    module|modules) show_module_help ;;
+                    host|hosts) show_host_help ;;
+                    health) show_health_help ;;
+                    config) show_config_help ;;
+                    preflight) show_preflight_help ;;
+                    *) show_help ;;
+                esac
+            fi
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown command: $command${NC}" >&2
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

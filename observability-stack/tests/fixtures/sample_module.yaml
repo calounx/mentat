@@ -1,0 +1,126 @@
+# Sample Module Manifest for Testing
+# This is a complete, valid module manifest for use in tests
+
+module:
+  name: test_exporter
+  display_name: Test Exporter
+  version: 1.0.0
+  description: Sample exporter for testing purposes
+  maintainer: test-team
+  category: testing
+
+  capabilities:
+    metrics: true
+    logs: false
+    traces: false
+
+# Service detection rules
+detection:
+  commands:
+    - "test -f /proc/cpuinfo"
+    - "which systemctl"
+  systemd_services:
+    - test-service
+  files:
+    - "/etc/test-service"
+  confidence: 80
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://example.com/releases/v${VERSION}/test_exporter-${VERSION}.linux-amd64.tar.gz"
+    archive_type: tar.gz
+    binary_name: test_exporter
+    archive_path: "test_exporter-${VERSION}.linux-amd64/test_exporter"
+    install_path: /usr/local/bin/test_exporter
+    checksum_url: "https://example.com/releases/v${VERSION}/checksums.txt"
+
+  system:
+    user: test_exporter
+    group: test_exporter
+    create_home: false
+    shell: /bin/false
+    additional_groups: []
+
+  dependencies:
+    modules: []
+    packages: []
+    optional_packages: []
+
+  config_dirs:
+    - /etc/test_exporter
+
+# Exporter runtime configuration
+exporter:
+  port: 19100
+
+  flags:
+    - "--test.flag=value"
+
+  environment:
+    TEST_VAR: "test_value"
+
+  health_check:
+    endpoint: "http://localhost:19100/metrics"
+    expected_metric: "test_metric_total"
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required: []
+
+  optional:
+    custom_flag:
+      default: ""
+      description: Custom flag for testing
+    enabled_features:
+      default: []
+      description: List of enabled features
+
+# Prometheus scrape configuration
+prometheus:
+  job_name: test_exporter
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  labels:
+    service: test
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: dashboard.json
+  title: Test Exporter Dashboard
+  tags:
+    - test
+    - sample
+  folder: Testing
+  variables:
+    - instance
+
+# Alert rules
+alerts:
+  file: alerts.yml
+  groups:
+    - test_alerts
+  thresholds:
+    test_metric_warning: 80
+    test_metric_critical: 95
+
+# Documentation
+documentation:
+  setup_instructions: |
+    This is a test module for testing purposes only.
+    It does not require any special setup.
+
+  troubleshooting:
+    - issue: "Test issue"
+      solution: "Test solution"
+
+# Lifecycle hooks
+hooks:
+  pre_install: ""
+  post_install: ""
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""

@@ -10,17 +10,30 @@
 
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_FILE="${BASE_DIR}/config/global.yaml"
+
+# Source common library for security utilities
+if [[ -f "$SCRIPT_DIR/lib/common.sh" ]]; then
+    source "$SCRIPT_DIR/lib/common.sh"
+else
+    # Fallback colors if common.sh not available
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+
+    log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+    log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+    log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+    # Minimal validation fallbacks
+    is_valid_ip() { [[ "$1" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; }
+    is_valid_hostname() { [[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]; }
+fi
 
 # Parameters
 HOST_NAME=""
@@ -28,19 +41,6 @@ HOST_IP=""
 HOST_DESC=""
 EXPORTERS=()
 RELOAD_PROMETHEUS=true
-
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-    exit 1
-}
 
 show_help() {
     echo "Usage: $0 --name NAME --ip IP [OPTIONS]"
@@ -101,9 +101,36 @@ parse_args() {
     # Validate required args
     if [[ -z "$HOST_NAME" ]]; then
         log_error "Missing required argument: --name"
+        echo ""
+        echo "Usage: $0 --name HOSTNAME --ip IP_ADDRESS"
+        echo ""
+        echo "Example:"
+        echo "  $0 --name webserver1 --ip 10.0.0.5"
+        echo ""
+        echo "Run '$0 --help' for more information"
+        exit 1
     fi
     if [[ -z "$HOST_IP" ]]; then
         log_error "Missing required argument: --ip"
+        echo ""
+        echo "Usage: $0 --name HOSTNAME --ip IP_ADDRESS"
+        echo ""
+        echo "Example:"
+        echo "  $0 --name webserver1 --ip 10.0.0.5"
+        echo ""
+        echo "Run '$0 --help' for more information"
+        exit 1
+    fi
+
+    # SECURITY: Validate hostname format (RFC 952/1123)
+    # Allow relaxed validation for short hostnames
+    if [[ ! "$HOST_NAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+        log_error "Invalid hostname: '$HOST_NAME' - must contain only alphanumeric characters and hyphens"
+    fi
+
+    # SECURITY: Validate IP address (RFC 791 - IPv4)
+    if ! is_valid_ip "$HOST_IP"; then
+        log_error "Invalid IP address: '$HOST_IP' - must be a valid IPv4 address (e.g., 192.168.1.100)"
     fi
 
     # Default exporters if not specified
@@ -120,6 +147,14 @@ parse_args() {
 check_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
         log_error "Config file not found: $CONFIG_FILE"
+        echo ""
+        echo "The global configuration file is missing."
+        echo ""
+        echo "To fix:"
+        echo "  1. Ensure you're in the observability-stack directory"
+        echo "  2. Create config/global.yaml from template if needed"
+        echo "  3. Verify the file exists: ls -l $CONFIG_FILE"
+        exit 1
     fi
 }
 
@@ -127,9 +162,23 @@ check_duplicate() {
     # Check if host already exists in config
     if grep -q "name: \"$HOST_NAME\"" "$CONFIG_FILE" 2>/dev/null; then
         log_error "Host '$HOST_NAME' already exists in $CONFIG_FILE"
+        echo ""
+        echo "To fix:"
+        echo "  1. Choose a different hostname"
+        echo "  2. Or remove the existing entry from $CONFIG_FILE"
+        echo "  3. View existing hosts: grep 'name:' $CONFIG_FILE"
+        exit 1
     fi
     if grep -q "ip: \"$HOST_IP\"" "$CONFIG_FILE" 2>/dev/null; then
         log_error "IP '$HOST_IP' already exists in $CONFIG_FILE"
+        echo ""
+        echo "Each monitored host must have a unique IP address."
+        echo ""
+        echo "To fix:"
+        echo "  1. Verify the IP address is correct"
+        echo "  2. Or remove the existing entry with this IP from $CONFIG_FILE"
+        echo "  3. View existing hosts: grep 'ip:' $CONFIG_FILE"
+        exit 1
     fi
 }
 

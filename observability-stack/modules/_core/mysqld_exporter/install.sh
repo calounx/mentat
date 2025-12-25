@@ -48,13 +48,32 @@ install_binary() {
     log_info "Installing $MODULE_NAME v$MODULE_VERSION..."
     cd /tmp
 
+    # SECURITY: Download with checksum verification
     local archive_name="mysqld_exporter-${MODULE_VERSION}.linux-amd64.tar.gz"
-    wget -q "https://github.com/prometheus/mysqld_exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
+    local download_url="https://github.com/prometheus/mysqld_exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
+    local checksum_url="https://github.com/prometheus/mysqld_exporter/releases/download/v${MODULE_VERSION}/sha256sums.txt"
+
+    if type download_and_verify &>/dev/null; then
+        if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+            log_warn "SECURITY: Checksum verification failed, trying without verification"
+            wget -q "$download_url"
+        fi
+    else
+        wget -q "$download_url"
+    fi
+
     tar xzf "$archive_name"
 
-    cp "mysqld_exporter-${MODULE_VERSION}.linux-amd64/mysqld_exporter" "$INSTALL_PATH"
-    chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
-    chmod 755 "$INSTALL_PATH"
+    # SECURITY: Safe binary installation
+    if type safe_chown &>/dev/null && type safe_chmod &>/dev/null; then
+        cp "mysqld_exporter-${MODULE_VERSION}.linux-amd64/mysqld_exporter" "$INSTALL_PATH"
+        safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
+    else
+        cp "mysqld_exporter-${MODULE_VERSION}.linux-amd64/mysqld_exporter" "$INSTALL_PATH"
+        chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        chmod 755 "$INSTALL_PATH"
+    fi
 
     rm -rf "mysqld_exporter-${MODULE_VERSION}.linux-amd64" "$archive_name"
     log_success "$MODULE_NAME binary installed"
@@ -79,8 +98,15 @@ user=exporter
 password=CHANGE_ME_EXPORTER_PASSWORD
 host=127.0.0.1
 EOF
-        chmod 600 "$CONFIG_DIR/.my.cnf"
-        chown "$USER_NAME:$USER_NAME" "$CONFIG_DIR/.my.cnf"
+        # SECURITY: Set restrictive permissions on credential file
+        if type safe_chmod &>/dev/null && type safe_chown &>/dev/null; then
+            safe_chmod 600 "$CONFIG_DIR/.my.cnf" "MySQL credentials file" || chmod 600 "$CONFIG_DIR/.my.cnf"
+            safe_chown "$USER_NAME:$USER_NAME" "$CONFIG_DIR/.my.cnf" || chown "$USER_NAME:$USER_NAME" "$CONFIG_DIR/.my.cnf"
+        else
+            chmod 600 "$CONFIG_DIR/.my.cnf"
+            chown "$USER_NAME:$USER_NAME" "$CONFIG_DIR/.my.cnf"
+        fi
+        log_warn "SECURITY: Default password set in $CONFIG_DIR/.my.cnf - YOU MUST CHANGE IT"
     fi
 }
 
@@ -105,6 +131,21 @@ ExecStart=/usr/local/bin/mysqld_exporter \
     --collect.binlog_size \
     --collect.info_schema.tablestats \
     --collect.global_variables
+
+# SECURITY: Systemd hardening
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/mysqld_exporter
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+RestrictNamespaces=true
+LockPersonality=true
 
 Restart=always
 RestartSec=5

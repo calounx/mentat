@@ -1,0 +1,120 @@
+# Bash completion for observability stack CLI
+# Install to: /etc/bash_completion.d/observability or /usr/share/bash-completion/completions/obs
+#
+# Usage:
+#   sudo cp etc/bash_completion.d/observability /etc/bash_completion.d/obs
+#   source /etc/bash_completion.d/obs
+
+_obs_completions() {
+    local cur prev words cword
+    _init_completion || return
+
+    local commands="setup module host health config preflight version help"
+    local module_commands="list show status install uninstall validate enable disable generate-config"
+    local host_commands="list add remove show detect"
+    local config_commands="validate show edit"
+    local setup_flags="--observability --monitored-host --force --interactive --uninstall --purge --help"
+    local preflight_flags="--observability-vps --monitored-host --fix --help"
+
+    # Complete main commands
+    if [[ $cword -eq 1 ]]; then
+        COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+        return 0
+    fi
+
+    # Complete subcommands and options based on main command
+    local command="${words[1]}"
+
+    case "$command" in
+        setup)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "$setup_flags" -- "$cur"))
+            fi
+            ;;
+
+        module|modules|mod)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "$module_commands" -- "$cur"))
+            elif [[ $cword -eq 3 ]]; then
+                local subcmd="${words[2]}"
+                case "$subcmd" in
+                    list)
+                        COMPREPLY=($(compgen -W "core available custom" -- "$cur"))
+                        ;;
+                    show|install|uninstall|validate)
+                        # Complete with available modules
+                        local modules=""
+                        if [[ -d "modules/_core" ]]; then
+                            modules=$(ls -1 modules/_core 2>/dev/null | tr '\n' ' ')
+                        fi
+                        COMPREPLY=($(compgen -W "$modules" -- "$cur"))
+                        ;;
+                    enable|disable)
+                        # Complete with module names
+                        local modules=""
+                        if [[ -d "modules/_core" ]]; then
+                            modules=$(ls -1 modules/_core 2>/dev/null | tr '\n' ' ')
+                        fi
+                        COMPREPLY=($(compgen -W "$modules" -- "$cur"))
+                        ;;
+                esac
+            elif [[ $cword -eq 4 ]]; then
+                # Complete with host names for enable/disable
+                local subcmd="${words[2]}"
+                if [[ "$subcmd" == "enable" ]] || [[ "$subcmd" == "disable" ]]; then
+                    local hosts=""
+                    if [[ -d "config/hosts" ]]; then
+                        hosts=$(ls -1 config/hosts/*.yaml 2>/dev/null | xargs -n1 basename -s .yaml | grep -v "example-host" | tr '\n' ' ')
+                    fi
+                    COMPREPLY=($(compgen -W "$hosts" -- "$cur"))
+                fi
+            fi
+            ;;
+
+        host|hosts)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "$host_commands" -- "$cur"))
+            elif [[ $cword -eq 3 ]]; then
+                local subcmd="${words[2]}"
+                if [[ "$subcmd" == "show" ]] || [[ "$subcmd" == "remove" ]]; then
+                    # Complete with configured host names
+                    local hosts=""
+                    if [[ -d "config/hosts" ]]; then
+                        hosts=$(ls -1 config/hosts/*.yaml 2>/dev/null | xargs -n1 basename -s .yaml | grep -v "example-host" | tr '\n' ' ')
+                    fi
+                    COMPREPLY=($(compgen -W "$hosts" -- "$cur"))
+                fi
+            fi
+            ;;
+
+        config|cfg)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "$config_commands" -- "$cur"))
+            fi
+            ;;
+
+        preflight|check)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "$preflight_flags" -- "$cur"))
+            fi
+            ;;
+
+        health|status)
+            if [[ $cur == -* ]]; then
+                COMPREPLY=($(compgen -W "--verbose --json --help" -- "$cur"))
+            fi
+            ;;
+
+        help)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+            fi
+            ;;
+    esac
+
+    return 0
+}
+
+# Register completion for both 'obs' and 'observability' commands
+complete -F _obs_completions obs
+complete -F _obs_completions observability

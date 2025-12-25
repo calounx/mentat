@@ -81,7 +81,15 @@ cmd_show() {
     local module="$1"
 
     if [[ -z "$module" ]]; then
-        log_error "Usage: module-manager.sh show <module>"
+        log_error "Module name required"
+        echo ""
+        echo "Usage: module-manager.sh show <module>"
+        echo ""
+        echo "Available modules:"
+        list_core_modules | sed 's/^/  - /'
+        echo ""
+        echo "Example:"
+        echo "  module-manager.sh show node_exporter"
         exit 1
     fi
 
@@ -109,12 +117,26 @@ cmd_enable() {
     local hostname="$2"
 
     if [[ -z "$module" ]] || [[ -z "$hostname" ]]; then
-        log_error "Usage: module-manager.sh enable <module> <hostname>"
+        log_error "Module and hostname required"
+        echo ""
+        echo "Usage: module-manager.sh enable <module> <hostname>"
+        echo ""
+        echo "Example:"
+        echo "  module-manager.sh enable nginx_exporter webserver1"
+        echo ""
+        echo "To see available modules:"
+        echo "  module-manager.sh list"
         exit 1
     fi
 
     if ! module_exists "$module"; then
         log_error "Module '$module' not found"
+        echo ""
+        echo "Available modules:"
+        list_all_modules | sed 's/^/  - /'
+        echo ""
+        echo "To see module details:"
+        echo "  module-manager.sh show <module>"
         exit 1
     fi
 
@@ -123,14 +145,30 @@ cmd_enable() {
 
     if [[ ! -f "$host_config" ]]; then
         log_error "Host config not found: $host_config"
-        log_info "Create it first with: auto-detect.sh --generate --output=$host_config"
+        echo ""
+        echo "Create host config first:"
+        echo "  1. Auto-detect modules on the host:"
+        echo "     ssh $hostname 'cd /path/to/observability-stack && ./scripts/auto-detect.sh --generate --output=config/hosts/${hostname}.yaml'"
+        echo ""
+        echo "  2. Or create it manually:"
+        echo "     mkdir -p config/hosts"
+        echo "     cp config/hosts/example.yaml config/hosts/${hostname}.yaml"
+        echo "     vi config/hosts/${hostname}.yaml"
         exit 1
     fi
 
-    # Update the enabled flag in the host config
+    # Update the enabled flag in the host config (idempotent)
     if grep -q "^  ${module}:" "$host_config"; then
-        sed -i "s/^\(  ${module}:\)/\1\n    enabled: true/" "$host_config"
-        log_success "Enabled $module for $hostname"
+        # Module exists - check if already has enabled flag
+        if grep -A5 "^  ${module}:" "$host_config" | grep -q "^    enabled:"; then
+            # Update existing enabled flag
+            sed -i "/^  ${module}:/,/^  [a-z]/ s/^    enabled:.*/    enabled: true/" "$host_config"
+            log_success "Updated $module to enabled for $hostname"
+        else
+            # Add enabled flag after module declaration
+            sed -i "/^  ${module}:/a\\    enabled: true" "$host_config"
+            log_success "Enabled $module for $hostname"
+        fi
     else
         log_warn "Module $module not found in $hostname config. Adding..."
         echo "" >> "$host_config"
@@ -138,6 +176,10 @@ cmd_enable() {
         echo "    enabled: true" >> "$host_config"
         log_success "Added and enabled $module for $hostname"
     fi
+
+    # Trigger config regeneration
+    log_info "Regenerating configurations..."
+    "$_MM_SCRIPT_DIR/module-manager.sh" generate-config 2>/dev/null || true
 }
 
 cmd_disable() {
@@ -145,7 +187,12 @@ cmd_disable() {
     local hostname="$2"
 
     if [[ -z "$module" ]] || [[ -z "$hostname" ]]; then
-        log_error "Usage: module-manager.sh disable <module> <hostname>"
+        log_error "Module and hostname required"
+        echo ""
+        echo "Usage: module-manager.sh disable <module> <hostname>"
+        echo ""
+        echo "Example:"
+        echo "  module-manager.sh disable nginx_exporter webserver1"
         exit 1
     fi
 
@@ -154,6 +201,11 @@ cmd_disable() {
 
     if [[ ! -f "$host_config" ]]; then
         log_error "Host config not found: $host_config"
+        echo ""
+        echo "Expected location: $host_config"
+        echo ""
+        echo "To list existing host configs:"
+        echo "  ls config/hosts/"
         exit 1
     fi
 
@@ -167,7 +219,19 @@ cmd_install() {
     shift
 
     if [[ -z "$module" ]]; then
-        log_error "Usage: module-manager.sh install <module> [--force]"
+        log_error "Module name required"
+        echo ""
+        echo "Usage: module-manager.sh install <module> [--force]"
+        echo ""
+        echo "Available modules:"
+        list_all_modules | sed 's/^/  - /'
+        echo ""
+        echo "Examples:"
+        echo "  module-manager.sh install node_exporter"
+        echo "  module-manager.sh install nginx_exporter --force"
+        echo ""
+        echo "To see module details:"
+        echo "  module-manager.sh show <module>"
         exit 1
     fi
 
@@ -179,7 +243,18 @@ cmd_uninstall() {
     shift
 
     if [[ -z "$module" ]]; then
-        log_error "Usage: module-manager.sh uninstall <module> [--purge]"
+        log_error "Module name required"
+        echo ""
+        echo "Usage: module-manager.sh uninstall <module> [--purge]"
+        echo ""
+        echo "Examples:"
+        echo "  module-manager.sh uninstall nginx_exporter"
+        echo "  module-manager.sh uninstall node_exporter --purge"
+        echo ""
+        echo "Note: --purge will also remove configuration files"
+        echo ""
+        echo "To see installed modules:"
+        echo "  module-manager.sh status"
         exit 1
     fi
 
@@ -332,7 +407,17 @@ main() {
         help|--help|-h) cmd_help ;;
         *)
             log_error "Unknown command: $command"
-            echo "Run 'module-manager.sh help' for usage"
+            echo ""
+            echo "Available commands:"
+            echo "  list              List all available modules"
+            echo "  show <module>     Show module details"
+            echo "  validate          Validate module manifests"
+            echo "  detect            Auto-detect applicable modules"
+            echo "  install <module>  Install a module"
+            echo "  uninstall <module> Uninstall a module"
+            echo "  status            Show module status"
+            echo ""
+            echo "Run 'module-manager.sh help' for detailed usage"
             exit 1
             ;;
     esac

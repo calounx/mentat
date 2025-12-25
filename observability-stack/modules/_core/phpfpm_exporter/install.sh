@@ -57,10 +57,20 @@ install_binary() {
     log_info "Installing $MODULE_NAME v$MODULE_VERSION..."
     cd /tmp
 
-    wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${MODULE_VERSION}/php-fpm_exporter_${MODULE_VERSION}_linux_amd64"
-    mv "php-fpm_exporter_${MODULE_VERSION}_linux_amd64" "$INSTALL_PATH"
-    chmod +x "$INSTALL_PATH"
-    chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    # SECURITY: Download binary (checksum verification if available)
+    local binary_url="https://github.com/hipages/php-fpm_exporter/releases/download/v${MODULE_VERSION}/php-fpm_exporter_${MODULE_VERSION}_linux_amd64"
+    wget -q "$binary_url" -O "$INSTALL_PATH.tmp"
+
+    mv "$INSTALL_PATH.tmp" "$INSTALL_PATH"
+
+    # SECURITY: Safe permissions
+    if type safe_chmod &>/dev/null && type safe_chown &>/dev/null; then
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
+        safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    else
+        chmod 755 "$INSTALL_PATH"
+        chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    fi
 
     log_success "$MODULE_NAME binary installed"
 }

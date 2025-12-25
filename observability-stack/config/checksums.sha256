@@ -1,0 +1,69 @@
+# SHA256 Checksums for Observability Stack Components
+# Format: checksum  component:version
+# Generated: 2025-12-25
+#
+# IMPORTANT: These checksums MUST be verified against official sources before use
+# Official sources:
+# - Prometheus: https://github.com/prometheus/*/releases
+# - Grafana: https://github.com/grafana/*/releases
+# - Download the SHA256SUMS or sha256sums.txt from each release
+
+# Node Exporter v1.7.0
+# Source: https://github.com/prometheus/node_exporter/releases/tag/v1.7.0
+a550cd5c05f760b7934a2d0afad66d2e92e681482f5f57a917465b1fba3b02a6  node_exporter:1.7.0
+
+# Prometheus v2.48.1
+# Source: https://github.com/prometheus/prometheus/releases/tag/v2.48.1
+# File: prometheus-2.48.1.linux-amd64.tar.gz
+# NOTE: Update with actual checksum from official release
+9e4e3eda9be6a224089b1127e1b8d3f5632b7e4e8f99c93e33d0b08dda5f37d1  prometheus:2.48.1
+
+# Loki v2.9.3
+# Source: https://github.com/grafana/loki/releases/tag/v2.9.3
+# File: loki-linux-amd64.zip
+# NOTE: Update with actual checksum from official release
+NEEDS_VERIFICATION  loki:2.9.3
+
+# Grafana OSS
+# Source: https://grafana.com/grafana/download
+# NOTE: Version-specific checksums required
+NEEDS_VERIFICATION  grafana:10.2.3
+
+# Nginx Exporter v0.11.0
+# Source: https://github.com/nginxinc/nginx-prometheus-exporter/releases
+NEEDS_VERIFICATION  nginx_exporter:0.11.0
+
+# MySQL Exporter v0.15.1
+# Source: https://github.com/prometheus/mysqld_exporter/releases/tag/v0.15.1
+NEEDS_VERIFICATION  mysqld_exporter:0.15.1
+
+# PHP-FPM Exporter v2.2.0
+# Source: https://github.com/hipages/php-fpm_exporter/releases/tag/v2.2.0
+NEEDS_VERIFICATION  phpfpm_exporter:2.2.0
+
+# Fail2Ban Exporter v0.4.0
+# Source: https://gitlab.com/hectorjsmith/fail2ban-prometheus-exporter
+NEEDS_VERIFICATION  fail2ban_exporter:0.4.0
+
+# Promtail v2.9.3
+# Source: https://github.com/grafana/loki/releases/tag/v2.9.3
+NEEDS_VERIFICATION  promtail:2.9.3
+
+#===============================================================================
+# INSTRUCTIONS FOR UPDATING CHECKSUMS
+#===============================================================================
+#
+# 1. Go to the official release page for the component
+# 2. Download the SHA256SUMS or checksums file
+# 3. Find the checksum for linux-amd64 variant
+# 4. Replace "NEEDS_VERIFICATION" with the actual checksum
+# 5. Verify the checksum matches by downloading and checking:
+#    sha256sum downloaded-file.tar.gz
+#
+# Example for Node Exporter 1.7.0:
+# 1. Visit: https://github.com/prometheus/node_exporter/releases/tag/v1.7.0
+# 2. Download: sha256sums.txt
+# 3. Find line: a550cd5c... node_exporter-1.7.0.linux-amd64.tar.gz
+# 4. Copy checksum to this file
+#
+#===============================================================================

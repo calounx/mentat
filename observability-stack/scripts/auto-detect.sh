@@ -23,14 +23,47 @@ GENERATE=false
 OUTPUT_FILE=""
 QUIET=false
 
-for arg in "$@"; do
-    case "$arg" in
-        --generate|-g) GENERATE=true ;;
-        --quiet|-q) QUIET=true ;;
-        --output=*) OUTPUT_FILE="${arg#*=}" ;;
-        --output|-o)
+# Parse arguments with proper shift handling
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --generate|-g)
+            GENERATE=true
             shift
-            OUTPUT_FILE="$1"
+            ;;
+        --quiet|-q)
+            QUIET=true
+            shift
+            ;;
+        --output=*)
+            OUTPUT_FILE="${1#*=}"
+            shift
+            ;;
+        --output|-o)
+            if [[ -n "${2:-}" ]] && [[ ! "${2:-}" =~ ^- ]]; then
+                OUTPUT_FILE="$2"
+                shift 2
+            else
+                echo "Error: --output requires a value"
+                exit 1
+            fi
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--generate] [--output file] [--quiet]"
+            echo ""
+            echo "Options:"
+            echo "  --generate, -g    Generate host configuration file"
+            echo "  --output FILE, -o Specify output file path"
+            echo "  --quiet, -q       Quiet mode, minimal output"
+            echo "  --help, -h        Show this help message"
+            exit 0
+            ;;
+        -*)
+            echo "Error: Unknown option: $1"
+            exit 1
+            ;;
+        *)
+            echo "Error: Unexpected argument: $1"
+            exit 1
             ;;
     esac
 done
@@ -211,7 +244,18 @@ main() {
     detected=$(detect_modules)
 
     if [[ -z "$detected" ]]; then
-        log_warn "No modules detected"
+        log_warn "No modules detected on this host"
+        echo ""
+        echo "This could mean:"
+        echo "  1. No supported services are installed (nginx, mysql, php-fpm, etc.)"
+        echo "  2. Services are installed but not running"
+        echo "  3. Detection scripts need to be updated for your environment"
+        echo ""
+        echo "To install monitoring for basic system metrics anyway:"
+        echo "  module-manager.sh install node_exporter"
+        echo ""
+        echo "To see all available modules:"
+        echo "  module-manager.sh list"
         exit 1
     fi
 

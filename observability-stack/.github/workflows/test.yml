@@ -1,0 +1,274 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Shellcheck Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on all scripts
+        run: |
+          find scripts -name "*.sh" -type f -exec shellcheck -x {} +
+          find modules -name "*.sh" -type f -exec shellcheck -x {} +
+
+      - name: Check for common shell issues
+        run: |
+          # Check for set -e in all scripts
+          for script in $(find scripts modules -name "*.sh" -type f); do
+            if ! grep -q "set -e" "$script"; then
+              echo "WARNING: $script missing 'set -e'"
+            fi
+          done
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install BATS
+        run: |
+          sudo npm install -g bats
+          bats --version
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run unit tests
+        run: |
+          cd tests
+          ./setup.sh
+          bats unit/
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-test-results
+          path: /tmp/observability-stack-tests/
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install BATS
+        run: |
+          sudo npm install -g bats
+          bats --version
+
+      - name: Install Prometheus tools
+        run: |
+          wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+          tar xzf prometheus-2.45.0.linux-amd64.tar.gz
+          sudo cp prometheus-2.45.0.linux-amd64/promtool /usr/local/bin/
+          promtool --version
+
+      - name: Run integration tests
+        run: |
+          cd tests
+          ./setup.sh
+          sudo bats integration/
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-results
+          path: /tmp/observability-stack-tests/
+
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install BATS
+        run: |
+          sudo npm install -g bats
+          bats --version
+
+      - name: Run security tests
+        run: |
+          cd tests
+          ./setup.sh
+          bats security/
+
+      - name: Check for secrets in code
+        run: |
+          # Basic secret scanning
+          ! grep -rE "(password|secret|api_key)[[:space:]]*=[[:space:]]*['\"][^'\"]{8,}" scripts/ modules/
+
+      - name: Upload security test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-test-results
+          path: /tmp/observability-stack-tests/
+
+  error-handling-tests:
+    name: Error Handling Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install BATS
+        run: |
+          sudo npm install -g bats
+          bats --version
+
+      - name: Run error handling tests
+        run: |
+          cd tests
+          ./setup.sh
+          bats errors/
+
+      - name: Upload error test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: error-test-results
+          path: /tmp/observability-stack-tests/
+
+  coverage-report:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, security-tests, error-handling-tests]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download all test results
+        uses: actions/download-artifact@v3
+
+      - name: Generate coverage summary
+        run: |
+          echo "# Test Coverage Summary" > coverage-summary.md
+          echo "" >> coverage-summary.md
+          echo "## Test Results" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+
+          # Count total functions in libraries
+          total_functions=$(grep -rE "^[a-zA-Z_]+\(\)" scripts/lib/*.sh | wc -l)
+          echo "Total library functions: $total_functions" >> coverage-summary.md
+
+          # Count test files
+          unit_tests=$(find tests/unit -name "*.bats" | wc -l)
+          integration_tests=$(find tests/integration -name "*.bats" | wc -l)
+          security_tests=$(find tests/security -name "*.bats" | wc -l)
+          error_tests=$(find tests/errors -name "*.bats" | wc -l)
+
+          echo "" >> coverage-summary.md
+          echo "### Test Files" >> coverage-summary.md
+          echo "- Unit tests: $unit_tests" >> coverage-summary.md
+          echo "- Integration tests: $integration_tests" >> coverage-summary.md
+          echo "- Security tests: $security_tests" >> coverage-summary.md
+          echo "- Error handling tests: $error_tests" >> coverage-summary.md
+
+          cat coverage-summary.md
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage-summary.md
+
+  validate-modules:
+    name: Validate Module Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Validate YAML syntax
+        run: |
+          # Install yq for YAML validation
+          sudo snap install yq || true
+
+          # Validate all module.yaml files
+          for manifest in $(find modules -name "module.yaml"); do
+            echo "Validating $manifest"
+            if command -v yq &>/dev/null; then
+              yq eval '.' "$manifest" > /dev/null
+            else
+              # Fallback to basic YAML check
+              python3 -c "import yaml; yaml.safe_load(open('$manifest'))" || exit 1
+            fi
+          done
+
+      - name: Check module structure
+        run: |
+          # Verify each module has required files
+          for module_dir in modules/_core/*/; do
+            module_name=$(basename "$module_dir")
+            echo "Checking $module_name"
+
+            # Check for module.yaml
+            [ -f "$module_dir/module.yaml" ] || {
+              echo "ERROR: $module_name missing module.yaml"
+              exit 1
+            }
+
+            # Check for install.sh
+            [ -f "$module_dir/install.sh" ] || {
+              echo "ERROR: $module_name missing install.sh"
+              exit 1
+            }
+
+            # install.sh should be executable
+            [ -x "$module_dir/install.sh" ] || {
+              echo "ERROR: $module_name install.sh not executable"
+              exit 1
+            }
+          done
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests, security-tests, error-handling-tests, validate-modules]
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          echo "All test jobs completed"
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "Security Tests: ${{ needs.security-tests.result }}"
+          echo "Error Tests: ${{ needs.error-handling-tests.result }}"
+          echo "Module Validation: ${{ needs.validate-modules.result }}"
+
+      - name: Fail if any job failed
+        if: |
+          needs.lint.result == 'failure' ||
+          needs.unit-tests.result == 'failure' ||
+          needs.integration-tests.result == 'failure' ||
+          needs.security-tests.result == 'failure' ||
+          needs.error-handling-tests.result == 'failure' ||
+          needs.validate-modules.result == 'failure'
+        run: |
+          echo "One or more test jobs failed"
+          exit 1
