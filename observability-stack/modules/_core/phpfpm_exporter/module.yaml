@@ -1,0 +1,136 @@
+# PHP-FPM Exporter Module Manifest
+# Exports PHP-FPM metrics to Prometheus
+
+module:
+  name: phpfpm_exporter
+  display_name: PHP-FPM Exporter
+  version: "2.2.0"
+  description: Exports PHP-FPM process pool metrics to Prometheus
+  maintainer: hipages
+  category: webserver
+
+  capabilities:
+    metrics: true
+    logs: false
+    traces: false
+
+# Service detection rules
+detection:
+  commands:
+    - "command -v php-fpm"
+    - "command -v php-fpm8.2"
+    - "command -v php-fpm8.1"
+    - "command -v php-fpm8.0"
+  systemd_services:
+    - php8.2-fpm.service
+    - php8.1-fpm.service
+    - php8.0-fpm.service
+    - php7.4-fpm.service
+    - php-fpm.service
+  files:
+    - /run/php/php8.2-fpm.sock
+    - /run/php/php8.1-fpm.sock
+    - /var/run/php-fpm.sock
+  confidence: 90
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://github.com/hipages/php-fpm_exporter/releases/download/v${VERSION}/php-fpm_exporter_${VERSION}_linux_amd64"
+    archive_type: binary
+    binary_name: php-fpm_exporter
+    install_path: /usr/local/bin/php-fpm_exporter
+    checksum_url: ""
+
+  system:
+    user: phpfpm_exporter
+    group: phpfpm_exporter
+    create_home: false
+    shell: /bin/false
+    additional_groups:
+      - www-data
+
+  dependencies:
+    modules: []
+    packages: []
+    optional_packages: []
+
+  config_dirs: []
+
+# Exporter runtime configuration
+exporter:
+  port: 9253
+
+  flags:
+    - "server"
+
+  environment: {}
+
+  health_check:
+    endpoint: "http://localhost:9253/metrics"
+    expected_metric: "phpfpm_up"
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required: []
+
+  optional:
+    scrape_uri:
+      default: ""
+      description: "PHP-FPM status URI (auto-detected if empty)"
+    pools:
+      default: []
+      description: "List of pool names to monitor"
+
+# Prometheus scrape configuration
+prometheus:
+  job_name: phpfpm
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  labels:
+    service: phpfpm
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: dashboard.json
+  title: PHP-FPM Overview
+  tags:
+    - phpfpm
+    - php
+    - webserver
+  folder: Web
+  variables:
+    - instance
+    - pool
+
+# Alert rules
+alerts:
+  file: alerts.yml
+  groups:
+    - phpfpm_alerts
+  thresholds:
+    high_active_processes: 80
+    slow_request_rate: 0.1
+    queue_usage: 80
+
+documentation:
+  setup_instructions: |
+    PHP-FPM exporter requires the status page to be enabled in your pool configuration.
+    Add the following to your pool config (e.g., /etc/php/8.2/fpm/pool.d/www.conf):
+      pm.status_path = /status
+
+  troubleshooting:
+    - issue: "phpfpm_up shows 0"
+      solution: "Check that pm.status_path is enabled in the pool config"
+    - issue: "Permission denied accessing socket"
+      solution: "Ensure phpfpm_exporter user is in www-data group"
+
+hooks:
+  pre_install: ""
+  post_install: ""
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""

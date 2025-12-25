@@ -1,0 +1,128 @@
+# Host Configuration Template
+# Copy this file as <hostname>.yaml and customize for each monitored host
+#
+# This file defines which modules are enabled for a specific host
+# and their per-host configuration overrides.
+
+# Host identification
+host:
+  # Hostname as it appears in metrics (required)
+  name: "webserver-01"
+
+  # IP address of the host (required)
+  ip: "10.0.0.10"
+
+  # Human-readable description
+  description: "Production web server 1"
+
+  # Environment tag for filtering
+  environment: "production"
+
+  # Custom labels applied to all metrics from this host
+  labels:
+    tier: "frontend"
+    team: "web"
+    app: "wordpress"
+
+# Enabled modules and their configurations
+modules:
+  # Node Exporter - System metrics (CPU, memory, disk, network)
+  # Always recommended for any host
+  node_exporter:
+    enabled: true
+    # Optional: override default flags
+    config:
+      extra_flags: []
+    # Optional: override alert thresholds
+    thresholds:
+      cpu_usage_warning: 80
+      cpu_usage_critical: 95
+      memory_usage_warning: 80
+      disk_usage_warning: 80
+
+  # Nginx Exporter - Web server metrics
+  # Enable if nginx is installed
+  nginx_exporter:
+    enabled: true
+    config:
+      # Optional: specify custom stub_status URL
+      # If not specified, auto-detected
+      stub_status_url: ""
+    thresholds:
+      high_4xx_rate: 5
+      high_5xx_rate: 1
+
+  # MySQL/MariaDB Exporter - Database metrics
+  # Enable if MySQL/MariaDB is installed
+  mysqld_exporter:
+    enabled: true
+    config:
+      # Credentials for the exporter user (required)
+      # Create user: GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost'
+      credentials:
+        username: "exporter"
+        # Use secret reference: {{ secret:mysql_exporter_password }}
+        # Or plain text (not recommended for production)
+        password: "CHANGE_ME"
+      host: "127.0.0.1"
+      port: 3306
+    thresholds:
+      connection_usage_warning: 80
+      slow_query_rate: 0.1
+
+  # PHP-FPM Exporter - PHP process pool metrics
+  # Enable if PHP-FPM is installed
+  phpfpm_exporter:
+    enabled: true
+    config:
+      # Optional: specify status URI
+      # If not specified, auto-detected
+      scrape_uri: ""
+      # Pool names to monitor
+      pools: []
+    thresholds:
+      high_active_processes: 80
+
+  # Fail2ban Exporter - Security metrics
+  # Enable if fail2ban is installed
+  fail2ban_exporter:
+    enabled: true
+    config:
+      socket_path: "/var/run/fail2ban/fail2ban.sock"
+    thresholds:
+      high_ban_rate: 1
+      many_current_bans: 50
+
+  # Promtail - Log shipping to Loki
+  # Enable to send logs to the central Loki instance
+  promtail:
+    enabled: true
+    config:
+      # Loki connection settings (required)
+      loki_url: "https://mentat.arewel.com"
+      loki_user: "loki"
+      loki_password: "CHANGE_ME"
+      # Optional: additional log paths to scrape
+      additional_scrape_configs: []
+
+# Secrets management (optional)
+# Reference secrets from external sources instead of storing in this file
+secrets:
+  # mysql_exporter_password:
+  #   source: "file"
+  #   path: "/etc/observability/secrets/mysql_exporter_password"
+  # Or from environment:
+  # mysql_exporter_password:
+  #   source: "env"
+  #   key: "MYSQL_EXPORTER_PASSWORD"
+
+# Alert overrides (optional)
+alerts:
+  # Disable specific alerts for this host
+  disabled: []
+  # Example: - "DiskWillFillIn24Hours"
+
+  # Custom annotations for this host
+  annotations:
+    runbook_url: ""
+    oncall_team: ""

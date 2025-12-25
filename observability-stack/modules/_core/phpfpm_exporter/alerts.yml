@@ -1,0 +1,29 @@
+groups:
+  - name: phpfpm_alerts
+    rules:
+      - alert: PHPFPMDown
+        expr: phpfpm_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PHP-FPM is down on {{ $labels.instance }}"
+          description: "PHP-FPM service is not responding"
+
+      - alert: PHPFPMHighActiveProcesses
+        expr: phpfpm_active_processes / phpfpm_total_processes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM high active processes on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.1f\" }}% of PHP-FPM processes are active"
+
+      - alert: PHPFPMMaxChildrenReached
+        expr: rate(phpfpm_max_children_reached_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM max children reached on {{ $labels.instance }}"
+          description: "PHP-FPM pool is hitting max_children limit"

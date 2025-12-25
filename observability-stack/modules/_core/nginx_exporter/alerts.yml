@@ -1,0 +1,29 @@
+groups:
+  - name: nginx_alerts
+    rules:
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx is down on {{ $labels.instance }}"
+          description: "Nginx service is not responding"
+
+      - alert: NginxHighConnections
+        expr: nginx_connections_active > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Nginx connections on {{ $labels.instance }}"
+          description: "Active connections: {{ $value }}"
+
+      - alert: NginxHighConnectionsWaiting
+        expr: nginx_connections_waiting > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Nginx waiting connections on {{ $labels.instance }}"
+          description: "Waiting connections: {{ $value }}"

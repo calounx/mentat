@@ -1,0 +1,169 @@
+# MySQL Exporter Module Manifest
+# Exports MySQL/MariaDB metrics to Prometheus
+
+module:
+  name: mysqld_exporter
+  display_name: MySQL/MariaDB Exporter
+  version: "0.15.1"
+  description: Exports MySQL/MariaDB database metrics to Prometheus
+  maintainer: prometheus-community
+  category: database
+
+  capabilities:
+    metrics: true
+    logs: false
+    traces: false
+
+# Service detection rules
+detection:
+  commands:
+    - "command -v mysql"
+    - "command -v mariadb"
+  systemd_services:
+    - mysql.service
+    - mariadb.service
+    - mysqld.service
+  files:
+    - /etc/mysql/my.cnf
+    - /etc/my.cnf
+  confidence: 95
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://github.com/prometheus/mysqld_exporter/releases/download/v${VERSION}/mysqld_exporter-${VERSION}.linux-amd64.tar.gz"
+    archive_type: tar.gz
+    binary_name: mysqld_exporter
+    archive_path: "mysqld_exporter-${VERSION}.linux-amd64/mysqld_exporter"
+    install_path: /usr/local/bin/mysqld_exporter
+    checksum_url: "https://github.com/prometheus/mysqld_exporter/releases/download/v${VERSION}/sha256sums.txt"
+
+  system:
+    user: mysqld_exporter
+    group: mysqld_exporter
+    create_home: false
+    shell: /bin/false
+    additional_groups: []
+
+  dependencies:
+    modules: []
+    packages: []
+    optional_packages: []
+
+  config_dirs:
+    - path: /etc/mysqld_exporter
+      owner: mysqld_exporter
+      group: mysqld_exporter
+      mode: "0750"
+
+# Exporter runtime configuration
+exporter:
+  port: 9104
+
+  flags:
+    - "--config.my-cnf=/etc/mysqld_exporter/.my.cnf"
+    - "--collect.global_status"
+    - "--collect.info_schema.innodb_metrics"
+    - "--collect.auto_increment.columns"
+    - "--collect.info_schema.processlist"
+    - "--collect.binlog_size"
+    - "--collect.info_schema.tablestats"
+    - "--collect.global_variables"
+
+  environment: {}
+
+  health_check:
+    endpoint: "http://localhost:9104/metrics"
+    expected_metric: "mysql_up"
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required:
+    - credentials
+
+  optional:
+    host:
+      default: "127.0.0.1"
+      description: MySQL server host
+    port:
+      default: 3306
+      description: MySQL server port
+    socket:
+      default: ""
+      description: MySQL socket path (alternative to host:port)
+    enable_collectors:
+      default: []
+      description: Additional collectors to enable
+
+  template: |
+    [client]
+    user={{ .credentials.username }}
+    password={{ .credentials.password }}
+    host={{ .host }}
+    port={{ .port }}
+
+# Prometheus scrape configuration
+prometheus:
+  job_name: mysql
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  labels:
+    service: mysql
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: dashboard.json
+  title: MySQL Overview
+  tags:
+    - mysql
+    - database
+    - mariadb
+  folder: Databases
+  variables:
+    - instance
+
+# Alert rules
+alerts:
+  file: alerts.yml
+  groups:
+    - mysql_alerts
+  thresholds:
+    connection_usage_warning: 80
+    connection_usage_critical: 95
+    slow_query_rate: 0.1
+    high_qps: 1000
+
+documentation:
+  setup_instructions: |
+    1. Create MySQL exporter user:
+       CREATE USER 'exporter'@'localhost' IDENTIFIED BY 'password';
+       GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';
+       FLUSH PRIVILEGES;
+
+    2. Configure credentials in /etc/mysqld_exporter/.my.cnf
+
+  troubleshooting:
+    - issue: "mysql_up shows 0"
+      solution: "Check credentials in /etc/mysqld_exporter/.my.cnf"
+    - issue: "Permission denied"
+      solution: "Verify MySQL user has correct grants"
+
+hooks:
+  pre_install: ""
+  post_install: |
+    if [[ ! -f /etc/mysqld_exporter/.my.cnf ]]; then
+      cat > /etc/mysqld_exporter/.my.cnf << 'EOF'
+    [client]
+    user=exporter
+    password=CHANGE_ME_EXPORTER_PASSWORD
+    host=127.0.0.1
+    EOF
+      chmod 600 /etc/mysqld_exporter/.my.cnf
+      chown mysqld_exporter:mysqld_exporter /etc/mysqld_exporter/.my.cnf
+    fi
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""

@@ -1,0 +1,128 @@
+# Promtail Module Manifest
+# Log shipping agent for Loki
+
+module:
+  name: promtail
+  display_name: Promtail
+  version: "2.9.3"
+  description: Log shipping agent that sends logs to Loki
+  maintainer: grafana
+  category: logging
+
+  capabilities:
+    metrics: false
+    logs: true
+    traces: false
+
+# Service detection rules
+detection:
+  # Promtail is always applicable where there are logs
+  commands:
+    - "test -d /var/log"
+  systemd_services: []
+  files:
+    - /var/log/syslog
+    - /var/log/auth.log
+  confidence: 100
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://github.com/grafana/loki/releases/download/v${VERSION}/promtail-linux-amd64.zip"
+    archive_type: zip
+    binary_name: promtail-linux-amd64
+    install_path: /usr/local/bin/promtail
+    checksum_url: ""
+
+  system:
+    user: promtail
+    group: promtail
+    create_home: false
+    shell: /bin/false
+    additional_groups:
+      - adm
+      - www-data
+
+  dependencies:
+    modules: []
+    packages:
+      - unzip
+    optional_packages: []
+
+  config_dirs:
+    - path: /etc/promtail
+      owner: promtail
+      group: promtail
+      mode: "0750"
+    - path: /var/lib/promtail
+      owner: promtail
+      group: promtail
+      mode: "0750"
+
+# Exporter runtime configuration
+exporter:
+  port: 9080
+
+  flags:
+    - "-config.file=/etc/promtail/promtail.yaml"
+
+  environment: {}
+
+  health_check:
+    endpoint: "http://localhost:9080/ready"
+    expected_metric: ""
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required:
+    - loki_url
+    - loki_user
+    - loki_password
+
+  optional:
+    additional_scrape_configs:
+      default: []
+      description: Additional log scrape configurations
+
+# Prometheus scrape configuration (Promtail exposes its own metrics)
+prometheus:
+  job_name: promtail
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  labels:
+    service: promtail
+  metric_relabel_configs: []
+
+# No Grafana dashboard (logs are viewed in Explore)
+dashboard:
+  file: ""
+  title: ""
+  tags: []
+  folder: ""
+  variables: []
+
+# No alert rules for promtail itself
+alerts:
+  file: ""
+  groups: []
+  thresholds: {}
+
+documentation:
+  setup_instructions: |
+    Promtail requires Loki credentials to push logs.
+    Configure loki_url, loki_user, and loki_password in host config.
+
+  troubleshooting:
+    - issue: "Logs not appearing in Loki"
+      solution: "Check Promtail logs with journalctl -u promtail"
+    - issue: "Permission denied reading logs"
+      solution: "Ensure promtail user is in adm group"
+
+hooks:
+  pre_install: ""
+  post_install: ""
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""

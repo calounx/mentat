@@ -1,0 +1,128 @@
+# Fail2ban Exporter Module Manifest
+# Exports Fail2ban security metrics to Prometheus
+
+module:
+  name: fail2ban_exporter
+  display_name: Fail2ban Exporter
+  version: "0.10.3"
+  description: Exports Fail2ban ban/jail metrics to Prometheus
+  maintainer: hctrdev
+  category: security
+
+  capabilities:
+    metrics: true
+    logs: false
+    traces: false
+
+# Service detection rules
+detection:
+  commands:
+    - "command -v fail2ban-client"
+  systemd_services:
+    - fail2ban.service
+  files:
+    - /var/run/fail2ban/fail2ban.sock
+    - /etc/fail2ban/fail2ban.conf
+  confidence: 95
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${VERSION}/downloads/fail2ban_exporter_${VERSION}_linux_amd64.tar.gz"
+    archive_type: tar.gz
+    binary_name: fail2ban_exporter
+    archive_path: fail2ban_exporter
+    install_path: /usr/local/bin/fail2ban-prometheus-exporter
+    checksum_url: ""
+
+  system:
+    user: fail2ban_exporter
+    group: fail2ban_exporter
+    create_home: false
+    shell: /bin/false
+    additional_groups:
+      - fail2ban
+
+  dependencies:
+    modules: []
+    packages: []
+    optional_packages: []
+
+  config_dirs: []
+
+# Exporter runtime configuration
+exporter:
+  port: 9191
+
+  flags:
+    - "--web.listen-address=:9191"
+
+  environment: {}
+
+  health_check:
+    endpoint: "http://localhost:9191/metrics"
+    expected_metric: "f2b_up"
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required: []
+
+  optional:
+    socket_path:
+      default: "/var/run/fail2ban/fail2ban.sock"
+      description: Path to fail2ban socket
+
+# Prometheus scrape configuration
+prometheus:
+  job_name: fail2ban
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  labels:
+    service: fail2ban
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: dashboard.json
+  title: Fail2ban Security
+  tags:
+    - fail2ban
+    - security
+  folder: Security
+  variables:
+    - instance
+    - jail
+
+# Alert rules
+alerts:
+  file: alerts.yml
+  groups:
+    - fail2ban_alerts
+  thresholds:
+    high_ban_rate: 1
+    high_failed_attempts: 10
+    many_current_bans: 50
+
+documentation:
+  setup_instructions: |
+    Fail2ban exporter needs access to the fail2ban socket.
+    The exporter user is added to the fail2ban group automatically.
+
+  troubleshooting:
+    - issue: "f2b_up shows 0"
+      solution: "Check fail2ban socket permissions"
+    - issue: "Permission denied"
+      solution: "Ensure fail2ban_exporter user is in fail2ban group"
+
+hooks:
+  pre_install: ""
+  post_install: |
+    # Ensure socket permissions
+    if [[ -S /var/run/fail2ban/fail2ban.sock ]]; then
+      chmod g+rw /var/run/fail2ban/fail2ban.sock 2>/dev/null || true
+    fi
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""

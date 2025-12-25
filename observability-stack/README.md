@@ -148,6 +148,7 @@ observability-stack/
 - Nginx down, high connections, 4xx/5xx error rates
 - MySQL down, connection saturation, slow queries, replication lag
 - PHP-FPM down, max children reached, queue filling
+- Fail2ban down, high ban rate, exporter errors
 
 ## Security
 
@@ -179,6 +180,8 @@ observability-stack/
 | 9113 | nginx_exporter | From Observability VPS |
 | 9104 | mysqld_exporter | From Observability VPS |
 | 9253 | phpfpm_exporter | From Observability VPS |
+| 9191 | fail2ban_exporter | From Observability VPS |
+| 9080 | promtail (push) | Outbound to Loki |
 
 ## Adding New Monitored Hosts
 
@@ -193,6 +196,8 @@ monitored_hosts:
       - nginx_exporter
       - mysqld_exporter
       - phpfpm_exporter
+      - fail2ban_exporter
+      - promtail
 ```
 
 2. Run agent setup on the new host:

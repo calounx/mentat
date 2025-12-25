@@ -1,0 +1,29 @@
+groups:
+  - name: fail2ban_alerts
+    rules:
+      - alert: Fail2banDown
+        expr: f2b_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fail2ban is down on {{ $labels.instance }}"
+          description: "Fail2ban service is not responding"
+
+      - alert: Fail2banHighBanRate
+        expr: rate(f2b_jail_banned_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High ban rate on {{ $labels.instance }}"
+          description: "Fail2ban is banning {{ $value | printf \"%.2f\" }} IPs per second"
+
+      - alert: Fail2banManyCurrentBans
+        expr: sum by (instance) (f2b_jail_banned_current) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many IPs currently banned on {{ $labels.instance }}"
+          description: "{{ $value }} IPs currently banned - possible attack"

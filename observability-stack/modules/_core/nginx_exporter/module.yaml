@@ -1,0 +1,121 @@
+# Nginx Exporter Module Manifest
+# Exports Nginx metrics to Prometheus using stub_status
+
+module:
+  name: nginx_exporter
+  display_name: Nginx Exporter
+  version: "1.1.0"
+  description: Exports Nginx web server metrics to Prometheus
+  maintainer: nginxinc
+  category: webserver
+
+  capabilities:
+    metrics: true
+    logs: false
+    traces: false
+
+# Service detection rules
+detection:
+  commands:
+    - "command -v nginx"
+  systemd_services:
+    - nginx.service
+  files:
+    - /etc/nginx/nginx.conf
+  confidence: 95
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${VERSION}/nginx-prometheus-exporter_${VERSION}_linux_amd64.tar.gz"
+    archive_type: tar.gz
+    binary_name: nginx-prometheus-exporter
+    archive_path: nginx-prometheus-exporter
+    install_path: /usr/local/bin/nginx-prometheus-exporter
+    checksum_url: ""
+
+  system:
+    user: nginx_exporter
+    group: nginx_exporter
+    create_home: false
+    shell: /bin/false
+    additional_groups: []
+
+  dependencies:
+    modules: []
+    packages: []
+    optional_packages: []
+
+  config_dirs: []
+
+# Exporter runtime configuration
+exporter:
+  port: 9113
+
+  flags: []
+
+  environment: {}
+
+  health_check:
+    endpoint: "http://localhost:9113/metrics"
+    expected_metric: "nginx_up"
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required: []
+
+  optional:
+    stub_status_url:
+      default: "http://127.0.0.1:8080/nginx_status"
+      description: URL to the nginx stub_status endpoint
+
+# Prometheus scrape configuration
+prometheus:
+  job_name: nginx
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  labels:
+    service: nginx
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: dashboard.json
+  title: Nginx Overview
+  tags:
+    - nginx
+    - webserver
+  folder: Web
+  variables:
+    - instance
+
+# Alert rules
+alerts:
+  file: alerts.yml
+  groups:
+    - nginx_alerts
+  thresholds:
+    high_connections: 1000
+    high_waiting: 500
+    high_4xx_rate: 5
+    high_5xx_rate: 1
+
+documentation:
+  setup_instructions: |
+    Nginx exporter requires the stub_status module to be enabled.
+    The install script will auto-detect existing stub_status or create one.
+
+  troubleshooting:
+    - issue: "nginx_up shows 0"
+      solution: "Check that stub_status is enabled and accessible"
+    - issue: "Connection refused"
+      solution: "Verify the stub_status URL in the service configuration"
+
+hooks:
+  pre_install: ""
+  post_install: ""
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""

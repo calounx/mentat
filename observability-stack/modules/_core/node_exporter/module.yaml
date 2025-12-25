@@ -1,0 +1,142 @@
+# Node Exporter Module Manifest
+# Exports system metrics (CPU, memory, disk, network) to Prometheus
+
+module:
+  name: node_exporter
+  display_name: Node Exporter
+  version: "1.7.0"
+  description: Exports system metrics (CPU, memory, disk, network) to Prometheus
+  maintainer: prometheus-community
+  category: system
+
+  capabilities:
+    metrics: true
+    logs: false
+    traces: false
+
+# Service detection rules
+detection:
+  # Commands to detect if this exporter is relevant
+  commands:
+    - "test -f /proc/cpuinfo"
+    - "test -d /sys"
+  # This is a base exporter - always applicable on Linux
+  systemd_services: []
+  files:
+    - "/proc/meminfo"
+    - "/proc/stat"
+  # Confidence level if detected (0-100)
+  confidence: 100
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/node_exporter-${VERSION}.linux-amd64.tar.gz"
+    archive_type: tar.gz
+    binary_name: node_exporter
+    archive_path: "node_exporter-${VERSION}.linux-amd64/node_exporter"
+    install_path: /usr/local/bin/node_exporter
+    checksum_url: "https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/sha256sums.txt"
+
+  system:
+    user: node_exporter
+    group: node_exporter
+    create_home: false
+    shell: /bin/false
+    additional_groups: []
+
+  dependencies:
+    modules: []
+    packages: []
+    optional_packages: []
+
+  config_dirs: []
+
+# Exporter runtime configuration
+exporter:
+  port: 9100
+
+  # Default command line flags
+  flags:
+    - "--collector.systemd"
+    - "--collector.processes"
+
+  # Environment variables
+  environment: {}
+
+  # Health check
+  health_check:
+    endpoint: "http://localhost:9100/metrics"
+    expected_metric: "node_cpu_seconds_total"
+    timeout: 5
+
+# Per-host configuration schema
+host_config:
+  required: []
+
+  optional:
+    collectors_enabled:
+      default: []
+      description: Additional collectors to enable
+    collectors_disabled:
+      default: []
+      description: Collectors to disable
+    flags:
+      default: []
+      description: Additional flags to pass to node_exporter
+
+# Prometheus scrape configuration
+prometheus:
+  job_name: node
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  labels:
+    service: system
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: dashboard.json
+  title: Node Exporter Details
+  tags:
+    - node
+    - system
+    - linux
+  folder: System
+  variables:
+    - instance
+
+# Alert rules
+alerts:
+  file: alerts.yml
+  groups:
+    - node_alerts
+  thresholds:
+    cpu_usage_warning: 80
+    cpu_usage_critical: 95
+    memory_usage_warning: 80
+    memory_usage_critical: 95
+    disk_usage_warning: 80
+    disk_usage_critical: 90
+    swap_usage_warning: 80
+
+# Documentation
+documentation:
+  setup_instructions: |
+    Node Exporter monitors system metrics and requires no additional setup.
+    It will automatically collect CPU, memory, disk, and network metrics.
+
+  troubleshooting:
+    - issue: "node_exporter not starting"
+      solution: "Check if port 9100 is already in use"
+    - issue: "Missing systemd metrics"
+      solution: "Ensure --collector.systemd flag is enabled"
+
+# Lifecycle hooks
+hooks:
+  pre_install: ""
+  post_install: ""
+  pre_upgrade: ""
+  post_upgrade: ""
+  pre_uninstall: ""
+  post_uninstall: ""
