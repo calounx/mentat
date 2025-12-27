@@ -611,6 +611,87 @@ systemctl reload nginx
 cp -r /var/lib/grafana /backup/grafana-$(date +%Y%m%d)
 ```
 
+## Upgrade Management
+
+This stack includes a **production-ready idempotent upgrade system** that automatically manages component versions with zero hardcoded values.
+
+### Quick Upgrade Commands
+
+```bash
+# Check current versions and available updates
+sudo ./scripts/upgrade-orchestrator.sh --status
+
+# Preview what would be upgraded (dry-run)
+sudo ./scripts/upgrade-orchestrator.sh --all --dry-run
+
+# Upgrade all components (safe mode)
+sudo ./scripts/upgrade-orchestrator.sh --all --mode safe
+
+# Upgrade by phase (recommended for production)
+sudo ./scripts/upgrade-orchestrator.sh --phase exporters
+sudo ./scripts/upgrade-orchestrator.sh --phase prometheus
+sudo ./scripts/upgrade-orchestrator.sh --phase loki
+
+# Rollback if needed
+sudo ./scripts/upgrade-orchestrator.sh --rollback
+```
+
+### Key Features
+
+- **Dynamic Version Management**: No hardcoded versions, automatically fetches latest stable releases from GitHub
+- **True Idempotency**: Safe to run multiple times, detects current state, resumes from crashes
+- **Automatic Rollback**: Self-healing on health check failures
+- **Phased Upgrades**: Low-risk exporters → High-risk core components
+- **State Tracking**: Full visibility into upgrade progress with crash recovery
+- **Multiple Modes**: Safe (default), standard, fast, and dry-run modes
+
+### Version Management CLI
+
+```bash
+# Check versions for all components
+./scripts/version-manager list
+
+# Check specific component
+./scripts/version-manager show prometheus
+
+# Update version cache
+./scripts/version-manager update --all
+```
+
+### Configuration
+
+Version strategies are configured in `config/versions.yaml`:
+
+```yaml
+components:
+  prometheus:
+    strategy: latest        # Always fetch latest stable
+    github_repo: prometheus/prometheus
+    fallback_version: "2.48.0"
+
+  node_exporter:
+    strategy: pinned        # Use exact version
+    version: "1.7.0"
+
+  loki:
+    strategy: range         # Semver range
+    version: ">=3.0.0 <4.0.0"
+```
+
+### Upgrade Safety
+
+All upgrades include:
+- Pre-flight checks (disk space, dependencies, compatibility)
+- Automatic backups before each component upgrade
+- Health validation after upgrades
+- Automatic rollback on failure
+- Detailed upgrade history and audit trail
+
+For complete documentation, see:
+- [UPGRADE_QUICKSTART.md](docs/UPGRADE_QUICKSTART.md) - Quick start guide
+- [IDEMPOTENT_UPGRADE_COMPLETE.md](docs/IDEMPOTENT_UPGRADE_COMPLETE.md) - Complete system overview
+- [UPGRADE_ORCHESTRATION.md](docs/UPGRADE_ORCHESTRATION.md) - Detailed guide
+
 ## Troubleshooting & Recovery
 
 ### Decision Tree
