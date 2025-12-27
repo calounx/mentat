@@ -1,0 +1,186 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "up{job=\"tempo\"}", "refId": "A" }],
+      "title": "Tempo Status",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "color": "red", "text": "DOWN" }, "1": { "color": "green", "text": "UP" } }, "type": "value" }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "sum(rate(tempo_distributor_spans_received_total[5m]))", "refId": "A" }],
+      "title": "Spans/sec",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "sum(rate(tempo_distributor_bytes_received_total[5m]))", "refId": "A" }],
+      "title": "Ingestion Rate",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "Bps" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "tempo_ingester_live_traces", "refId": "A" }],
+      "title": "Live Traces",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
+      "id": 5,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "expr": "sum(rate(tempo_request_duration_seconds_count{status_code=~\"5..\"}[5m])) / sum(rate(tempo_request_duration_seconds_count[5m])) * 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Rate",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum(rate(tempo_distributor_spans_received_total[5m])) by (receiver)", "legendFormat": "{{receiver}}", "refId": "A" }
+      ],
+      "title": "Spans by Receiver",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } } } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(tempo_request_duration_seconds_bucket[5m])) by (le, route))", "legendFormat": "p50 {{route}}", "refId": "A" },
+        { "expr": "histogram_quantile(0.99, sum(rate(tempo_request_duration_seconds_bucket[5m])) by (le, route))", "legendFormat": "p99 {{route}}", "refId": "B" }
+      ],
+      "title": "Request Latency by Route",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "tempo_ingester_live_traces", "legendFormat": "Live Traces", "refId": "A" },
+        { "expr": "tempo_ingester_traces_created_total - tempo_ingester_traces_completed_total", "legendFormat": "In-Flight Traces", "refId": "B" }
+      ],
+      "title": "Trace Activity",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 9,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(tempo_ingester_bytes_received_total[5m])", "legendFormat": "Received", "refId": "A" },
+        { "expr": "rate(tempo_ingester_bytes_written_total[5m])", "legendFormat": "Written", "refId": "B" }
+      ],
+      "title": "Ingester Throughput",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "Bps" } }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "id": 10,
+      "title": "Storage",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "id": 11,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "tempo_ingester_block_bytes", "legendFormat": "Block Size", "refId": "A" }
+      ],
+      "title": "Block Storage",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "id": 12,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(tempo_compactor_blocks_compacted_total[5m])", "legendFormat": "Compacted", "refId": "A" },
+        { "expr": "tempo_compactor_outstanding_blocks", "legendFormat": "Outstanding", "refId": "B" }
+      ],
+      "title": "Compaction",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "id": 13,
+      "title": "Resource Usage",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "id": 14,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "process_resident_memory_bytes{job=\"tempo\"}", "legendFormat": "Resident Memory", "refId": "A" },
+        { "expr": "go_memstats_heap_inuse_bytes{job=\"tempo\"}", "legendFormat": "Heap In Use", "refId": "B" }
+      ],
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "id": 15,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(process_cpu_seconds_total{job=\"tempo\"}[5m])", "legendFormat": "CPU Usage", "refId": "A" }
+      ],
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["tempo", "tracing", "library"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Tempo Overview",
+  "uid": "tempo-overview-lib",
+  "version": 1
+}

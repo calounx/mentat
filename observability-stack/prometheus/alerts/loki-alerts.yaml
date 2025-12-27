@@ -1,0 +1,158 @@
+# Loki Alerts
+# Alert rules for Loki log aggregation
+
+groups:
+  #=============================================================================
+  # Loki Ingestion Alerts
+  #=============================================================================
+  - name: loki:ingestion
+    rules:
+      - alert: LokiDown
+        expr: absent(up{job="loki"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loki is down"
+          description: "Loki has been down for 5 minutes - log ingestion stopped"
+
+      - alert: LokiRequestErrors
+        expr: |
+          sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[5m])) by (route)
+          /
+          sum(rate(loki_request_duration_seconds_count[5m])) by (route)
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki high error rate on {{ $labels.route }}"
+          description: "{{ $value | printf \"%.1f\" }}% of requests failing"
+
+      - alert: LokiRequestLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(loki_request_duration_seconds_bucket{route=~"loki_api_v1_push"}[5m])) by (le))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki push latency high"
+          description: "P99 push latency: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: LokiIngesterNotReady
+        expr: loki_ingester_wal_replay_flushing != 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki ingester not ready"
+          description: "Ingester WAL replay not complete"
+
+      - alert: LokiIngesterFlushFailing
+        expr: increase(loki_ingester_flush_failed_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki ingester flush failing"
+          description: "{{ $value }} flush failures in the last hour"
+
+  #=============================================================================
+  # Loki Storage Alerts
+  #=============================================================================
+  - name: loki:storage
+    rules:
+      - alert: LokiChunkStoreError
+        expr: increase(loki_chunk_store_index_entries_per_chunk_bucket{le="+Inf"}[1h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki chunk store errors"
+          description: "No chunks written in the last hour"
+
+      - alert: LokiCompactorNotRunning
+        expr: loki_compactor_running != 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki compactor not running"
+          description: "Compactor has stopped - retention may not work"
+
+      - alert: LokiCompactorFailing
+        expr: increase(loki_compactor_compaction_failed_total[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki compactor failing"
+          description: "{{ $value }} compaction failures in the last hour"
+
+  #=============================================================================
+  # Loki Query Alerts
+  #=============================================================================
+  - name: loki:query
+    rules:
+      - alert: LokiQueryTimeout
+        expr: |
+          sum(rate(loki_request_duration_seconds_count{status_code="499"}[5m])) by (route) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki queries timing out"
+          description: "Query timeouts on {{ $labels.route }}"
+
+      - alert: LokiQueryQueueFull
+        expr: loki_query_frontend_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki query queue full"
+          description: "{{ $value }} queries queued"
+
+  #=============================================================================
+  # Promtail Alerts
+  #=============================================================================
+  - name: promtail
+    rules:
+      - alert: PromtailDown
+        expr: absent(up{job="promtail"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Promtail is down"
+          description: "Promtail has been down for 5 minutes - log collection stopped"
+
+      - alert: PromtailFileLagging
+        expr: |
+          promtail_file_bytes_total - promtail_read_bytes_total > 1e9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Promtail file reading lagging"
+          description: "{{ $value | humanize1024 }}B behind on {{ $labels.path }}"
+
+      - alert: PromtailRequestsErrors
+        expr: |
+          rate(promtail_request_duration_seconds_count{status_code=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Promtail requests failing"
+          description: "Promtail failing to send logs to Loki"
+
+      - alert: PromtailFileMissing
+        expr: promtail_file_bytes_total == 0
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Promtail file missing or empty"
+          description: "File {{ $labels.path }} appears empty or missing"

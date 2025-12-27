@@ -1,0 +1,70 @@
+# MySQL Alerts
+# Alert rules for MySQL/MariaDB monitoring
+
+groups:
+  - name: mysql
+    rules:
+      - alert: MysqlDown
+        expr: mysql_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL down on {{ $labels.instance }}"
+          description: "MySQL has been down for 2 minutes"
+
+      - alert: MysqlTooManyConnections
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySQL connections high on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.0f\" }}% of max connections used"
+
+      - alert: MysqlSlowQueries
+        expr: rate(mysql_global_status_slow_queries[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySQL slow queries on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.2f\" }} slow queries/sec"
+
+      - alert: MysqlReplicationLag
+        expr: mysql_slave_status_seconds_behind_master > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySQL replication lag on {{ $labels.instance }}"
+          description: "{{ $value }}s behind master"
+
+      - alert: MysqlReplicationNotRunning
+        expr: mysql_slave_status_slave_io_running == 0 or mysql_slave_status_slave_sql_running == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL replication stopped on {{ $labels.instance }}"
+          description: "Replication IO or SQL thread not running"
+
+      - alert: MysqlInnodbBufferPoolHitRate
+        expr: |
+          (rate(mysql_global_status_innodb_buffer_pool_read_requests[5m]) - rate(mysql_global_status_innodb_buffer_pool_reads[5m]))
+          / rate(mysql_global_status_innodb_buffer_pool_read_requests[5m]) < 0.95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "InnoDB buffer pool hit rate low on {{ $labels.instance }}"
+          description: "Hit rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: MysqlDeadlock
+        expr: increase(mysql_global_status_innodb_deadlocks[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySQL deadlock on {{ $labels.instance }}"
+          description: "{{ $value }} deadlocks in last 5 minutes"

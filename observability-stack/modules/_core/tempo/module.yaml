@@ -1,0 +1,90 @@
+# Tempo Module - Distributed Tracing
+# Completes the observability triangle: Metrics + Logs + Traces
+
+name: tempo
+description: "Grafana Tempo - Distributed tracing backend"
+version: "2.6.1"
+category: tracing
+
+# Component information
+component:
+  type: tracing
+  port: 3200
+  protocol: http
+
+# Dependencies
+dependencies:
+  required: []
+  optional:
+    - grafana  # For trace visualization
+    - loki     # For trace-to-logs correlation
+
+# Installation configuration
+installation:
+  user: tempo
+  group: tempo
+  binary_path: /usr/local/bin/tempo
+  config_path: /etc/tempo
+  data_path: /var/lib/tempo
+  log_path: /var/log/tempo
+
+# Service configuration
+service:
+  name: tempo
+  type: systemd
+  restart_policy: on-failure
+  restart_delay: 5s
+
+# Health check
+health_check:
+  type: http
+  endpoint: "http://localhost:3200/ready"
+  expected_status: 200
+  timeout: 10
+  interval: 30
+
+# Upgrade information
+upgrade:
+  from_version: "2.3.0"
+  to_version: "2.6.1"
+  breaking_changes:
+    - description: "Storage format changes in 2.5+"
+      severity: medium
+  backup_paths:
+    - /var/lib/tempo
+    - /etc/tempo
+
+# Receivers (ingestion protocols)
+receivers:
+  otlp:
+    grpc:
+      port: 4317
+    http:
+      port: 4318
+  jaeger:
+    thrift_http:
+      port: 14268
+    thrift_compact:
+      port: 6831
+    thrift_binary:
+      port: 6832
+    grpc:
+      port: 14250
+  zipkin:
+    port: 9411
+
+# Integration with other components
+integrations:
+  grafana:
+    datasource_type: tempo
+    datasource_url: "http://localhost:3200"
+  loki:
+    derived_fields:
+      - name: traceID
+        regex: "traceID=([a-f0-9]+)"
+        url: "http://localhost:3200/api/traces/${__value.raw}"
+  prometheus:
+    service_graph:
+      enabled: true
+    span_metrics:
+      enabled: true

@@ -1,0 +1,258 @@
+# Prometheus Self-Monitoring Alerts
+# Alert rules for Prometheus, Alertmanager, and scraping
+
+groups:
+  #=============================================================================
+  # Prometheus Alerts
+  #=============================================================================
+  - name: prometheus:self
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.instance }} is down"
+          description: "Prometheus target {{ $labels.job }}/{{ $labels.instance }} has been down for 5 minutes"
+
+      - alert: PrometheusTargetMissing
+        expr: absent(up{job="prometheus"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target missing"
+          description: "A Prometheus job has disappeared from discovery"
+
+      - alert: PrometheusConfigurationReloadFailure
+        expr: prometheus_config_last_reload_successful != 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus configuration reload failed"
+          description: "Prometheus failed to reload its configuration"
+
+      - alert: PrometheusTooManyRestarts
+        expr: changes(process_start_time_seconds{job="prometheus"}[15m]) > 2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus has restarted too many times"
+          description: "Prometheus has restarted {{ $value }} times in the last 15 minutes"
+
+      - alert: PrometheusNotConnectedToAlertmanager
+        expr: prometheus_notifications_alertmanagers_discovered < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus not connected to Alertmanager"
+          description: "Prometheus cannot send alerts to Alertmanager"
+
+      - alert: PrometheusNotificationsDropped
+        expr: increase(prometheus_notifications_dropped_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus notifications dropped"
+          description: "{{ $value }} notifications dropped due to Alertmanager errors"
+
+      - alert: PrometheusRuleFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule evaluation failures"
+          description: "{{ $value }} rule evaluation failures in the last 5 minutes"
+
+      - alert: PrometheusRuleEvaluationSlow
+        expr: prometheus_rule_group_last_duration_seconds > prometheus_rule_group_interval_seconds
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule evaluation slow"
+          description: "Rule group {{ $labels.rule_group }} taking longer than its interval"
+
+  #=============================================================================
+  # Prometheus Storage Alerts
+  #=============================================================================
+  - name: prometheus:storage
+    rules:
+      - alert: PrometheusTsdbCheckpointCreationFailures
+        expr: increase(prometheus_tsdb_checkpoint_creations_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus TSDB checkpoint creation failed"
+          description: "TSDB checkpoint creation is failing"
+
+      - alert: PrometheusTsdbCompactionsFailed
+        expr: increase(prometheus_tsdb_compactions_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus TSDB compaction failed"
+          description: "TSDB compaction is failing"
+
+      - alert: PrometheusTsdbHeadTruncationsFailed
+        expr: increase(prometheus_tsdb_head_truncations_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus TSDB head truncation failed"
+          description: "TSDB head truncation is failing"
+
+      - alert: PrometheusTsdbReloadFailures
+        expr: increase(prometheus_tsdb_reloads_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus TSDB reload failed"
+          description: "TSDB failed to reload blocks from disk"
+
+      - alert: PrometheusTsdbWalCorruptions
+        expr: increase(prometheus_tsdb_wal_corruptions_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus TSDB WAL corruption"
+          description: "TSDB Write-Ahead Log has corruption"
+
+      - alert: PrometheusTsdbWalTruncationsFailed
+        expr: increase(prometheus_tsdb_wal_truncations_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus TSDB WAL truncation failed"
+          description: "TSDB WAL truncation is failing"
+
+  #=============================================================================
+  # Prometheus Scraping Alerts
+  #=============================================================================
+  - name: prometheus:scraping
+    rules:
+      - alert: PrometheusTargetScrapingSlow
+        expr: prometheus_target_interval_length_seconds{quantile="0.9"} / on (interval, instance, job) prometheus_target_interval_length_seconds{quantile="0.5"} > 1.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus target scraping slow"
+          description: "Scrape of {{ $labels.job }} is taking longer than expected"
+
+      - alert: PrometheusScrapeBodySizeLimit
+        expr: sum(prometheus_target_scrape_pool_exceeded_target_limit_total) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus scrape body size limit exceeded"
+          description: "Some targets exceeded the body size limit"
+
+      - alert: PrometheusScrapeSampleLimit
+        expr: sum(prometheus_target_scrape_pool_exceeded_sample_limit_total) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus scrape sample limit exceeded"
+          description: "Some targets exceeded the sample limit"
+
+      - alert: PrometheusTargetScrapePoolReachingLimit
+        expr: |
+          (prometheus_target_scrape_pool_targets / prometheus_target_scrape_pool_target_limit) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus scrape pool reaching limit"
+          description: "Scrape pool {{ $labels.scrape_job }} is at {{ $value | printf \"%.0f\" }}% of limit"
+
+  #=============================================================================
+  # Alertmanager Alerts
+  #=============================================================================
+  - name: alertmanager
+    rules:
+      - alert: AlertmanagerDown
+        expr: absent(up{job="alertmanager"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager is down"
+          description: "Alertmanager has been down for 5 minutes"
+
+      - alert: AlertmanagerConfigurationReloadFailure
+        expr: alertmanager_config_last_reload_successful != 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager configuration reload failed"
+          description: "Alertmanager failed to reload its configuration"
+
+      - alert: AlertmanagerNotificationsFailing
+        expr: rate(alertmanager_notifications_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager notifications failing"
+          description: "Alertmanager failing to send notifications to {{ $labels.integration }}"
+
+      - alert: AlertmanagerClusterFailedToSendAlerts
+        expr: |
+          sum by (integration) (rate(alertmanager_notifications_failed_total[5m]))
+          /
+          sum by (integration) (rate(alertmanager_notifications_total[5m]))
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager cluster failing to send alerts"
+          description: "{{ $value | printf \"%.1f\" }}% of alerts failing for {{ $labels.integration }}"
+
+      - alert: AlertmanagerMembersInconsistent
+        expr: alertmanager_cluster_members != on () group_left() count(alertmanager_cluster_members)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager cluster members inconsistent"
+          description: "Alertmanager cluster has inconsistent member count"
+
+  #=============================================================================
+  # General Exporter Alerts
+  #=============================================================================
+  - name: exporters
+    rules:
+      - alert: ExporterDown
+        expr: up{job=~".*_exporter"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exporter {{ $labels.job }} down on {{ $labels.instance }}"
+          description: "Exporter has been down for 5 minutes"
+
+      - alert: ExporterScrapeSlow
+        expr: scrape_duration_seconds > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow scrape for {{ $labels.job }} on {{ $labels.instance }}"
+          description: "Scrape taking {{ $value | printf \"%.1f\" }}s"

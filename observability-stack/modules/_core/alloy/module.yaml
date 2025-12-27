@@ -1,0 +1,97 @@
+# Grafana Alloy - Modern OpenTelemetry Collector
+# Unified collection for metrics, logs, and traces
+# Replaces Grafana Agent with River configuration language
+
+name: alloy
+display_name: Grafana Alloy
+description: |
+  OpenTelemetry-compatible telemetry collector for metrics, logs, and traces.
+  Features programmable pipelines using River configuration language.
+category: core
+version: "1.5.1"
+
+# Component type configuration
+type: collector
+port: 12345  # Default HTTP port
+metrics_path: /metrics
+
+dependencies:
+  required: []
+  optional:
+    - prometheus   # For remote_write metrics
+    - loki         # For log forwarding
+    - tempo        # For trace forwarding
+
+# Installation configuration
+install:
+  method: binary
+  binary_name: alloy
+  service_name: alloy
+  user: alloy
+  group: alloy
+
+  download:
+    base_url: "https://github.com/grafana/alloy/releases/download"
+    architectures:
+      amd64: "alloy-linux-amd64"
+      arm64: "alloy-linux-arm64"
+
+# Service configuration
+service:
+  exec_start: "/usr/local/bin/alloy run /etc/alloy/config.alloy"
+  restart: always
+  restart_sec: 5
+
+# Default configuration
+config:
+  file: /etc/alloy/config.alloy
+  template: |
+    // Grafana Alloy Configuration
+    // River configuration language
+
+    logging {
+      level  = "info"
+      format = "logfmt"
+    }
+
+    // Self-monitoring - expose Alloy metrics
+    prometheus.exporter.self "alloy" {
+    }
+
+    prometheus.scrape "self" {
+      targets    = prometheus.exporter.self.alloy.targets
+      forward_to = [prometheus.remote_write.default.receiver]
+    }
+
+    // Prometheus remote write endpoint
+    prometheus.remote_write "default" {
+      endpoint {
+        url = "http://localhost:9090/api/v1/write"
+      }
+    }
+
+# Health check
+health_check:
+  endpoint: "http://localhost:12345/-/ready"
+  interval: 30s
+
+# Upgrade notes
+upgrade:
+  from_grafana_agent: |
+    Alloy replaces Grafana Agent with these key changes:
+    - New River configuration language (not YAML)
+    - Component-based architecture
+    - Native OpenTelemetry support
+    - Programmable pipelines
+
+  migration_steps:
+    - "Convert YAML config to River format"
+    - "Update service files"
+    - "Test configuration with 'alloy fmt'"
+    - "Validate with 'alloy run --dry-run'"
+
+# Documentation
+documentation:
+  official: "https://grafana.com/docs/alloy/latest/"
+  configuration: "https://grafana.com/docs/alloy/latest/reference/config-blocks/"
+  migration: "https://grafana.com/docs/alloy/latest/set-up/migrate/"

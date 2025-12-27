@@ -1,0 +1,217 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "up{job=\"alloy\", instance=~\"$instance\"}", "refId": "A" }],
+      "title": "Alloy Status",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "color": "red", "text": "DOWN" }, "1": { "color": "green", "text": "UP" } }, "type": "value" }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "alloy_component_controller_running_components{instance=~\"$instance\"}", "refId": "A" }],
+      "title": "Running Components",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "sum(rate(prometheus_remote_write_samples_total{job=\"alloy\", instance=~\"$instance\"}[5m]))", "refId": "A" }],
+      "title": "Samples/sec",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "sum(rate(loki_write_sent_entries_total{job=\"alloy\", instance=~\"$instance\"}[5m]))", "refId": "A" }],
+      "title": "Log Lines/sec",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "id": 5,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "sum(rate(otelcol_receiver_accepted_spans{job=\"alloy\", instance=~\"$instance\"}[5m]))", "refId": "A" }],
+      "title": "Spans/sec",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "id": 6,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "process_resident_memory_bytes{job=\"alloy\", instance=~\"$instance\"}", "refId": "A" }],
+      "title": "Memory Usage",
+      "type": "stat",
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+      "id": 7,
+      "title": "Metrics Pipeline",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(prometheus_remote_write_samples_total{job=\"alloy\", instance=~\"$instance\"}[5m])", "legendFormat": "{{remote_name}} - sent", "refId": "A" },
+        { "expr": "rate(prometheus_remote_write_samples_failed_total{job=\"alloy\", instance=~\"$instance\"}[5m])", "legendFormat": "{{remote_name}} - failed", "refId": "B" }
+      ],
+      "title": "Remote Write Samples",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "id": 9,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(prometheus_remote_write_duration_seconds_bucket{job=\"alloy\", instance=~\"$instance\"}[5m])) by (le, remote_name))", "legendFormat": "p50 {{remote_name}}", "refId": "A" },
+        { "expr": "histogram_quantile(0.99, sum(rate(prometheus_remote_write_duration_seconds_bucket{job=\"alloy\", instance=~\"$instance\"}[5m])) by (le, remote_name))", "legendFormat": "p99 {{remote_name}}", "refId": "B" }
+      ],
+      "title": "Remote Write Latency",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "id": 10,
+      "title": "Logs Pipeline",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "id": 11,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum(rate(loki_write_sent_entries_total{job=\"alloy\", instance=~\"$instance\"}[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A" }
+      ],
+      "title": "Log Entries by Status",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } } } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "id": 12,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum(rate(loki_write_sent_bytes_total{job=\"alloy\", instance=~\"$instance\"}[5m]))", "legendFormat": "Sent", "refId": "A" }
+      ],
+      "title": "Log Bytes Rate",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "Bps" } }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "id": 13,
+      "title": "Traces Pipeline (OTLP)",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "id": 14,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum(rate(otelcol_receiver_accepted_spans{job=\"alloy\", instance=~\"$instance\"}[5m])) by (receiver)", "legendFormat": "{{receiver}} - accepted", "refId": "A" },
+        { "expr": "sum(rate(otelcol_receiver_refused_spans{job=\"alloy\", instance=~\"$instance\"}[5m])) by (receiver)", "legendFormat": "{{receiver}} - refused", "refId": "B" }
+      ],
+      "title": "OTLP Receiver Spans",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "id": 15,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "sum(rate(otelcol_exporter_sent_spans{job=\"alloy\", instance=~\"$instance\"}[5m])) by (exporter)", "legendFormat": "{{exporter}} - sent", "refId": "A" },
+        { "expr": "sum(rate(otelcol_exporter_send_failed_spans{job=\"alloy\", instance=~\"$instance\"}[5m])) by (exporter)", "legendFormat": "{{exporter}} - failed", "refId": "B" }
+      ],
+      "title": "OTLP Exporter Spans",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "id": 16,
+      "title": "Components & Resources",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "id": 17,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum(rate(alloy_component_evaluation_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, component_id))", "legendFormat": "{{component_id}}", "refId": "A" }
+      ],
+      "title": "Component Evaluation Time (p99)",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "id": 18,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "rate(process_cpu_seconds_total{job=\"alloy\", instance=~\"$instance\"}[5m])", "legendFormat": "CPU Usage", "refId": "A" }
+      ],
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["alloy", "collector", "otel", "library"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(up{job=\"alloy\"}, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": { "query": "label_values(up{job=\"alloy\"}, instance)", "refId": "StandardVariableQuery" },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Grafana Alloy Overview",
+  "uid": "alloy-overview-lib",
+  "version": 1
+}

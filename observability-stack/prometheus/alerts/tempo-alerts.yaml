@@ -1,0 +1,132 @@
+# Tempo Alerts
+# Alert rules for Tempo distributed tracing
+
+groups:
+  #=============================================================================
+  # Tempo Availability
+  #=============================================================================
+  - name: tempo:availability
+    rules:
+      - alert: TempoDown
+        expr: absent(up{job="tempo"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tempo is down"
+          description: "Tempo has been down for 5 minutes - trace ingestion stopped"
+
+      - alert: TempoRequestErrors
+        expr: |
+          sum(rate(tempo_request_duration_seconds_count{status_code=~"5.."}[5m])) by (route)
+          /
+          sum(rate(tempo_request_duration_seconds_count[5m])) by (route)
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo high error rate on {{ $labels.route }}"
+          description: "{{ $value | printf \"%.1f\" }}% of requests failing"
+
+      - alert: TempoRequestLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(tempo_request_duration_seconds_bucket[5m])) by (le, route))
+          > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo high latency on {{ $labels.route }}"
+          description: "P99 latency: {{ $value | printf \"%.2f\" }}s"
+
+  #=============================================================================
+  # Tempo Ingestion
+  #=============================================================================
+  - name: tempo:ingestion
+    rules:
+      - alert: TempoIngesterNotReady
+        expr: tempo_ingester_live_traces == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo ingester has no live traces"
+          description: "No traces in memory for 10 minutes"
+
+      - alert: TempoIngesterFlushFailing
+        expr: increase(tempo_ingester_flush_failed_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo ingester flush failing"
+          description: "{{ $value }} flush failures in the last hour"
+
+      - alert: TempoDistributorSpansDropped
+        expr: rate(tempo_distributor_spans_dropped_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo dropping spans"
+          description: "{{ $value | printf \"%.1f\" }} spans/sec being dropped"
+
+  #=============================================================================
+  # Tempo Storage
+  #=============================================================================
+  - name: tempo:storage
+    rules:
+      - alert: TempoCompactorNotRunning
+        expr: tempo_compactor_outstanding_blocks > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo compactor falling behind"
+          description: "{{ $value }} blocks waiting for compaction"
+
+      - alert: TempoCompactorFailing
+        expr: increase(tempo_compactor_compaction_errors_total[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo compactor failing"
+          description: "{{ $value }} compaction errors in the last hour"
+
+      - alert: TempoQueryFrontendQueueFull
+        expr: tempo_query_frontend_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo query queue full"
+          description: "{{ $value }} queries queued"
+
+  #=============================================================================
+  # Tempo Query
+  #=============================================================================
+  - name: tempo:query
+    rules:
+      - alert: TempoQueryTimeout
+        expr: |
+          sum(rate(tempo_request_duration_seconds_count{status_code="499"}[5m])) by (route) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo queries timing out"
+          description: "Query timeouts on {{ $labels.route }}"
+
+      - alert: TempoTraceNotFound
+        expr: |
+          sum(rate(tempo_request_duration_seconds_count{status_code="404", route="tempo_api_traces_traceid"}[5m]))
+          / sum(rate(tempo_request_duration_seconds_count{route="tempo_api_traces_traceid"}[5m]))
+          > 0.5
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "High trace not found rate"
+          description: "{{ $value | printf \"%.0f\" }}% of trace lookups returning 404"

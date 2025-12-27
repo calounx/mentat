@@ -1,0 +1,148 @@
+# Application & Container Alerts
+# Generic application monitoring alerts
+
+groups:
+  #=============================================================================
+  # HTTP Application Alerts
+  #=============================================================================
+  - name: application:http
+    rules:
+      - alert: ApplicationHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service, job)
+          / sum(rate(http_requests_total[5m])) by (service, job) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate for {{ $labels.service }}"
+          description: "{{ $value | printf \"%.1f\" }}% of requests failing"
+
+      - alert: ApplicationHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency for {{ $labels.service }}"
+          description: "P95 latency: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: ApplicationNoTraffic
+        expr: sum(rate(http_requests_total[5m])) by (service) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No traffic for {{ $labels.service }}"
+          description: "Service has received no requests for 15 minutes"
+
+  #=============================================================================
+  # PHP-FPM Alerts
+  #=============================================================================
+  - name: phpfpm
+    rules:
+      - alert: PhpFpmDown
+        expr: phpfpm_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PHP-FPM down on {{ $labels.instance }}"
+          description: "PHP-FPM has been down for 2 minutes"
+
+      - alert: PhpFpmMaxChildrenReached
+        expr: phpfpm_max_children_reached > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM max children reached on {{ $labels.instance }}"
+          description: "{{ $value }} times max children limit reached"
+
+      - alert: PhpFpmSlowRequests
+        expr: rate(phpfpm_slow_requests[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM slow requests on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.2f\" }} slow requests/sec"
+
+      - alert: PhpFpmProcessesHigh
+        expr: phpfpm_active_processes / phpfpm_total_processes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM processes high on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.0f\" }}% of processes active"
+
+  #=============================================================================
+  # Container/Process Alerts
+  #=============================================================================
+  - name: containers
+    rules:
+      - alert: ContainerCpuUsageHigh
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total[5m])) by (container, pod)
+          / sum(container_spec_cpu_quota / container_spec_cpu_period) by (container, pod) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.container }} CPU high"
+          description: "{{ $value | printf \"%.0f\" }}% CPU usage"
+
+      - alert: ContainerMemoryUsageHigh
+        expr: |
+          container_memory_working_set_bytes
+          / container_spec_memory_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.container }} memory high"
+          description: "{{ $value | printf \"%.0f\" }}% memory usage"
+
+      - alert: ContainerRestartingTooOften
+        expr: increase(container_restart_count[1h]) > 5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.container }} restarting frequently"
+          description: "{{ $value }} restarts in last hour"
+
+  #=============================================================================
+  # Fail2ban Alerts
+  #=============================================================================
+  - name: fail2ban
+    rules:
+      - alert: Fail2banDown
+        expr: fail2ban_up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fail2ban down on {{ $labels.instance }}"
+          description: "Fail2ban has been down for 5 minutes"
+
+      - alert: Fail2banBannedIpsHigh
+        expr: fail2ban_banned_ips > 100
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High banned IPs on {{ $labels.instance }}"
+          description: "{{ $value }} IPs currently banned in {{ $labels.jail }}"
+
+      - alert: Fail2banNewBans
+        expr: increase(fail2ban_banned_ips[5m]) > 10
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many new bans on {{ $labels.instance }}"
+          description: "{{ $value }} new bans in last 5 minutes for {{ $labels.jail }}"

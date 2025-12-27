@@ -1,0 +1,180 @@
+# Grafana Alloy Alerts
+# Alert rules for Alloy telemetry collector monitoring
+
+groups:
+  #=============================================================================
+  # Alloy Availability
+  #=============================================================================
+  - name: alloy:availability
+    rules:
+      - alert: AlloyDown
+        expr: absent(up{job="alloy"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana Alloy is down"
+          description: "Alloy has been down for 5 minutes - telemetry collection stopped"
+
+      - alert: AlloyUnhealthy
+        expr: alloy_component_controller_running_components == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alloy has no running components"
+          description: "No Alloy components are running on {{ $labels.instance }}"
+
+  #=============================================================================
+  # Alloy Component Health
+  #=============================================================================
+  - name: alloy:components
+    rules:
+      - alert: AlloyComponentUnhealthy
+        expr: alloy_component_controller_component_health{health!="healthy"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy component unhealthy"
+          description: "Component {{ $labels.component_id }} is {{ $labels.health }} on {{ $labels.instance }}"
+
+      - alert: AlloyComponentEvaluationSlow
+        expr: |
+          histogram_quantile(0.99, sum(rate(alloy_component_evaluation_seconds_bucket[5m])) by (le, component_id))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy component evaluation slow"
+          description: "Component {{ $labels.component_id }} P99 evaluation time: {{ $value | printf \"%.2f\" }}s"
+
+  #=============================================================================
+  # Alloy Metrics Pipeline
+  #=============================================================================
+  - name: alloy:metrics
+    rules:
+      - alert: AlloyRemoteWriteFailures
+        expr: |
+          rate(prometheus_remote_write_samples_failed_total{job="alloy"}[5m])
+          / rate(prometheus_remote_write_samples_total{job="alloy"}[5m])
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy remote write failures"
+          description: "{{ $value | printf \"%.2f\" }}% of samples failing to write on {{ $labels.instance }}"
+
+      - alert: AlloyRemoteWriteLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(prometheus_remote_write_duration_seconds_bucket{job="alloy"}[5m])) by (le, remote_name))
+          > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy remote write latency high"
+          description: "P99 remote write latency to {{ $labels.remote_name }}: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: AlloyRemoteWriteQueueFull
+        expr: |
+          prometheus_remote_write_pending_samples{job="alloy"}
+          / prometheus_remote_write_capacity_samples{job="alloy"}
+          > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy remote write queue nearly full"
+          description: "{{ $value | printf \"%.0f\" }}% queue capacity used on {{ $labels.instance }}"
+
+  #=============================================================================
+  # Alloy Logs Pipeline
+  #=============================================================================
+  - name: alloy:logs
+    rules:
+      - alert: AlloyLokiWriteFailures
+        expr: |
+          rate(loki_write_sent_entries_total{job="alloy", status!="2xx"}[5m])
+          / rate(loki_write_sent_entries_total{job="alloy"}[5m])
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy Loki write failures"
+          description: "{{ $value | printf \"%.1f\" }}% of log entries failing on {{ $labels.instance }}"
+
+      - alert: AlloyLogFileLagging
+        expr: |
+          loki_source_file_file_bytes_total{job="alloy"} - loki_source_file_read_bytes_total{job="alloy"}
+          > 100000000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy log file reading lagging"
+          description: "{{ $value | humanize1024 }}B behind on {{ $labels.path }}"
+
+  #=============================================================================
+  # Alloy Traces Pipeline
+  #=============================================================================
+  - name: alloy:traces
+    rules:
+      - alert: AlloyOTLPExportFailures
+        expr: |
+          rate(otelcol_exporter_send_failed_spans{job="alloy"}[5m])
+          / rate(otelcol_exporter_sent_spans{job="alloy"}[5m])
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy OTLP export failures"
+          description: "{{ $value | printf \"%.2f\" }}% of spans failing to export on {{ $labels.instance }}"
+
+      - alert: AlloyOTLPReceiverRefused
+        expr: rate(otelcol_receiver_refused_spans{job="alloy"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy OTLP receiver refusing spans"
+          description: "{{ $value | printf \"%.1f\" }} spans/sec refused on {{ $labels.instance }}"
+
+  #=============================================================================
+  # Alloy Resources
+  #=============================================================================
+  - name: alloy:resources
+    rules:
+      - alert: AlloyHighMemoryUsage
+        expr: |
+          process_resident_memory_bytes{job="alloy"}
+          / on(instance) node_memory_MemTotal_bytes
+          > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy high memory usage"
+          description: "Alloy using {{ $value | printf \"%.0f\" }}% of system memory on {{ $labels.instance }}"
+
+      - alert: AlloyHighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="alloy"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy high CPU usage"
+          description: "Alloy CPU usage: {{ $value | printf \"%.0f\" }}% on {{ $labels.instance }}"
+
+      - alert: AlloyTooManyRestarts
+        expr: changes(process_start_time_seconds{job="alloy"}[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy restarting frequently"
+          description: "Alloy has restarted {{ $value }} times in the last hour on {{ $labels.instance }}"
