@@ -25,8 +25,8 @@ set -euo pipefail
 UPGRADE_STATE_SH_LOADED=1
 
 # Source dependencies
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_LIB_DIR/common.sh"
 
 #===============================================================================
 # STATE CONFIGURATION

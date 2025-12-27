@@ -230,3 +230,622 @@ ok 105 state error: missing component in state is handled
 ok 106 state error: state lock timeout is enforced
 ok 108 state error: error context tracking works
 ok 109 state error: error aggregation collects multiple errors
+ok 112 state error: invalid checkpoint name is rejected
+ok 115 state error: state file permissions are secure
+ok 116 state error: state directory has correct permissions
+ok 117 state error: invalid JSON in update is rejected
+ok 119 state error: error recovery hooks can be registered
+not ok 121 get_stack_root returns absolute path
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 122 get_modules_dir returns correct path
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 123 get_config_dir returns correct path
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 124 get_hosts_config_dir returns correct path
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 125 yaml_get extracts simple key-value pairs
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 126 yaml_get handles quoted values
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 127 yaml_get handles comments
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 128 yaml_get returns empty for missing key
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 129 yaml_get fails for missing file
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 130 yaml_get_nested extracts nested values
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 131 yaml_get_deep extracts three-level nested values
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 132 yaml_get_array extracts array items
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 133 yaml_get_array handles empty arrays
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 134 yaml_has_key detects existing keys
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 135 yaml_has_key returns false for missing keys
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 136 version_compare handles equal versions
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 137 version_compare detects greater version
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 138 version_compare detects lesser version
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 139 version_compare handles different length versions
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 140 check_binary_version validates correct version
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 141 check_binary_version fails for wrong version
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 142 check_binary_version fails for non-executable
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 143 template_render substitutes simple variables
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 144 template_render handles both brace and non-brace syntax
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 145 template_render handles multiple occurrences
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 146 template_render_file renders file templates
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 147 template_render_file fails for missing file
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 148 ensure_dir creates directory
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 149 ensure_dir is idempotent
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 150 check_config_diff detects no changes
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 151 check_config_diff detects changes in force mode
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 152 check_config_diff creates new file
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 153 check_port detects open port
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 154 check_port detects closed port
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 155 wait_for_service times out on unavailable service
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 156 check_root detects non-root user
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 157 safe_stop_service handles non-existent service
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 158 log_info outputs info message
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 159 log_error outputs to stderr
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 160 log_debug outputs only when DEBUG=true
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 161 log_success outputs success message
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 162 log_warn outputs warning message
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 163 exit codes are defined
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 164 path constants are defined
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 165 path constants have sensible defaults
+# (from function `setup' in test file tests/unit/test_common.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_common.bats: line 21: RED: readonly variable
+not ok 166 get_all_enabled_modules finds enabled modules across hosts
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 167 get_all_enabled_modules returns empty when no hosts configured
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 168 get_all_enabled_modules skips template files
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 169 generate_module_scrape_config creates valid scrape config
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 170 generate_module_scrape_config uses custom job_name from manifest
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 171 generate_module_scrape_config aggregates multiple hosts
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 172 generate_module_scrape_config skips hosts without IP
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 173 generate_prometheus_config creates complete config
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 174 generate_prometheus_config includes header comment
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 175 generate_prometheus_config uses retention from global config
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 176 aggregate_alert_rules copies alert files
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 177 aggregate_alert_rules removes old module rules
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 178 aggregate_alert_rules skips modules without alerts
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 179 provision_dashboards copies dashboard files
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 180 provision_dashboards removes old module dashboards
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 181 provision_dashboards creates directory if missing
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 182 show_generation_plan displays summary
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 183 functions handle missing global config gracefully
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 184 generate_module_scrape_config handles missing manifest gracefully
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 185 aggregate_alert_rules handles missing rules directory
+# (from function `setup' in test file tests/unit/test_config_generator.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_config_generator.bats: line 21: RED: readonly variable
+not ok 186 list_all_modules finds existing modules
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 187 list_all_modules returns unique sorted results
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 188 list_core_modules finds core modules
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 189 get_module_dir returns correct path for existing module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 190 get_module_dir fails for non-existent module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 191 get_module_manifest returns manifest path
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 192 get_module_manifest fails for non-existent module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 193 module_exists detects existing module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 194 module_exists fails for non-existent module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 195 module_get extracts top-level values
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 196 module_get_nested extracts nested values
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 197 module_version returns version string
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 198 module_display_name returns display name
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 199 module_port returns valid port number
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 200 module_category returns category
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 201 module_description returns description
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 202 validate_and_execute_detection_command accepts whitelisted commands
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 203 validate_and_execute_detection_command rejects dangerous commands
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 204 validate_and_execute_detection_command rejects non-whitelisted commands
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 205 module_detect returns confidence for node_exporter
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 206 module_detect returns empty for non-applicable module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 207 detect_all_modules finds multiple modules
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 208 detect_all_modules returns sorted by confidence
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 209 validate_module succeeds for valid module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 210 validate_module fails for non-existent module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 211 validate_module checks required fields
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 212 validate_module checks for install script
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 213 validate_module checks port is numeric
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 214 get_host_config returns correct path
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 215 host_config_exists detects existing config
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 216 host_config_exists fails for non-existent config
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 217 list_configured_hosts finds existing hosts
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 218 host_config_get extracts values from host config
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 219 get_host_enabled_modules returns enabled modules
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 220 module_enabled_for_host checks module status
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 221 show_module_info displays module information
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 222 show_module_info fails for non-existent module
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 223 list_modules_status displays table
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 224 module directories are defined
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 225 core modules directory exists
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 226 functions handle empty module names gracefully
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 227 functions handle special characters in module names
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+not ok 228 yaml parsing handles malformed files gracefully
+# (from function `setup' in test file tests/unit/test_module_loader.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/unit/test_module_loader.bats: line 20: RED: readonly variable
+ok 229 integration: complete upgrade workflow - initialization
+ok 232 integration: complete upgrade workflow - version detection
+ok 233 integration: complete upgrade workflow - version comparison
+ok 234 integration: complete upgrade workflow - needs upgrade check
+ok 235 integration: complete upgrade workflow - backup creation
+not ok 250 generate_prometheus_config creates valid YAML
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 251 generated config includes all real enabled modules
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 252 generated config has valid scrape_interval values
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 253 promtool validates generated prometheus config
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 254 config generation with single host and module
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 255 config generation with multiple hosts
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 256 config generation with mixed modules
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 257 aggregate_alert_rules creates valid alert files
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 258 aggregated alert rules follow naming convention
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 259 promtool validates aggregated alert rules
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 260 alert rules contain required fields
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 261 provision_dashboards creates valid JSON files
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 262 provisioned dashboards follow naming convention
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 263 dashboards contain required Grafana structure
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 264 generate_all_configs creates all required files
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 265 show_generation_plan displays without errors
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 266 regenerating config with same data produces same output
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 267 config generation handles host addition
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 268 config generation handles missing host IP gracefully
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 269 config generation handles malformed host config
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 270 config generation ignores template files
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 271 no duplicate ports in module manifests
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 272 config generation with typical web server setup
+# (from function `setup' in test file tests/integration/test_config_generation.bats, line 21)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_config_generation.bats: line 21: RED: readonly variable
+not ok 273 detect_all_modules finds real system services
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 274 node_exporter detection works on Linux systems
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 275 validate_all_modules checks all real modules
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 276 all core modules have required files
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 277 all modules have valid ports
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 278 install simple test module with mock binary
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 279 uninstall removes module cleanly
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 280 module installation sets proper environment variables
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 281 install_module fails gracefully for non-existent module
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 282 install_module fails if install script missing
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 283 install_module handles script failure
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 284 host configuration file is parsed correctly
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 285 enabled modules can be retrieved from host config
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 286 node_exporter module has all required components
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 287 all install scripts are executable
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 288 all install scripts have bash shebang
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 289 list_modules_status generates complete table
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 290 show_module_info displays complete information
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 291 parallel module queries don't interfere
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 292 module directories have proper permissions
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+not ok 293 no module files contain secrets or credentials
+# (from function `setup' in test file tests/integration/test_module_install.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/integration/test_module_install.bats: line 20: RED: readonly variable
+# bats warning: Executed 255 instead of expected 293 tests

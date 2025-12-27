@@ -26,10 +26,10 @@ set -euo pipefail
 UPGRADE_MANAGER_SH_LOADED=1
 
 # Source dependencies
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
-source "$SCRIPT_DIR/versions.sh"
-source "$SCRIPT_DIR/upgrade-state.sh"
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_LIB_DIR/common.sh"
+source "$_LIB_DIR/versions.sh"
+source "$_LIB_DIR/upgrade-state.sh"
 
 #===============================================================================
 # CONFIGURATION

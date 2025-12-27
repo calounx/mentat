@@ -47,14 +47,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Default configuration - must be set before sourcing libraries
+UPGRADE_CONFIG_FILE="$STACK_ROOT/config/upgrade.yaml"
+
 # Source libraries
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/versions.sh"
 source "$SCRIPT_DIR/lib/upgrade-state.sh"
 source "$SCRIPT_DIR/lib/upgrade-manager.sh"
-
-# Default configuration
-UPGRADE_CONFIG_FILE="$STACK_ROOT/config/upgrade.yaml"
 DRY_RUN=false
 FORCE_MODE=false
 # shellcheck disable=SC2034  # P1-1: Reserved for future use

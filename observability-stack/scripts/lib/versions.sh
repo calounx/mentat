@@ -59,7 +59,9 @@ _version_log() {
 
     case "$level" in
         DEBUG)
-            [[ "$VERSION_DEBUG" == "true" ]] && echo "[VERSION:DEBUG] $msg" >&2
+            if [[ "$VERSION_DEBUG" == "true" ]]; then
+                echo "[VERSION:DEBUG] $msg" >&2
+            fi
             ;;
         INFO)
             echo "[VERSION:INFO] $msg" >&2
@@ -74,6 +76,7 @@ _version_log() {
             echo "[VERSION] $msg" >&2
             ;;
     esac
+    return 0
 }
 
 #===============================================================================
@@ -929,8 +932,9 @@ validate_component_config() {
 #===============================================================================
 
 # Auto-cleanup on load (if enabled)
-if [[ "${VERSION_AUTO_CLEANUP:-true}" == "true" ]]; then
-    cache_cleanup 2>/dev/null || true
-fi
+# Disabled due to potential initialization issues
+# if [[ "${VERSION_AUTO_CLEANUP:-true}" == "true" ]]; then
+#     (cache_cleanup 2>/dev/null) || true
+# fi
 
 _version_log DEBUG "Version management library loaded (v${VERSION_LIB_VERSION})"

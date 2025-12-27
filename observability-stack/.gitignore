@@ -1,0 +1,113 @@
+# Observability Stack - Git Ignore File
+
+# Configuration files with sensitive data
+config/global.yaml
+config/hosts/*.yaml
+!config/hosts/example-host.yaml.template
+
+# Secrets directory (except README)
+secrets/*
+!secrets/README.md
+
+# Logs
+*.log
+/var/log/
+logs/
+
+# Backups
+/var/backups/
+backups/
+*.backup
+*.bak
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# State files
+/var/lib/
+*.state
+*.lock
+.upgrade-state.json
+
+# Build artifacts
+*.tar.gz
+*.zip
+dist/
+build/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Test artifacts
+test-results*.xml
+shellcheck-results.txt
+coverage-summary.md
+/tmp/bats-test-*
+
+# Node modules (if any)
+node_modules/
+
+# Python cache (if any)
+__pycache__/
+*.pyc
+*.pyo
+
+# SSH keys
+*.pem
+*.key
+!*.key.example
+
+# Database files
+*.db
+*.sqlite
+
+# Grafana data
+/var/lib/grafana/
+
+# Prometheus data
+/var/lib/prometheus/
+
+# Loki data
+/var/lib/loki/
+
+# SSL certificates (managed by certbot)
+/etc/letsencrypt/
+
+# htpasswd files
+.htpasswd*
+
+# Docker artifacts (if using)
+.dockerignore
+Dockerfile.local
+
+# Kubernetes local configs (if using)
+*.local.yaml
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+.directory
+
+# Personal notes
+NOTES.md
+TODO.md
+SCRATCH.md
