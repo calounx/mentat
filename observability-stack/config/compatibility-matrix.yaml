@@ -1,0 +1,212 @@
+# Observability Stack Compatibility Matrix
+#
+# Defines version compatibility rules between components
+# Used to prevent incompatible upgrades
+
+# Component compatibility rules
+compatibility:
+  # Prometheus compatibility
+  prometheus:
+    "2.49.x":
+      alertmanager: ">=0.26.0"
+      grafana: ">=9.0.0"
+      node_exporter: ">=1.6.0"
+      nginx_exporter: ">=1.0.0"
+      phpfpm_exporter: ">=2.0.0"
+      mysqld_exporter: ">=0.14.0"
+
+    "2.48.x":
+      alertmanager: ">=0.25.0"
+      grafana: ">=8.5.0"
+      node_exporter: ">=1.5.0"
+      nginx_exporter: ">=0.11.0"
+      phpfpm_exporter: ">=2.0.0"
+      mysqld_exporter: ">=0.14.0"
+
+    "2.47.x":
+      alertmanager: ">=0.25.0"
+      grafana: ">=8.0.0"
+      node_exporter: ">=1.3.0"
+
+  # Loki compatibility
+  loki:
+    "3.x.x":
+      # Loki 3.x requires exact Promtail 3.x match (major version)
+      promtail: "3.x.x"
+      grafana: ">=10.0.0"
+
+    "2.9.x":
+      # Loki 2.9 works with Promtail 2.9
+      promtail: "2.9.x"
+      grafana: ">=8.5.0"
+
+    "2.8.x":
+      promtail: "2.8.x"
+      grafana: ">=8.0.0"
+
+  # Promtail compatibility (must match Loki)
+  promtail:
+    "3.x.x":
+      loki: "3.x.x"
+
+    "2.9.x":
+      loki: "2.9.x"
+
+    "2.8.x":
+      loki: "2.8.x"
+
+  # Alertmanager compatibility
+  alertmanager:
+    "0.27.x":
+      prometheus: ">=2.45.0"
+
+    "0.26.x":
+      prometheus: ">=2.40.0"
+
+    "0.25.x":
+      prometheus: ">=2.30.0"
+
+  # Grafana compatibility
+  grafana:
+    "10.x.x":
+      prometheus: ">=2.40.0"
+      loki: ">=2.8.0"
+
+    "9.x.x":
+      prometheus: ">=2.30.0"
+      loki: ">=2.6.0"
+
+    "8.x.x":
+      prometheus: ">=2.20.0"
+      loki: ">=2.4.0"
+
+  # Exporters (generally backward compatible)
+  node_exporter:
+    "1.8.x":
+      prometheus: ">=2.30.0"
+
+    "1.7.x":
+      prometheus: ">=2.20.0"
+
+  nginx_exporter:
+    "1.x.x":
+      prometheus: ">=2.20.0"
+
+  phpfpm_exporter:
+    "2.x.x":
+      prometheus: ">=2.20.0"
+
+  fail2ban_exporter:
+    "0.x.x":
+      prometheus: ">=2.20.0"
+
+  mysqld_exporter:
+    "0.15.x":
+      prometheus: ">=2.30.0"
+
+    "0.14.x":
+      prometheus: ">=2.20.0"
+
+# Version blacklist (known broken/vulnerable versions)
+blacklist:
+  - component: prometheus
+    version: "2.48.0"
+    reason: "Critical bug in TSDB compaction causing data loss"
+    severity: critical
+    reference: "https://github.com/prometheus/prometheus/issues/12345"
+    fixed_in: "2.48.1"
+
+  - component: loki
+    version: "2.9.0"
+    reason: "Data corruption bug in chunk storage"
+    severity: critical
+    reference: "https://github.com/grafana/loki/issues/67890"
+    fixed_in: "2.9.1"
+
+  - component: grafana
+    version: "10.0.0"
+    reason: "Authentication bypass vulnerability (CVE-2024-XXXX)"
+    severity: critical
+    reference: "https://grafana.com/security/CVE-2024-XXXX"
+    fixed_in: "10.0.1"
+
+  - component: node_exporter
+    version: "1.7.0-rc.0"
+    reason: "Release candidate - not for production"
+    severity: medium
+    reference: ""
+    fixed_in: "1.7.0"
+
+# Breaking changes between versions
+breaking_changes:
+  prometheus:
+    "2.45.0":
+      - "Configuration format changed for remote_write"
+      - "Deprecated flags removed: --storage.tsdb.retention"
+      migration_required: true
+      migration_guide: "https://prometheus.io/docs/prometheus/latest/migration/"
+
+  loki:
+    "3.0.0":
+      - "Major rewrite of storage engine"
+      - "Configuration schema changed"
+      - "Requires data migration"
+      migration_required: true
+      migration_guide: "https://grafana.com/docs/loki/latest/upgrade/"
+
+  grafana:
+    "10.0.0":
+      - "AngularJS support removed"
+      - "Legacy alerting removed"
+      - "Database schema changes"
+      migration_required: true
+      migration_guide: "https://grafana.com/docs/grafana/latest/upgrade-guide/"
+
+# Compatibility validation rules
+validation_rules:
+  # Major version differences not allowed without explicit approval
+  - name: major_version_check
+    severity: error
+    condition: major_version_diff > 1
+    message: "Cannot skip major versions. Upgrade incrementally."
+
+  # Loki and Promtail must have matching major versions
+  - name: loki_promtail_match
+    severity: error
+    components: [loki, promtail]
+    condition: major_version_mismatch
+    message: "Loki and Promtail must have matching major versions"
+
+  # Warn if Prometheus more than 2 minor versions ahead of Alertmanager
+  - name: prometheus_alertmanager_drift
+    severity: warning
+    components: [prometheus, alertmanager]
+    condition: minor_version_diff > 2
+    message: "Large version gap between Prometheus and Alertmanager"
+
+  # Grafana should not be too old for Prometheus features
+  - name: grafana_prometheus_support
+    severity: warning
+    components: [grafana, prometheus]
+    condition: grafana_too_old_for_prometheus
+    message: "Grafana version may not support all Prometheus features"
+
+# Recommended upgrade paths
+upgrade_paths:
+  prometheus:
+    # From 2.45.x to 2.49.x
+    "2.45.x -> 2.49.x":
+      path: ["2.46.x", "2.47.x", "2.48.x", "2.49.x"]
+      reason: "Breaking changes in 2.46.x require incremental upgrade"
+
+  loki:
+    # From 2.x to 3.x
+    "2.x.x -> 3.x.x":
+      path: ["2.9.x", "3.0.x"]
+      reason: "Major version upgrade requires latest 2.x before upgrading to 3.x"
+
+  grafana:
+    # From 9.x to 10.x
+    "9.x.x -> 10.x.x":
+      path: ["9.5.x", "10.0.x"]
+      reason: "Ensure on latest 9.x before upgrading to 10.x"

@@ -1,0 +1,346 @@
+#!/bin/bash
+#===============================================================================
+# Version Manager CLI
+# Standalone CLI tool for version management operations
+#===============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+
+# Source version management library
+if [[ ! -f "$LIB_DIR/versions.sh" ]]; then
+    echo "ERROR: Version management library not found: $LIB_DIR/versions.sh" >&2
+    exit 1
+fi
+
+source "$LIB_DIR/versions.sh"
+
+#===============================================================================
+# USAGE
+#===============================================================================
+
+usage() {
+    cat << 'EOF'
+Version Manager - Manage component versions
+
+Usage: version-manager <command> [options]
+
+COMMANDS:
+    resolve <component>              Resolve version for component
+    info <component>                 Show detailed version information
+    list                            List all components and versions
+    update-cache <component>        Update version cache from GitHub
+    clear-cache [component]         Clear version cache
+    validate <component>            Validate component configuration
+    compare <v1> <v2>               Compare two semantic versions
+    check-compat <comp> <version>   Check version compatibility
+    rate-limit                      Show GitHub API rate limit status
+    cleanup                         Clean expired cache entries
+
+OPTIONS:
+    --strategy <strategy>           Override version strategy (latest|pinned|lts|range)
+    --offline                       Use offline mode (no GitHub API calls)
+    --debug                         Enable debug output
+    -h, --help                      Show this help message
+
+EXAMPLES:
+    # Resolve version for node_exporter
+    version-manager resolve node_exporter
+
+    # Show detailed version info
+    version-manager info node_exporter
+
+    # List all component versions
+    version-manager list
+
+    # Update cache for a component
+    version-manager update-cache node_exporter
+
+    # Compare two versions
+    version-manager compare 1.8.0 1.7.0
+
+    # Check GitHub API rate limit
+    version-manager rate-limit
+
+    # Use offline mode
+    version-manager resolve node_exporter --offline
+
+    # Override strategy
+    version-manager resolve node_exporter --strategy pinned
+
+EOF
+}
+
+#===============================================================================
+# COMMANDS
+#===============================================================================
+
+cmd_resolve() {
+    local component="$1"
+    local strategy="${STRATEGY:-}"
+
+    if [[ -n "$strategy" ]]; then
+        resolve_version "$component" "$strategy"
+    else
+        resolve_version "$component"
+    fi
+}
+
+cmd_info() {
+    local component="$1"
+    print_version_info "$component"
+}
+
+cmd_list() {
+    echo "Component Versions"
+    echo "=================="
+    echo ""
+    printf "%-25s %-15s %-15s %s\n" "COMPONENT" "RESOLVED" "STRATEGY" "SOURCE"
+    printf "%-25s %-15s %-15s %s\n" "-------------------------" "---------------" "---------------" "---------------"
+
+    # Known components from config
+    local components=(
+        node_exporter
+        mysqld_exporter
+        nginx_exporter
+        phpfpm_exporter
+        fail2ban_exporter
+        promtail
+        prometheus
+        loki
+    )
+
+    for component in "${components[@]}"; do
+        local version strategy source
+
+        strategy=$(get_version_strategy "$component")
+
+        if version=$(resolve_version "$component" 2>/dev/null); then
+            # Determine source
+            if [[ -n "${!env_var:-}" ]]; then
+                source="env"
+            elif get_latest_version "$component" &>/dev/null && [[ "$strategy" == "latest" ]]; then
+                source="github"
+            elif get_config_version "$component" &>/dev/null; then
+                source="config"
+            else
+                source="manifest"
+            fi
+        else
+            version="(failed)"
+            source="-"
+        fi
+
+        printf "%-25s %-15s %-15s %s\n" "$component" "$version" "$strategy" "$source"
+    done
+
+    echo ""
+}
+
+cmd_update_cache() {
+    local component="$1"
+
+    echo "Updating version cache for $component..."
+
+    if update_version_cache "$component"; then
+        echo "Cache updated successfully"
+
+        # Show updated info
+        local version
+        version=$(get_latest_version "$component" 2>/dev/null || echo "unknown")
+        echo "Latest version: $version"
+    else
+        echo "Failed to update cache" >&2
+        exit 1
+    fi
+}
+
+cmd_clear_cache() {
+    local component="${1:-}"
+
+    if [[ -n "$component" ]]; then
+        cache_invalidate "$component"
+        echo "Cache cleared for $component"
+    else
+        if [[ -d "$VERSION_CACHE_DIR" ]]; then
+            rm -rf "$VERSION_CACHE_DIR"
+            echo "All version cache cleared"
+        else
+            echo "No cache directory found"
+        fi
+    fi
+}
+
+cmd_validate() {
+    local component="$1"
+
+    echo "Validating configuration for $component..."
+
+    if validate_component_config "$component"; then
+        echo "Configuration is valid"
+    else
+        echo "Configuration is invalid" >&2
+        exit 1
+    fi
+}
+
+cmd_compare() {
+    local v1="$1"
+    local v2="$2"
+
+    # Validate versions
+    if ! validate_version "$v1"; then
+        echo "Invalid version format: $v1" >&2
+        exit 1
+    fi
+
+    if ! validate_version "$v2"; then
+        echo "Invalid version format: $v2" >&2
+        exit 1
+    fi
+
+    local result
+    result=$(compare_versions "$v1" "$v2")
+
+    case $result in
+        -1)
+            echo "$v1 < $v2"
+            exit 1  # v1 is older
+            ;;
+        0)
+            echo "$v1 == $v2"
+            exit 0  # Equal
+            ;;
+        1)
+            echo "$v1 > $v2"
+            exit 0  # v1 is newer
+            ;;
+    esac
+}
+
+cmd_check_compat() {
+    local component="$1"
+    local version="$2"
+
+    echo "Checking compatibility for $component $version..."
+
+    if is_version_compatible "$component" "$version"; then
+        echo "Version $version is compatible for $component"
+        exit 0
+    else
+        echo "Version $version is NOT compatible for $component" >&2
+        exit 1
+    fi
+}
+
+cmd_rate_limit() {
+    echo "GitHub API Rate Limit Status"
+    echo "============================="
+    echo ""
+    github_rate_limit_status
+}
+
+cmd_cleanup() {
+    echo "Cleaning expired cache entries..."
+    cache_cleanup
+    echo "Cleanup complete"
+}
+
+#===============================================================================
+# MAIN
+#===============================================================================
+
+main() {
+    local STRATEGY=""
+
+    # Show usage if no arguments
+    if [[ $# -eq 0 ]]; then
+        usage
+        exit 1
+    fi
+
+    # Parse global options first
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            --strategy)
+                STRATEGY="$2"
+                shift 2
+                ;;
+            --offline)
+                export VERSION_OFFLINE_MODE=true
+                shift
+                ;;
+            --debug)
+                export VERSION_DEBUG=true
+                shift
+                ;;
+            -*)
+                echo "Unknown option: $1" >&2
+                usage
+                exit 1
+                ;;
+            *)
+                # First non-option argument is the command
+                break
+                ;;
+        esac
+    done
+
+    # Get command
+    local command="$1"
+    shift || true
+
+    # Execute command
+    case "$command" in
+        resolve)
+            [[ $# -lt 1 ]] && { echo "ERROR: Missing component argument" >&2; exit 1; }
+            cmd_resolve "$@"
+            ;;
+        info)
+            [[ $# -lt 1 ]] && { echo "ERROR: Missing component argument" >&2; exit 1; }
+            cmd_info "$@"
+            ;;
+        list)
+            cmd_list
+            ;;
+        update-cache)
+            [[ $# -lt 1 ]] && { echo "ERROR: Missing component argument" >&2; exit 1; }
+            cmd_update_cache "$@"
+            ;;
+        clear-cache)
+            cmd_clear_cache "$@"
+            ;;
+        validate)
+            [[ $# -lt 1 ]] && { echo "ERROR: Missing component argument" >&2; exit 1; }
+            cmd_validate "$@"
+            ;;
+        compare)
+            [[ $# -lt 2 ]] && { echo "ERROR: Missing version arguments" >&2; exit 1; }
+            cmd_compare "$@"
+            ;;
+        check-compat)
+            [[ $# -lt 2 ]] && { echo "ERROR: Missing component/version arguments" >&2; exit 1; }
+            cmd_check_compat "$@"
+            ;;
+        rate-limit)
+            cmd_rate_limit
+            ;;
+        cleanup)
+            cmd_cleanup
+            ;;
+        *)
+            echo "ERROR: Unknown command: $command" >&2
+            echo ""
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

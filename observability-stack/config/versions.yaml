@@ -1,0 +1,371 @@
+# Version Management Configuration
+# Part of the observability-stack
+#
+# This file configures version resolution strategies for all components.
+# Supports multiple strategies: latest, pinned, lts, range
+#
+# Strategy types:
+#   latest  - Always fetch latest stable release from GitHub
+#   pinned  - Use exact version specified (production stability)
+#   lts     - Use latest LTS version (conservative deployments)
+#   range   - Any version matching semver range (compatibility testing)
+#
+# Priority order for version resolution:
+#   1. Environment variable (VERSION_OVERRIDE_<component>)
+#   2. Strategy-based resolution
+#   3. Config fallback_version
+#   4. Module manifest version
+
+#===============================================================================
+# GLOBAL SETTINGS
+#===============================================================================
+global:
+  # Default strategy for components not explicitly configured
+  default_strategy: latest
+
+  # GitHub API configuration
+  github_api:
+    enabled: true
+    # Optional: Set GITHUB_TOKEN environment variable to increase rate limit
+    # Unauthenticated: 60 requests/hour
+    # Authenticated: 5000 requests/hour
+    timeout: 10  # seconds
+    cache_ttl: 900  # 15 minutes
+
+  # Cache configuration
+  cache:
+    enabled: true
+    directory: ~/.cache/observability-stack/versions
+    ttl: 900  # 15 minutes for fresh data
+    max_age: 86400  # 24 hours before forced refresh
+
+  # Offline mode (only use cache and config, no GitHub API calls)
+  offline_mode: false
+
+  # Compatibility checking (validates version compatibility across components)
+  compatibility_check: true
+
+  # Exclude pre-release versions by default
+  exclude_prereleases: true
+
+#===============================================================================
+# COMPONENT VERSION CONFIGURATION
+#===============================================================================
+components:
+  # Node Exporter - System metrics (CPU, memory, disk, network)
+  node_exporter:
+    strategy: latest
+    github_repo: prometheus/node_exporter
+    fallback_version: "1.7.0"
+    minimum_version: "1.5.0"
+
+    # Version constraints
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    # Compatibility requirements
+    compatible_with:
+      prometheus: ">=2.0.0"
+
+    # Download configuration
+    download:
+      archive_type: tar.gz
+      archive_pattern: "node_exporter-{VERSION}.linux-amd64.tar.gz"
+      checksum_file: "sha256sums.txt"
+
+  # MySQL Exporter - MySQL/MariaDB metrics
+  mysqld_exporter:
+    strategy: latest
+    github_repo: prometheus/mysqld_exporter
+    fallback_version: "0.15.1"
+    minimum_version: "0.14.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    download:
+      archive_type: tar.gz
+      archive_pattern: "mysqld_exporter-{VERSION}.linux-amd64.tar.gz"
+      checksum_file: "sha256sums.txt"
+
+  # Nginx Exporter - Nginx metrics
+  nginx_exporter:
+    strategy: latest
+    github_repo: nginxinc/nginx-prometheus-exporter
+    fallback_version: "1.1.0"
+    minimum_version: "1.0.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    download:
+      archive_type: tar.gz
+      archive_pattern: "nginx-prometheus-exporter_{VERSION}_linux_amd64.tar.gz"
+      checksum_file: "checksums.txt"
+
+  # PHP-FPM Exporter - PHP-FPM metrics
+  phpfpm_exporter:
+    strategy: latest
+    github_repo: hipages/php-fpm_exporter
+    fallback_version: "2.2.0"
+    minimum_version: "2.0.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    download:
+      archive_type: tar.gz
+      archive_pattern: "php-fpm_exporter_{VERSION}_linux_amd64.tar.gz"
+      checksum_file: "checksums.txt"
+
+  # Fail2ban Exporter - Fail2ban metrics
+  fail2ban_exporter:
+    strategy: latest
+    github_repo: jangrewe/prometheus-fail2ban-exporter
+    fallback_version: "0.10.3"
+    minimum_version: "0.9.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    download:
+      archive_type: binary
+      binary_name: "prometheus-fail2ban-exporter-linux-amd64"
+
+  # Promtail - Log shipping agent for Loki
+  promtail:
+    strategy: latest
+    github_repo: grafana/loki
+    fallback_version: "2.9.3"
+    minimum_version: "2.8.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    # Compatibility with Loki
+    compatible_with:
+      loki: ">=2.9.0"
+
+    download:
+      archive_type: zip
+      archive_pattern: "promtail-linux-amd64.zip"
+      binary_name: "promtail-linux-amd64"
+
+  # Prometheus - Metrics collection and storage
+  prometheus:
+    strategy: latest
+    github_repo: prometheus/prometheus
+    fallback_version: "2.48.0"
+    minimum_version: "2.45.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    download:
+      archive_type: tar.gz
+      archive_pattern: "prometheus-{VERSION}.linux-amd64.tar.gz"
+      checksum_file: "sha256sums.txt"
+
+  # Grafana - Visualization and dashboarding
+  grafana:
+    strategy: latest
+    # Note: Grafana is typically installed via package manager
+    # This config is for documentation purposes
+    fallback_version: "10.2.3"
+    minimum_version: "10.0.0"
+
+  # Loki - Log aggregation system
+  loki:
+    strategy: latest
+    github_repo: grafana/loki
+    fallback_version: "2.9.3"
+    minimum_version: "2.8.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    compatible_with:
+      promtail: ">=2.9.0"
+
+    download:
+      archive_type: zip
+      archive_pattern: "loki-linux-amd64.zip"
+      binary_name: "loki-linux-amd64"
+
+#===============================================================================
+# ENVIRONMENT-SPECIFIC OVERRIDES
+#===============================================================================
+# Use environment variables to switch configurations:
+#   export OBSERVABILITY_ENV=production
+#   export OBSERVABILITY_ENV=staging
+#   export OBSERVABILITY_ENV=development
+
+environments:
+  # Production environment - Stability over features
+  production:
+    default_strategy: pinned
+    offline_mode: true  # Do not call external APIs in production
+
+    # Override component versions for production
+    component_overrides:
+      node_exporter:
+        strategy: pinned
+        version: "1.7.0"
+
+      mysqld_exporter:
+        strategy: pinned
+        version: "0.15.1"
+
+      nginx_exporter:
+        strategy: pinned
+        version: "1.1.0"
+
+      phpfpm_exporter:
+        strategy: pinned
+        version: "2.2.0"
+
+      fail2ban_exporter:
+        strategy: pinned
+        version: "0.10.3"
+
+      promtail:
+        strategy: pinned
+        version: "2.9.3"
+
+      prometheus:
+        strategy: pinned
+        version: "2.48.0"
+
+      loki:
+        strategy: pinned
+        version: "2.9.3"
+
+  # Staging environment - Test latest before production
+  staging:
+    default_strategy: latest
+
+    github_api:
+      cache_ttl: 1800  # 30 minutes
+
+    # Allow pre-releases for testing
+    exclude_prereleases: false
+
+  # Development environment - Bleeding edge
+  development:
+    default_strategy: latest
+
+    github_api:
+      cache_ttl: 300  # 5 minutes for faster iteration
+
+    cache:
+      ttl: 300
+
+    exclude_prereleases: false
+
+#===============================================================================
+# COMPATIBILITY MATRIX
+#===============================================================================
+# Defines cross-component version compatibility requirements
+# Used to validate that component versions work together
+
+compatibility_matrix:
+  # Promtail must be compatible with Loki
+  - component: promtail
+    requires:
+      loki:
+        constraint: ">=2.9.0"
+        reason: "API compatibility"
+
+  # Prometheus exporter compatibility
+  - component: node_exporter
+    requires:
+      prometheus:
+        constraint: ">=2.0.0"
+        reason: "Metrics format compatibility"
+
+  - component: mysqld_exporter
+    requires:
+      prometheus:
+        constraint: ">=2.0.0"
+        reason: "Metrics format compatibility"
+
+  - component: nginx_exporter
+    requires:
+      prometheus:
+        constraint: ">=2.0.0"
+        reason: "Metrics format compatibility"
+
+  # Grafana dashboard compatibility
+  - component: grafana
+    requires:
+      prometheus:
+        constraint: ">=2.0.0"
+        reason: "Data source compatibility"
+      loki:
+        constraint: ">=2.0.0"
+        reason: "Data source compatibility"
+
+#===============================================================================
+# VERSION UPDATE POLICIES
+#===============================================================================
+# Configure how and when to update versions
+
+update_policies:
+  # Automatic update checking
+  auto_check:
+    enabled: false  # Set to true to enable automatic update checks
+    interval: 86400  # Check once per day
+    notify_only: true  # Only notify, don't auto-update
+
+  # Version constraints for auto-updates
+  auto_update_constraints:
+    # Only update within the same major version
+    major_version: false
+    minor_version: true
+    patch_version: true
+
+  # Excluded versions (known issues, security vulnerabilities)
+  excluded_versions:
+    node_exporter:
+      - "1.6.0"  # Example: Known bug in this version
+
+#===============================================================================
+# USAGE EXAMPLES
+#===============================================================================
+#
+# 1. Use latest version (default):
+#    version=$(resolve_version "node_exporter")
+#
+# 2. Override with environment variable:
+#    export VERSION_OVERRIDE_NODE_EXPORTER="1.8.0"
+#    version=$(resolve_version "node_exporter")
+#
+# 3. Force specific strategy:
+#    version=$(resolve_version "node_exporter" "pinned")
+#
+# 4. Check version info:
+#    print_version_info "node_exporter"
+#
+# 5. Update cache:
+#    update_version_cache "node_exporter"
+#
+# 6. Validate configuration:
+#    validate_component_config "node_exporter"
+#
+# 7. Compare versions:
+#    if compare_versions "1.8.0" "1.7.0"; then
+#      echo "1.8.0 is newer"
+#    fi
+#
+# 8. Check version constraints:
+#    if version_satisfies "1.8.0" ">=1.7.0"; then
+#      echo "Version satisfies constraint"
+#    fi

@@ -1,0 +1,36 @@
+[Unit]
+Description=Observability Stack Upgrade Service
+Documentation=https://github.com/your-org/observability-stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/observability-upgrade apply --yes
+StandardOutput=journal
+StandardError=journal
+
+# Run as root (required for system changes)
+User=root
+Group=root
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/observability /var/backups/observability /usr/local/bin /etc/systemd/system /etc/prometheus /etc/loki /etc/grafana /etc/alertmanager /etc/promtail
+
+# Resource limits
+CPUQuota=50%
+MemoryMax=1G
+TasksMax=100
+
+# Timeout (upgrades can take time)
+TimeoutStartSec=30min
+
+# Don't restart on failure
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,416 @@
+#===============================================================================
+# Upgrade Orchestration Configuration
+# Defines upgrade strategies, version targets, and safety policies
+#===============================================================================
+
+# Global upgrade settings
+global:
+  # Backup directory for pre-upgrade state
+  backup_dir: /var/lib/observability-upgrades/backups
+
+  # State tracking directory
+  state_dir: /var/lib/observability-upgrades
+
+  # Upgrade history directory
+  history_dir: /var/lib/observability-upgrades/history
+
+  # Checksum storage for verification
+  checksum_dir: /var/lib/observability-upgrades/checksums
+
+  # Default validation rules
+  validation:
+    # Minimum free disk space (MB)
+    min_disk_space: 1024
+
+    # Check connectivity before upgrade
+    check_connectivity: true
+
+    # Verify checksums
+    verify_checksums: true
+
+    # Health check timeout (seconds)
+    health_check_timeout: 60
+
+    # Maximum retries for failed upgrades
+    max_retries: 3
+
+  # Rollback policy
+  rollback:
+    # Auto-rollback on health check failure
+    auto_rollback: true
+
+    # Keep rollback backups for N days
+    retention_days: 30
+
+  # Notification settings (optional)
+  notifications:
+    enabled: false
+    # webhook_url: "https://hooks.slack.com/services/..."
+    # email: "admin@example.com"
+
+#===============================================================================
+# COMPONENT DEFINITIONS
+# Each component has upgrade metadata and version information
+#===============================================================================
+
+components:
+
+  # Phase 1: Low Risk - Exporters
+  # These can be upgraded independently with minimal risk
+
+  node_exporter:
+    # Current version (detected automatically if omitted)
+    current_version: "1.7.0"
+
+    # Target version
+    target_version: "1.9.1"
+
+    # GitHub repository for version resolution
+    github_repo: "prometheus/node_exporter"
+
+    # Upgrade phase
+    phase: 1
+
+    # Risk level
+    risk_level: low
+
+    # Dependencies (upgrade these first)
+    dependencies: []
+
+    # Service name
+    service: "node_exporter"
+
+    # Binary path for version detection
+    binary_path: "/usr/local/bin/node_exporter"
+
+    # Health check
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9100/metrics"
+      expected_status: 200
+      timeout: 10
+
+    # Backup strategy
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/node_exporter
+        - /etc/systemd/system/node_exporter.service
+
+    # Validation rules
+    validation:
+      check_port: 9100
+      verify_metrics: true
+
+  nginx_exporter:
+    current_version: "1.1.0"
+    target_version: "1.5.1"
+    github_repo: "nginxinc/nginx-prometheus-exporter"
+    phase: 1
+    risk_level: low
+    dependencies: []
+    service: "nginx_exporter"
+    binary_path: "/usr/local/bin/nginx_exporter"
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9113/metrics"
+      expected_status: 200
+      timeout: 10
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/nginx_exporter
+        - /etc/systemd/system/nginx_exporter.service
+    validation:
+      check_port: 9113
+      verify_metrics: true
+
+  mysqld_exporter:
+    current_version: "0.15.1"
+    target_version: "0.18.0"
+    github_repo: "prometheus/mysqld_exporter"
+    phase: 1
+    risk_level: low
+    dependencies: []
+    service: "mysqld_exporter"
+    binary_path: "/usr/local/bin/mysqld_exporter"
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9104/metrics"
+      expected_status: 200
+      timeout: 10
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/mysqld_exporter
+        - /etc/systemd/system/mysqld_exporter.service
+        - /etc/.mysqld_exporter.cnf
+    validation:
+      check_port: 9104
+      verify_metrics: true
+
+  phpfpm_exporter:
+    current_version: "2.2.0"
+    target_version: "2.3.0"
+    github_repo: "hipages/php-fpm_exporter"
+    phase: 1
+    risk_level: low
+    dependencies: []
+    service: "phpfpm_exporter"
+    binary_path: "/usr/local/bin/php-fpm_exporter"
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9253/metrics"
+      expected_status: 200
+      timeout: 10
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/php-fpm_exporter
+        - /etc/systemd/system/phpfpm_exporter.service
+    validation:
+      check_port: 9253
+      verify_metrics: true
+
+  fail2ban_exporter:
+    current_version: "0.4.1"
+    target_version: "0.5.0"
+    github_repo: "jangrewe/prometheus-fail2ban-exporter"
+    phase: 1
+    risk_level: low
+    dependencies: []
+    service: "fail2ban_exporter"
+    binary_path: "/usr/local/bin/fail2ban_exporter"
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9191/metrics"
+      expected_status: 200
+      timeout: 10
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/fail2ban_exporter
+        - /etc/systemd/system/fail2ban_exporter.service
+    validation:
+      check_port: 9191
+      verify_metrics: true
+
+  # Phase 2: High Risk - Core Services (Two-Stage Upgrades)
+  # Prometheus requires intermediate version for safe upgrade path
+
+  prometheus:
+    current_version: "2.48.1"
+
+    # Two-stage upgrade path for major version bump
+    upgrade_strategy: "two-stage"
+    intermediate_version: "2.55.1"
+    target_version: "3.8.1"
+
+    github_repo: "prometheus/prometheus"
+    phase: 2
+    risk_level: high
+    dependencies: []
+    service: "prometheus"
+    binary_path: "/usr/local/bin/prometheus"
+
+    # Multi-stage health checks
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9090/-/healthy"
+      expected_status: 200
+      timeout: 30
+      # Additional checks
+      additional_checks:
+        - type: "http"
+          endpoint: "http://localhost:9090/api/v1/status/config"
+          expected_status: 200
+        - type: "http"
+          endpoint: "http://localhost:9090/api/v1/targets"
+          expected_status: 200
+
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/prometheus
+        - /usr/local/bin/promtool
+        - /etc/prometheus/
+        - /var/lib/prometheus/
+      # Special handling for data directory
+      data_backup:
+        enabled: true
+        path: /var/lib/prometheus
+        # Use snapshots for large datasets
+        use_snapshot: true
+        snapshot_endpoint: "http://localhost:9090/api/v1/admin/tsdb/snapshot"
+
+    validation:
+      check_port: 9090
+      verify_metrics: true
+      verify_config: true
+      verify_tsdb: true
+      # Ensure targets are scraped
+      check_targets: true
+      # Validate config before upgrade
+      pre_upgrade_validation:
+        - "promtool check config /etc/prometheus/prometheus.yml"
+
+  # Phase 3: Medium Risk - Logging Stack
+  # Loki and Promtail should be upgraded together
+
+  loki:
+    current_version: "2.9.3"
+    target_version: "3.6.3"
+    github_repo: "grafana/loki"
+    phase: 3
+    risk_level: medium
+    dependencies: []
+    service: "loki"
+    binary_path: "/usr/local/bin/loki"
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:3100/ready"
+      expected_status: 200
+      timeout: 20
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/loki
+        - /etc/loki/
+        - /var/lib/loki/
+      data_backup:
+        enabled: true
+        path: /var/lib/loki
+    validation:
+      check_port: 3100
+      verify_config: true
+
+  promtail:
+    current_version: "2.9.3"
+    target_version: "3.6.3"
+    github_repo: "grafana/loki"
+    phase: 3
+    risk_level: medium
+    # Promtail should match Loki version
+    dependencies:
+      - loki
+    service: "promtail"
+    binary_path: "/usr/local/bin/promtail"
+    health_check:
+      type: "http"
+      endpoint: "http://localhost:9080/ready"
+      expected_status: 200
+      timeout: 10
+    backup:
+      enabled: true
+      paths:
+        - /usr/local/bin/promtail
+        - /etc/promtail/
+    validation:
+      check_port: 9080
+      verify_config: true
+
+#===============================================================================
+# UPGRADE PHASES
+# Defines the order and grouping of component upgrades
+#===============================================================================
+
+phases:
+  - id: 1
+    name: "Low Risk Exporters"
+    description: "Upgrade monitoring exporters (node, nginx, mysql, etc.)"
+    components:
+      - node_exporter
+      - nginx_exporter
+      - mysqld_exporter
+      - phpfpm_exporter
+      - fail2ban_exporter
+    strategy: "parallel"  # Can upgrade in parallel
+    max_parallel: 3
+    pause_between: 5  # seconds
+
+  - id: 2
+    name: "Core Metrics Database"
+    description: "Upgrade Prometheus (two-stage process)"
+    components:
+      - prometheus
+    strategy: "sequential"  # Must be done carefully
+    # Pause before this phase for manual confirmation
+    require_confirmation: true
+
+  - id: 3
+    name: "Logging Stack"
+    description: "Upgrade Loki and Promtail together"
+    components:
+      - loki
+      - promtail
+    strategy: "sequential"  # Loki first, then Promtail
+    pause_between: 10  # seconds
+
+#===============================================================================
+# VERSION PINNING AND CONSTRAINTS
+# Optional: Pin specific versions or define constraints
+#===============================================================================
+
+version_constraints:
+  # Example: Only upgrade within patch versions
+  # node_exporter: "~1.7.0"  # Allows 1.7.x
+
+  # Example: Range constraint
+  # prometheus: ">=2.48.0 <4.0.0"
+
+  # Leave empty to use target_version from components
+
+#===============================================================================
+# COMPATIBILITY MATRIX
+# Define known compatibility requirements between components
+#===============================================================================
+
+compatibility:
+  # Promtail must match Loki version
+  - components:
+      - loki
+      - promtail
+    rule: "exact_match"
+    description: "Loki and Promtail must be on the same version"
+
+  # Prometheus exporters should work with Prometheus 2.x and 3.x
+  - components:
+      - prometheus
+      - node_exporter
+    rule: "compatible"
+    description: "Node Exporter compatible with Prometheus 2.x and 3.x"
+
+#===============================================================================
+# UPGRADE MODES
+# Different modes for different scenarios
+#===============================================================================
+
+modes:
+  # Safe mode: Maximum safety, manual confirmations
+  safe:
+    auto_rollback: true
+    require_confirmation: true
+    backup_everything: true
+    health_check_strict: true
+    pause_between_components: 30
+
+  # Standard mode: Balanced safety and automation
+  standard:
+    auto_rollback: true
+    require_confirmation: false
+    backup_everything: true
+    health_check_strict: true
+    pause_between_components: 10
+
+  # Fast mode: Minimal pauses, for CI/CD
+  fast:
+    auto_rollback: true
+    require_confirmation: false
+    backup_everything: false  # Only backup critical data
+    health_check_strict: false
+    pause_between_components: 0
+
+  # Dry-run mode: No actual changes
+  dry_run:
+    simulate_only: true
+    show_all_steps: true

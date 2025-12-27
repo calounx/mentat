@@ -1,0 +1,26 @@
+[Unit]
+Description=Observability Stack Upgrade Check Timer
+Documentation=https://github.com/your-org/observability-stack
+Requires=observability-upgrade.service
+
+[Timer]
+# Run every Saturday at 2 AM UTC
+OnCalendar=Sat *-*-* 02:00:00
+
+# If system was off, run 1 hour after boot
+OnBootSec=1h
+
+# Run 15 minutes after timer activation (if missed)
+OnUnitActiveSec=15min
+
+# Randomize start time by up to 30 minutes to avoid thundering herd
+RandomizedDelaySec=30min
+
+# Persistent timer (track when last run even across reboots)
+Persistent=true
+
+# Accuracy (allow some drift for power saving)
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

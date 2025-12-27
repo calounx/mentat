@@ -1,0 +1,186 @@
+# Observability Stack Upgrade Policy Configuration
+#
+# Controls automatic upgrade behavior, maintenance windows,
+# and component-specific upgrade policies
+
+# Default upgrade policy (applied if component-specific not defined)
+default_policy:
+  # Upgrade types allowed: none, patch_only, minor, any
+  auto_upgrade: patch_only
+
+  # Maximum age (days) before upgrade is recommended
+  max_age_days: 30
+
+  # Require manual approval for upgrades
+  require_approval: true
+
+  # Automatically rollback on failure
+  auto_rollback: true
+
+  # Continue upgrading other components if one fails
+  continue_on_failure: false
+
+# Component-specific policies
+components:
+  # Prometheus - allow minor version upgrades
+  prometheus:
+    auto_upgrade: minor
+    max_age_days: 30
+    require_approval: false
+    auto_rollback: true
+
+  # Alertmanager - follow Prometheus version
+  alertmanager:
+    auto_upgrade: minor
+    max_age_days: 30
+    require_approval: false
+    auto_rollback: true
+
+  # Loki - patch only (more conservative)
+  loki:
+    auto_upgrade: patch_only
+    max_age_days: 45
+    require_approval: true
+    auto_rollback: true
+
+  # Promtail - must match Loki version
+  promtail:
+    auto_upgrade: patch_only
+    max_age_days: 45
+    require_approval: true
+    auto_rollback: true
+
+  # Node Exporter - allow any version
+  node_exporter:
+    auto_upgrade: any
+    max_age_days: 60
+    require_approval: false
+    auto_rollback: true
+
+  # Nginx Exporter
+  nginx_exporter:
+    auto_upgrade: minor
+    max_age_days: 60
+    require_approval: false
+    auto_rollback: true
+
+  # PHP-FPM Exporter
+  phpfpm_exporter:
+    auto_upgrade: minor
+    max_age_days: 60
+    require_approval: false
+    auto_rollback: true
+
+  # Fail2ban Exporter
+  fail2ban_exporter:
+    auto_upgrade: minor
+    max_age_days: 90
+    require_approval: false
+    auto_rollback: true
+
+  # MySQL Exporter
+  mysqld_exporter:
+    auto_upgrade: minor
+    max_age_days: 60
+    require_approval: false
+    auto_rollback: true
+
+  # Grafana - never auto-upgrade (too important)
+  grafana:
+    auto_upgrade: none
+    max_age_days: null
+    require_approval: true
+    auto_rollback: true
+
+# Maintenance windows (UTC timezone)
+# Auto-upgrades only run during these windows
+maintenance_windows:
+  - day: saturday
+    start: "02:00"
+    end: "06:00"
+    timezone: UTC
+
+  - day: sunday
+    start: "02:00"
+    end: "06:00"
+    timezone: UTC
+
+# Backup retention
+backup_retention:
+  # Keep last N backups
+  keep_count: 5
+
+  # Keep backups for N days minimum (even if exceeds count)
+  keep_days: 30
+
+  # Keep at least one backup per version
+  keep_per_version: true
+
+# Health check timeouts
+health_checks:
+  # Timeout for service to start (seconds)
+  startup_timeout: 60
+
+  # Timeout for health endpoint to respond (seconds)
+  endpoint_timeout: 30
+
+  # Number of health check retries
+  retries: 3
+
+  # Delay between retries (seconds)
+  retry_delay: 5
+
+# Notification settings
+notifications:
+  # Send notification on available updates
+  on_update_available: true
+
+  # Send notification when upgrade starts
+  on_upgrade_start: true
+
+  # Send notification on successful upgrade
+  on_upgrade_success: true
+
+  # Send notification on upgrade failure
+  on_upgrade_failure: true
+
+  # Send notification when rollback is performed
+  on_rollback: true
+
+# Safety features
+safety:
+  # Require minimum free disk space (MB)
+  min_free_disk_mb: 2048
+
+  # Require all services healthy before upgrade
+  require_healthy: true
+
+  # Check compatibility matrix
+  check_compatibility: true
+
+  # Verify checksums
+  verify_checksums: true
+
+  # Test binary execution before deployment
+  test_binary: true
+
+  # Maximum concurrent upgrades (for HA deployments)
+  max_concurrent: 1
+
+# Download settings
+download:
+  # Timeout for downloads (seconds)
+  timeout: 300
+
+  # Number of download retries
+  retries: 3
+
+  # Verify GPG signatures (if available)
+  verify_signatures: true
+
+  # Use proxy for downloads (optional)
+  proxy: ""
+
+  # Cache downloaded binaries
+  cache_downloads: true
+  cache_dir: /var/cache/observability-upgrades
