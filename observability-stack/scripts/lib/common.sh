@@ -391,109 +391,84 @@ validate_email() {
 
 #===============================================================================
 # YAML PARSING UTILITIES
-# Simple YAML parsing without external dependencies (for basic key: value)
+# Robust YAML parsing with intelligent fallback (yq -> python -> awk)
+# Source the new yaml-parser library for all YAML operations
 #===============================================================================
+
+# Source the YAML parser library
+_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
+    # Prevent circular dependency by temporarily marking common as loaded
+    _COMMON_WAS_LOADED="${COMMON_SH_LOADED:-}"
+    COMMON_SH_LOADED=1
+    source "$_COMMON_DIR/yaml-parser.sh"
+    if [[ -z "$_COMMON_WAS_LOADED" ]]; then
+        unset COMMON_SH_LOADED
+    fi
+fi
+
+# Backward compatibility wrappers with deprecation warnings
+# These call the new yaml-parser.sh functions
 
 # Get a simple key: value from a YAML file
 # Usage: yaml_get "file.yaml" "key"
+# DEPRECATED: Use yaml_get_value from yaml-parser.sh
 yaml_get() {
-    local file="$1"
-    local key="$2"
-
-    if [[ ! -f "$file" ]]; then
-        return 1
+    if [[ "${YAML_DEPRECATION_WARNINGS:-false}" == "true" ]]; then
+        log_debug "DEPRECATED: yaml_get() - use yaml_get_value() instead"
     fi
-
-    grep -E "^${key}:" "$file" 2>/dev/null | sed "s/^${key}:[[:space:]]*//" | sed 's/^["'\'']//' | sed 's/["'\'']$//' | sed 's/#.*//' | xargs
+    yaml_get_value "$@"
 }
 
 # Get a nested key value (one level deep)
 # Usage: yaml_get_nested "file.yaml" "parent" "child"
+# Note: Now uses robust parser from yaml-parser.sh
 yaml_get_nested() {
-    local file="$1"
-    local parent="$2"
-    local child="$3"
-
-    if [[ ! -f "$file" ]]; then
+    # This function is still valid, just reimplemented in yaml-parser.sh
+    # Call through to the new implementation
+    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
+        log_error "YAML parser not loaded"
         return 1
     fi
-
-    # Extract the section under parent and find the child key
-    awk -v parent="$parent" -v child="$child" '
-        /^[a-zA-Z_-]+:/ { in_section = ($0 ~ "^"parent":") }
-        in_section && /^  [a-zA-Z_-]+:/ {
-            gsub(/^  /, "")
-            if ($0 ~ "^"child":") {
-                sub("^"child":[[:space:]]*", "")
-                gsub(/^["'\''"]|["'\''"]$/, "")
-                print
-                exit
-            }
-        }
-    ' "$file"
+    # The yaml-parser.sh version is already available
+    command yaml_get_nested "$@"
 }
 
 # Get deeply nested key value (two levels deep)
 # Usage: yaml_get_deep "file.yaml" "level1" "level2" "level3"
+# Note: Now uses robust parser from yaml-parser.sh
 yaml_get_deep() {
-    local file="$1"
-    local level1="$2"
-    local level2="$3"
-    local level3="$4"
-
-    if [[ ! -f "$file" ]]; then
+    # This function is still valid, just reimplemented in yaml-parser.sh
+    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
+        log_error "YAML parser not loaded"
         return 1
     fi
-
-    awk -v l1="$level1" -v l2="$level2" -v l3="$level3" '
-        BEGIN { in_l1 = 0; in_l2 = 0 }
-        /^[a-zA-Z_-]+:/ {
-            in_l1 = ($0 ~ "^"l1":")
-            in_l2 = 0
-        }
-        in_l1 && /^  [a-zA-Z_-]+:/ {
-            in_l2 = ($0 ~ "^  "l2":")
-        }
-        in_l1 && in_l2 && /^    [a-zA-Z_-]+:/ {
-            if ($0 ~ "^    "l3":") {
-                sub("^    "l3":[[:space:]]*", "")
-                gsub(/^["'\''"]|["'\''"]$/, "")
-                print
-                exit
-            }
-        }
-    ' "$file"
+    command yaml_get_deep "$@"
 }
 
 # Get an array of values from YAML (list items under a key)
 # Usage: yaml_get_array "file.yaml" "key"
 # Returns lines, one per item
+# Note: Now uses robust parser from yaml-parser.sh
 yaml_get_array() {
-    local file="$1"
-    local key="$2"
-
-    if [[ ! -f "$file" ]]; then
+    # This function is still valid, just reimplemented in yaml-parser.sh
+    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
+        log_error "YAML parser not loaded"
         return 1
     fi
-
-    awk -v key="$key" '
-        /^[a-zA-Z_-]+:/ { in_section = ($0 ~ "^"key":") }
-        in_section && /^  - / {
-            sub(/^  - /, "")
-            gsub(/^["'\''"]|["'\''"]$/, "")
-            print
-        }
-        in_section && /^[a-zA-Z_-]+:/ && !($0 ~ "^"key":") { in_section = 0 }
-    ' "$file"
+    command yaml_get_array "$@"
 }
 
 # Check if a key exists in YAML
 # Usage: yaml_has_key "file.yaml" "key"
+# Note: Now uses robust parser from yaml-parser.sh
 yaml_has_key() {
-    local file="$1"
-    local key="$2"
-
-    grep -qE "^${key}:" "$file" 2>/dev/null
+    # This function is still valid, just reimplemented in yaml-parser.sh
+    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
+        log_error "YAML parser not loaded"
+        return 1
+    fi
+    command yaml_has_key "$@"
 }
 
 #===============================================================================

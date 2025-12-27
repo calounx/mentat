@@ -40,6 +40,20 @@ BACKUP_BASE_DIR="${BACKUP_BASE_DIR:-/var/lib/observability-upgrades/backups}"
 CHECKSUM_DIR="${CHECKSUM_DIR:-/var/lib/observability-upgrades/checksums}"
 
 #===============================================================================
+# YAML HELPER FUNCTIONS
+#===============================================================================
+
+# Get component config value using Python
+# Usage: get_component_config "component_name" "key" ["default"]
+get_component_config() {
+    local component="$1"
+    local key="$2"
+    local default="${3:-}"
+
+    python3 -c "import yaml; import sys; config = yaml.safe_load(open('$UPGRADE_CONFIG_FILE')); value = config.get('components', {}).get('$component', {}).get('$key'); print(value if value is not None else '$default')" 2>/dev/null || echo "$default"
+}
+
+#===============================================================================
 # VERSION DETECTION
 #===============================================================================
 
@@ -161,7 +175,7 @@ get_target_version() {
 
     # Check for two-stage upgrade
     local upgrade_strategy
-    upgrade_strategy=$(yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "upgrade_strategy" 2>/dev/null || echo "")
+    upgrade_strategy=$(get_component_config "$component" "upgrade_strategy")
 
     if [[ "$upgrade_strategy" == "two-stage" ]]; then
         # Check if we need intermediate version first
@@ -169,10 +183,10 @@ get_target_version() {
         current_version=$(detect_installed_version "$component" || echo "0.0.0")
 
         local intermediate_version
-        intermediate_version=$(yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "intermediate_version")
+        intermediate_version=$(get_component_config "$component" "intermediate_version")
 
         local target_version
-        target_version=$(yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "target_version")
+        target_version=$(get_component_config "$component" "target_version")
 
         # If current < intermediate, return intermediate
         # Otherwise return target
@@ -186,7 +200,7 @@ get_target_version() {
         fi
     else
         # Single-stage upgrade
-        yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "target_version"
+        get_component_config "$component" "target_version"
     fi
 }
 
@@ -746,14 +760,14 @@ validate_upgrade_config() {
 # Usage: get_risk_level "component_name"
 get_risk_level() {
     local component="$1"
-    yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "risk_level" 2>/dev/null || echo "medium"
+    get_component_config "$component" "risk_level" "medium"
 }
 
 # Get component phase
 # Usage: get_component_phase "component_name"
 get_component_phase() {
     local component="$1"
-    yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "phase" 2>/dev/null || echo "1"
+    python3 -c "import yaml; config = yaml.safe_load(open('$UPGRADE_CONFIG_FILE')); print(config.get('components', {}).get('$component', {}).get('phase', 1))" 2>/dev/null || echo "1"
 }
 
 # List all components from config
@@ -764,13 +778,8 @@ list_all_components() {
         return 1
     fi
 
-    # Extract component names from YAML
-    awk '/^components:/,/^[a-z]/ {
-        if ($1 ~ /^[a-z_-]+:$/ && $1 != "components:") {
-            gsub(/:$/, "", $1)
-            print $1
-        }
-    }' "$UPGRADE_CONFIG_FILE" | grep -v "^components$"
+    # Extract component names from YAML using Python
+    python3 -c "import yaml; import sys; config = yaml.safe_load(open('$UPGRADE_CONFIG_FILE')); [print(comp) for comp in config.get('components', {}).keys()]" 2>/dev/null
 }
 
 # Get components by phase

@@ -130,8 +130,10 @@ state_lock() {
     local elapsed=0
 
     while [[ $elapsed -lt $timeout ]]; do
-        # SECURITY: Use atomic directory creation with set -C (noclobber) for lock acquisition (H-2 fix)
-        if (set -C; echo $$ > "$STATE_LOCK/pid") 2>/dev/null; then
+        # SECURITY: Use atomic directory creation for lock acquisition (H-2 fix)
+        if mkdir "$STATE_LOCK" 2>/dev/null; then
+            # Write PID to lock file
+            echo $$ > "$STATE_LOCK/pid"
             # Double-check we still own the lock (detect race with another process)
             local written_pid
             written_pid=$(cat "$STATE_LOCK/pid" 2>/dev/null || echo "")
@@ -139,8 +141,9 @@ state_lock() {
                 log_debug "State lock acquired (PID $$)"
                 return 0
             fi
-            # If PID doesn't match, another process won the race - retry
+            # If PID doesn't match, another process won the race - cleanup and retry
             log_debug "Lock race detected, retrying..."
+            rm -rf "$STATE_LOCK" 2>/dev/null || true
         fi
 
         # SECURITY: Check if lock is stale using flock to prevent TOCTOU (H-2 fix)

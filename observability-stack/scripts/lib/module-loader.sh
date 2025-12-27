@@ -12,6 +12,9 @@ MODULE_LOADER_LOADED=1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
+# Source module validator library
+source "$SCRIPT_DIR/module-validator.sh"
+
 # Module directories
 MODULES_CORE_DIR="$(get_modules_dir)/_core"
 MODULES_AVAILABLE_DIR="$(get_modules_dir)/_available"

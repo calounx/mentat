@@ -53,13 +53,19 @@ install_binary() {
     local download_url="https://github.com/prometheus/mysqld_exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
     local checksum_url="https://github.com/prometheus/mysqld_exporter/releases/download/v${MODULE_VERSION}/sha256sums.txt"
 
-    if type download_and_verify &>/dev/null; then
-        if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
-            log_warn "SECURITY: Checksum verification failed, trying without verification"
-            wget -q "$download_url"
-        fi
-    else
-        wget -q "$download_url"
+    # SECURITY: Always require checksum verification - fail if unavailable
+    if ! type download_and_verify &>/dev/null; then
+        log_error "SECURITY: download_and_verify function not available"
+        log_error "Cannot install without checksum verification"
+        return 1
+    fi
+
+    # SECURITY: Fail installation if checksum verification fails
+    # NEVER fall back to unverified downloads
+    if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+        log_error "SECURITY: Checksum verification failed for mysqld_exporter"
+        log_error "Refusing to install unverified binary"
+        return 1
     fi
 
     tar xzf "$archive_name"
