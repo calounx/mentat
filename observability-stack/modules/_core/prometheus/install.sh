@@ -722,7 +722,7 @@ Restart=always
 RestartSec=10
 TimeoutStopSec=30
 
-# SECURITY: Systemd hardening
+# SECURITY: Comprehensive systemd hardening
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=${PROMETHEUS_DATA} ${PROMETHEUS_LOG}
@@ -742,6 +742,31 @@ PrivateDevices=true
 LockPersonality=true
 RestrictRealtime=true
 ProtectClock=true
+
+# Advanced hardening: Capability restrictions
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Advanced hardening: System call filtering
+# Allow only syscalls needed for Prometheus operation
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @swap @reboot @obsolete @cpu-emulation @debug
+SystemCallArchitectures=native
+
+# Advanced hardening: Memory protection
+MemoryDenyWriteExecute=true
+
+# Advanced hardening: Process isolation
+ProtectProc=invisible
+ProcSubset=pid
+
+# Advanced hardening: Restrict file system access
+RestrictSUIDSGID=true
+RemoveIPC=true
+
+# Resource limits (prevent runaway processes)
+LimitNOFILE=65536
+LimitNPROC=512
 
 # Logging
 StandardOutput=journal

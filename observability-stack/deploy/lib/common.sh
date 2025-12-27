@@ -86,15 +86,127 @@ check_port_available() {
 # Download Functions
 #===============================================================================
 
+# Download a file with optional checksum verification
+# Usage: download_file "url" "dest" [max_time] [expected_checksum] [checksum_algo]
+# Returns: 0 on success, 1 on failure
 download_file() {
     local url="$1"
     local dest="$2"
     local max_time="${3:-300}"
+    local expected_checksum="${4:-}"
+    local checksum_algo="${5:-sha256}"
+
+    # Security: Require HTTPS for non-localhost URLs
+    if [[ ! "$url" =~ ^https:// ]] && [[ ! "$url" =~ ^http://localhost ]] && [[ ! "$url" =~ ^http://127\. ]]; then
+        log_error "Security: Only HTTPS URLs are allowed (got: $url)"
+        return 1
+    fi
 
     if ! curl -fsSL --max-time "$max_time" -o "$dest" "$url"; then
         log_error "Failed to download: $url"
         return 1
     fi
+
+    # Verify checksum if provided
+    if [[ -n "$expected_checksum" ]]; then
+        if ! verify_checksum "$dest" "$expected_checksum" "$checksum_algo"; then
+            log_error "Checksum verification failed for: $dest"
+            rm -f "$dest"
+            return 1
+        fi
+        log_info "Checksum verified: $dest"
+    fi
+
+    return 0
+}
+
+# Verify file checksum
+# Usage: verify_checksum "file" "expected_checksum" [algo]
+# Returns: 0 if matches, 1 if not
+verify_checksum() {
+    local file="$1"
+    local expected="$2"
+    local algo="${3:-sha256}"
+
+    if [[ ! -f "$file" ]]; then
+        log_error "File not found for checksum: $file"
+        return 1
+    fi
+
+    local actual=""
+    case "$algo" in
+        sha256)
+            actual=$(sha256sum "$file" 2>/dev/null | awk '{print $1}')
+            ;;
+        sha512)
+            actual=$(sha512sum "$file" 2>/dev/null | awk '{print $1}')
+            ;;
+        md5)
+            actual=$(md5sum "$file" 2>/dev/null | awk '{print $1}')
+            ;;
+        *)
+            log_error "Unsupported checksum algorithm: $algo"
+            return 1
+            ;;
+    esac
+
+    if [[ -z "$actual" ]]; then
+        log_error "Failed to compute checksum for: $file"
+        return 1
+    fi
+
+    # Case-insensitive comparison
+    if [[ "${actual,,}" != "${expected,,}" ]]; then
+        log_error "Checksum mismatch for $file"
+        log_error "  Expected: $expected"
+        log_error "  Actual:   $actual"
+        return 1
+    fi
+
+    return 0
+}
+
+# Download and verify using checksums file from GitHub release
+# Usage: download_and_verify_github "repo" "version" "asset" "dest" [checksums_file]
+# Returns: 0 on success, 1 on failure
+download_and_verify_github() {
+    local repo="$1"
+    local version="$2"
+    local asset="$3"
+    local dest="$4"
+    local checksums_file="${5:-sha256sums.txt}"
+
+    local base_url="https://github.com/${repo}/releases/download/v${version}"
+    local asset_url="${base_url}/${asset}"
+    local checksums_url="${base_url}/${checksums_file}"
+
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    trap "rm -rf '$temp_dir'" RETURN
+
+    local checksums_path="${temp_dir}/checksums.txt"
+
+    # Download checksums file first
+    log_info "Downloading checksums from: $checksums_url"
+    if curl -fsSL --max-time 30 -o "$checksums_path" "$checksums_url" 2>/dev/null; then
+        # Extract expected checksum for our asset
+        local expected_checksum
+        expected_checksum=$(grep -E "(^| )${asset}$" "$checksums_path" 2>/dev/null | awk '{print $1}' | head -1)
+
+        if [[ -n "$expected_checksum" ]]; then
+            log_info "Found checksum for ${asset}: ${expected_checksum:0:16}..."
+            download_file "$asset_url" "$dest" 300 "$expected_checksum" "sha256"
+            return $?
+        else
+            log_warn "No checksum found for $asset in checksums file"
+        fi
+    else
+        log_warn "Checksums file not available: $checksums_url"
+    fi
+
+    # Fallback: download without checksum verification (with warning)
+    log_warn "SECURITY WARNING: Downloading without checksum verification"
+    download_file "$asset_url" "$dest" 300
 }
 
 download_github_release() {
@@ -103,9 +215,8 @@ download_github_release() {
     local asset_pattern="$3"
     local dest="$4"
 
-    local download_url="https://github.com/${repo}/releases/download/v${version}/${asset_pattern}"
-
-    download_file "$download_url" "$dest"
+    # Try to download with checksum verification
+    download_and_verify_github "$repo" "$version" "$asset_pattern" "$dest"
 }
 
 get_latest_github_release() {

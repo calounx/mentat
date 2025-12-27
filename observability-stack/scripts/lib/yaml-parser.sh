@@ -68,6 +68,44 @@ _yaml_detect_parser() {
 }
 
 #===============================================================================
+# SECURITY FUNCTIONS
+#===============================================================================
+
+# Validate file path to prevent command injection
+# Usage: _yaml_validate_path "filepath"
+# Returns: 0 if safe, 1 if potentially dangerous
+_yaml_validate_path() {
+    local filepath="$1"
+
+    # Reject empty paths
+    if [[ -z "$filepath" ]]; then
+        log_error "YAML: Empty file path provided"
+        return 1
+    fi
+
+    # Reject paths with dangerous shell metacharacters
+    # This prevents command injection when paths are used in subshells
+    if [[ "$filepath" =~ [\`\$\(\)\{\}\;\|\&\<\>\!\#] ]]; then
+        log_error "YAML: File path contains dangerous characters: $filepath"
+        return 1
+    fi
+
+    # Reject paths with newlines or null bytes
+    if [[ "$filepath" == *$'\n'* ]] || [[ "$filepath" == *$'\0'* ]]; then
+        log_error "YAML: File path contains newlines or null bytes"
+        return 1
+    fi
+
+    # Reject paths with single/double quotes that could break escaping
+    if [[ "$filepath" == *\'* ]] || [[ "$filepath" == *\"* ]]; then
+        log_error "YAML: File path contains quotes: $filepath"
+        return 1
+    fi
+
+    return 0
+}
+
+#===============================================================================
 # VALIDATION FUNCTIONS
 #===============================================================================
 
@@ -76,6 +114,11 @@ _yaml_detect_parser() {
 # Returns: 0 if valid, 1 if invalid
 yaml_validate() {
     local file="$1"
+
+    # Security: Validate file path before use
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
 
     # Check file exists
     if [[ ! -f "$file" ]]; then
@@ -102,20 +145,24 @@ yaml_validate() {
             ;;
 
         python)
-            # Use Python to validate YAML syntax
-            if ! python3 -c "
+            # SECURITY: Pass file path via environment variable to prevent injection
+            if ! YAML_FILE="$file" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    if not filepath:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         yaml.safe_load(f)
 except yaml.YAMLError as e:
-    print(f'YAML syntax error: {e}', file=sys.stderr)
+    print(f"YAML syntax error: {e}", file=sys.stderr)
     sys.exit(1)
 except Exception as e:
-    print(f'Error reading YAML: {e}', file=sys.stderr)
+    print(f"Error reading YAML: {e}", file=sys.stderr)
     sys.exit(1)
-" 2>&1; then
+' 2>&1; then
                 log_error "YAML syntax error in: $file"
                 return 1
             fi
@@ -189,6 +236,11 @@ yaml_get_value() {
     local file="$1"
     local key="$2"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_debug "yaml_get_value: file not found: $file"
         return 1
@@ -208,19 +260,25 @@ yaml_get_value() {
             ;;
 
         python)
-            result=$(python3 -c "
+            # SECURITY: Pass file path and key via environment variables
+            result=$(YAML_FILE="$file" YAML_KEY="$key" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    key = os.environ.get("YAML_KEY", "")
+    if not filepath or not key:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
-    if data and '$key' in data:
-        value = data['$key']
+    if data and key in data:
+        value = data[key]
         if value is not None:
             print(str(value))
 except Exception:
     pass
-" 2>/dev/null)
+' 2>/dev/null)
             ;;
 
         awk)
@@ -245,6 +303,11 @@ yaml_get_nested_path() {
     local file="$1"
     local path="$2"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_debug "yaml_get_nested_path: file not found: $file"
         return 1
@@ -263,15 +326,21 @@ yaml_get_nested_path() {
             ;;
 
         python)
-            result=$(python3 -c "
+            # SECURITY: Pass file path and path via environment variables
+            result=$(YAML_FILE="$file" YAML_PATH="$path" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    path = os.environ.get("YAML_PATH", "")
+    if not filepath or not path:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
 
     # Navigate the path
-    keys = '$path'.split('.')
+    keys = path.split(".")
     value = data
     for key in keys:
         if isinstance(value, dict) and key in value:
@@ -283,7 +352,7 @@ try:
         print(str(value))
 except Exception:
     sys.exit(1)
-" 2>/dev/null)
+' 2>/dev/null)
             ;;
 
         awk)
@@ -318,6 +387,11 @@ yaml_get_nested() {
     local parent="$2"
     local child="$3"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_debug "yaml_get_nested: file not found: $file"
         return 1
@@ -336,20 +410,27 @@ yaml_get_nested() {
             ;;
 
         python)
-            result=$(python3 -c "
+            # SECURITY: Pass file path and keys via environment variables
+            result=$(YAML_FILE="$file" YAML_PARENT="$parent" YAML_CHILD="$child" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    parent = os.environ.get("YAML_PARENT", "")
+    child = os.environ.get("YAML_CHILD", "")
+    if not filepath:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
-    if data and '$parent' in data and isinstance(data['$parent'], dict):
-        if '$child' in data['$parent']:
-            value = data['$parent']['$child']
+    if data and parent in data and isinstance(data[parent], dict):
+        if child in data[parent]:
+            value = data[parent][child]
             if value is not None:
                 print(str(value))
 except Exception:
     pass
-" 2>/dev/null)
+' 2>/dev/null)
             ;;
 
         awk)
@@ -382,6 +463,11 @@ yaml_get_deep() {
     local level2="$3"
     local level3="$4"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_debug "yaml_get_deep: file not found: $file"
         return 1
@@ -400,23 +486,31 @@ yaml_get_deep() {
             ;;
 
         python)
-            result=$(python3 -c "
+            # SECURITY: Pass file path and keys via environment variables
+            result=$(YAML_FILE="$file" YAML_L1="$level1" YAML_L2="$level2" YAML_L3="$level3" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    l1 = os.environ.get("YAML_L1", "")
+    l2 = os.environ.get("YAML_L2", "")
+    l3 = os.environ.get("YAML_L3", "")
+    if not filepath:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
-    if (data and '$level1' in data and
-        isinstance(data['$level1'], dict) and
-        '$level2' in data['$level1'] and
-        isinstance(data['$level1']['$level2'], dict) and
-        '$level3' in data['$level1']['$level2']):
-        value = data['$level1']['$level2']['$level3']
+    if (data and l1 in data and
+        isinstance(data[l1], dict) and
+        l2 in data[l1] and
+        isinstance(data[l1][l2], dict) and
+        l3 in data[l1][l2]):
+        value = data[l1][l2][l3]
         if value is not None:
             print(str(value))
 except Exception:
     pass
-" 2>/dev/null)
+' 2>/dev/null)
             ;;
 
         awk)
@@ -453,6 +547,11 @@ yaml_get_array() {
     local file="$1"
     local key="$2"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_debug "yaml_get_array: file not found: $file"
         return 1
@@ -466,21 +565,27 @@ yaml_get_array() {
             ;;
 
         python)
-            python3 -c "
+            # SECURITY: Pass file path and key via environment variables
+            YAML_FILE="$file" YAML_KEY="$key" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    key = os.environ.get("YAML_KEY", "")
+    if not filepath:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
-    if data and '$key' in data:
-        value = data['$key']
+    if data and key in data:
+        value = data[key]
         if isinstance(value, list):
             for item in value:
                 if item is not None:
                     print(str(item))
 except Exception:
     pass
-" 2>/dev/null
+' 2>/dev/null
             ;;
 
         awk)
@@ -506,6 +611,11 @@ yaml_get_nested_array() {
     local parent="$2"
     local array_key="$3"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_debug "yaml_get_nested_array: file not found: $file"
         return 1
@@ -519,23 +629,30 @@ yaml_get_nested_array() {
             ;;
 
         python)
-            python3 -c "
+            # SECURITY: Pass file path and keys via environment variables
+            YAML_FILE="$file" YAML_PARENT="$parent" YAML_ARRAY_KEY="$array_key" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    parent = os.environ.get("YAML_PARENT", "")
+    array_key = os.environ.get("YAML_ARRAY_KEY", "")
+    if not filepath:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
-    if (data and '$parent' in data and
-        isinstance(data['$parent'], dict) and
-        '$array_key' in data['$parent']):
-        value = data['$parent']['$array_key']
+    if (data and parent in data and
+        isinstance(data[parent], dict) and
+        array_key in data[parent]):
+        value = data[parent][array_key]
         if isinstance(value, list):
             for item in value:
                 if item is not None:
                     print(str(item))
 except Exception:
     pass
-" 2>/dev/null
+' 2>/dev/null
             ;;
 
         awk)
@@ -564,6 +681,11 @@ yaml_has_key() {
     local file="$1"
     local key="$2"
 
+    # Security: Validate file path
+    if ! _yaml_validate_path "$file"; then
+        return 1
+    fi
+
     if [[ ! -f "$file" ]]; then
         return 1
     fi
@@ -578,18 +700,24 @@ yaml_has_key() {
             ;;
 
         python)
-            python3 -c "
+            # SECURITY: Pass file path and key via environment variables
+            YAML_FILE="$file" YAML_KEY="$key" python3 -c '
 import yaml
 import sys
+import os
 try:
-    with open('$file', 'r') as f:
+    filepath = os.environ.get("YAML_FILE", "")
+    key = os.environ.get("YAML_KEY", "")
+    if not filepath:
+        sys.exit(1)
+    with open(filepath, "r") as f:
         data = yaml.safe_load(f)
-    if data and '$key' in data:
+    if data and key in data:
         sys.exit(0)
     sys.exit(1)
 except Exception:
     sys.exit(1)
-" 2>/dev/null
+' 2>/dev/null
             ;;
 
         awk)
