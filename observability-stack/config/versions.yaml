@@ -158,11 +158,67 @@ components:
       binary_name: "promtail-linux-amd64"
 
   # Prometheus - Metrics collection and storage
+  # NOTE: Two-stage upgrade required for 2.x -> 3.x migration
+  #   Stage 1: 2.48.1 -> 2.55.1 (TSDB v1 -> v2 migration)
+  #   Stage 2: 2.55.1 -> 3.8.1 (TSDB v2 -> v3 + breaking changes)
   prometheus:
-    strategy: latest
+    strategy: pinned
     github_repo: prometheus/prometheus
-    fallback_version: "2.48.0"
+    fallback_version: "2.48.1"
     minimum_version: "2.45.0"
+
+    # Two-stage upgrade configuration
+    upgrade:
+      strategy: two-stage
+      current_version: "2.48.1"
+      intermediate_version: "2.55.1"
+      target_version: "3.8.1"
+
+      # Stage 1: 2.48.1 -> 2.55.1
+      stage1:
+        from_version: "2.48.1"
+        to_version: "2.55.1"
+        description: "TSDB v1 to v2 migration"
+        tsdb_migration: true
+        breaking_changes: []
+        required_checks:
+          - tsdb_health
+          - config_validation
+        estimated_downtime: "5-10 minutes"
+
+      # Stage 2: 2.55.1 -> 3.8.1
+      stage2:
+        from_version: "2.55.1"
+        to_version: "3.8.1"
+        description: "Major version upgrade with breaking changes"
+        tsdb_migration: true
+        breaking_changes:
+          # Deprecated flags removed in 3.x
+          - flag: "--storage.tsdb.no-lockfile"
+            action: "remove"
+            replacement: null
+          - flag: "--storage.tsdb.allow-overlapping-blocks"
+            action: "remove"
+            replacement: null
+          - flag: "--storage.tsdb.wal-compression"
+            action: "rename"
+            replacement: "--storage.tsdb.wal-compression-type=zstd"
+          - flag: "--web.enable-admin-api"
+            action: "check"
+            note: "Still supported but consider security implications"
+          # Query engine changes
+          - flag: "--promql.lookback-delta"
+            action: "check"
+            note: "Default changed from 5m to 5m, verify behavior"
+          # Remote write changes
+          - flag: "--storage.remote.read-sample-limit"
+            action: "check"
+            note: "Verify remote read configuration"
+        required_checks:
+          - tsdb_health
+          - config_validation
+          - deprecated_flags
+        estimated_downtime: "10-15 minutes"
 
     constraints:
       architecture: linux-amd64
