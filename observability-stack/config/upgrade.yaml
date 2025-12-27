@@ -197,6 +197,12 @@ components:
 
   # Phase 2: High Risk - Core Services (Two-Stage Upgrades)
   # Prometheus requires intermediate version for safe upgrade path
+  #
+  # IMPORTANT: Two-stage upgrade is MANDATORY for 2.x -> 3.x
+  #   Stage 1: 2.48.1 -> 2.55.1 (TSDB v1 -> v2 migration)
+  #   Stage 2: 2.55.1 -> 3.8.1  (TSDB v2 -> v3 + breaking changes)
+  #
+  # DO NOT skip Stage 1 - TSDB format migration requires intermediate version
 
   prometheus:
     current_version: "2.48.1"
@@ -212,6 +218,66 @@ components:
     dependencies: []
     service: "prometheus"
     binary_path: "/usr/local/bin/prometheus"
+    promtool_path: "/usr/local/bin/promtool"
+
+    # Two-stage upgrade configuration
+    two_stage_upgrade:
+      # Stage 1: TSDB v1 -> v2 migration
+      stage1:
+        from_min_version: "2.0.0"
+        from_max_version: "2.54.99"
+        to_version: "2.55.1"
+        description: "TSDB format migration v1 -> v2"
+        estimated_downtime: "5-10 minutes"
+        requires_tsdb_backup: true
+        breaking_changes: []
+        migration_monitoring:
+          enabled: true
+          timeout: 300  # 5 minutes
+          check_interval: 10
+        rollback_supported: true
+
+      # Stage 2: Major version upgrade to 3.x
+      stage2:
+        from_min_version: "2.55.0"
+        from_max_version: "2.99.99"
+        to_version: "3.8.1"
+        description: "Major version upgrade with breaking changes"
+        estimated_downtime: "10-15 minutes"
+        requires_tsdb_backup: true
+        breaking_changes:
+          # Flags removed in 3.x - MUST be removed from service file
+          - type: "flag_removed"
+            flag: "--storage.tsdb.no-lockfile"
+            action: "remove"
+            severity: "critical"
+          - type: "flag_removed"
+            flag: "--storage.tsdb.allow-overlapping-blocks"
+            action: "remove"
+            severity: "critical"
+          # Flags renamed in 3.x
+          - type: "flag_renamed"
+            old_flag: "--storage.tsdb.wal-compression"
+            new_flag: "--storage.tsdb.wal-compression-type=zstd"
+            action: "replace"
+            severity: "critical"
+          - type: "flag_renamed"
+            old_flag: "--storage.tsdb.retention"
+            new_flag: "--storage.tsdb.retention.time"
+            action: "replace"
+            severity: "critical"
+          # Behavior changes to be aware of
+          - type: "behavior_change"
+            description: "TSDB compaction algorithm improved"
+            severity: "info"
+          - type: "behavior_change"
+            description: "Query engine performance improvements"
+            severity: "info"
+        migration_monitoring:
+          enabled: true
+          timeout: 600  # 10 minutes
+          check_interval: 10
+        rollback_supported: true
 
     # Multi-stage health checks
     health_check:
@@ -219,14 +285,26 @@ components:
       endpoint: "http://localhost:9090/-/healthy"
       expected_status: 200
       timeout: 30
-      # Additional checks
+      # Additional health endpoints
       additional_checks:
+        - type: "http"
+          endpoint: "http://localhost:9090/-/ready"
+          expected_status: 200
+          description: "Readiness check"
         - type: "http"
           endpoint: "http://localhost:9090/api/v1/status/config"
           expected_status: 200
+          description: "Config endpoint"
         - type: "http"
           endpoint: "http://localhost:9090/api/v1/targets"
           expected_status: 200
+          description: "Targets endpoint"
+      # TSDB specific health checks
+      tsdb_checks:
+        - type: "http"
+          endpoint: "http://localhost:9090/api/v1/status/tsdb"
+          expected_status: 200
+          description: "TSDB status"
 
     backup:
       enabled: true
@@ -234,25 +312,49 @@ components:
         - /usr/local/bin/prometheus
         - /usr/local/bin/promtool
         - /etc/prometheus/
-        - /var/lib/prometheus/
-      # Special handling for data directory
+        - /etc/systemd/system/prometheus.service
+      # Special handling for TSDB data directory
       data_backup:
         enabled: true
         path: /var/lib/prometheus
-        # Use snapshots for large datasets
+        # Use API snapshots for zero-downtime backup when admin API enabled
         use_snapshot: true
         snapshot_endpoint: "http://localhost:9090/api/v1/admin/tsdb/snapshot"
+        # Fallback to file backup if snapshot fails
+        fallback_to_file_backup: true
+        # Retention for backups
+        retention_days: 30
 
     validation:
       check_port: 9090
       verify_metrics: true
       verify_config: true
       verify_tsdb: true
-      # Ensure targets are scraped
       check_targets: true
-      # Validate config before upgrade
+      # Pre-upgrade validation commands
       pre_upgrade_validation:
-        - "promtool check config /etc/prometheus/prometheus.yml"
+        - command: "promtool check config /etc/prometheus/prometheus.yml"
+          description: "Validate Prometheus configuration"
+          required: true
+        - command: "promtool tsdb analyze /var/lib/prometheus"
+          description: "Analyze TSDB health"
+          required: false
+      # Post-upgrade validation
+      post_upgrade_validation:
+        - command: "curl -sf http://localhost:9090/-/healthy"
+          description: "Health endpoint check"
+          required: true
+        - command: "curl -sf http://localhost:9090/-/ready"
+          description: "Readiness check"
+          required: true
+
+    # Install script location
+    install_script: "modules/_core/prometheus/install.sh"
+
+    # Helper scripts
+    helper_scripts:
+      tsdb_backup: "modules/_core/prometheus/tsdb-backup.sh"
+      config_migrate: "modules/_core/prometheus/config-migrate.sh"
 
   # Phase 3: Medium Risk - Logging Stack
   # Loki and Promtail should be upgraded together

@@ -1,0 +1,258 @@
+# Prometheus Module Manifest
+# Part of the observability-stack module system
+
+module:
+  name: prometheus
+  version: "2.48.1"
+  description: "Prometheus monitoring system and time series database"
+  category: core
+
+  # Module metadata
+  maintainer: "observability-stack team"
+  documentation: "https://prometheus.io/docs/"
+  license: "Apache-2.0"
+
+# Version information
+version_info:
+  current: "2.48.1"
+  intermediate: "2.55.1"
+  target: "3.8.1"
+
+  # Upgrade path
+  upgrade_path:
+    - from: "2.48.1"
+      to: "2.55.1"
+      stage: 1
+      description: "TSDB v1 to v2 migration"
+    - from: "2.55.1"
+      to: "3.8.1"
+      stage: 2
+      description: "Major version upgrade with breaking changes"
+
+# Dependencies
+dependencies:
+  system:
+    - name: "systemd"
+      required: true
+    - name: "curl"
+      required: true
+    - name: "wget"
+      required: true
+
+  optional:
+    - name: "rsync"
+      description: "For efficient TSDB backups"
+    - name: "jq"
+      description: "For JSON parsing in scripts"
+
+# Installation configuration
+installation:
+  user: "prometheus"
+  group: "prometheus"
+
+  paths:
+    binary: "/usr/local/bin/prometheus"
+    promtool: "/usr/local/bin/promtool"
+    config: "/etc/prometheus"
+    data: "/var/lib/prometheus"
+    log: "/var/log/prometheus"
+
+  service:
+    name: "prometheus"
+    type: "simple"
+    restart: "always"
+    restart_sec: 10
+
+  ports:
+    - port: 9090
+      protocol: "tcp"
+      description: "Prometheus web interface and API"
+
+# Health checks
+health_checks:
+  - name: "http_healthy"
+    type: "http"
+    endpoint: "http://localhost:9090/-/healthy"
+    expected_status: 200
+    timeout: 10
+
+  - name: "http_ready"
+    type: "http"
+    endpoint: "http://localhost:9090/-/ready"
+    expected_status: 200
+    timeout: 10
+
+  - name: "metrics_endpoint"
+    type: "http"
+    endpoint: "http://localhost:9090/metrics"
+    expected_status: 200
+    timeout: 10
+
+# Backup configuration
+backup:
+  enabled: true
+
+  methods:
+    # API snapshot (preferred - zero downtime)
+    - name: "api_snapshot"
+      type: "api"
+      endpoint: "http://localhost:9090/api/v1/admin/tsdb/snapshot"
+      requires: "--web.enable-admin-api flag"
+      downtime: false
+
+    # File backup (fallback)
+    - name: "file_backup"
+      type: "file"
+      paths:
+        - "/var/lib/prometheus"
+      requires_stop: true
+      downtime: true
+
+  retention:
+    days: 30
+    max_backups: 10
+
+# Two-stage upgrade specific configuration
+two_stage_upgrade:
+  required_for_major_upgrade: true
+
+  pre_upgrade_checks:
+    - name: "config_validation"
+      command: "promtool check config /etc/prometheus/prometheus.yml"
+      required: true
+
+    - name: "tsdb_health"
+      command: "promtool tsdb analyze /var/lib/prometheus"
+      required: false
+
+    - name: "deprecated_flags"
+      script: "config-migrate.sh --check"
+      required: true
+
+    - name: "disk_space"
+      description: "Ensure sufficient disk space for backup"
+      min_free_space_mb: 2048
+
+  stage1:
+    version: "2.55.1"
+    migration_type: "tsdb_format"
+    estimated_time: "5-10 minutes"
+
+    steps:
+      - name: "backup"
+        description: "Create full TSDB backup"
+        script: "tsdb-backup.sh"
+
+      - name: "stop_service"
+        description: "Stop Prometheus service"
+        command: "systemctl stop prometheus"
+
+      - name: "install_binary"
+        description: "Install intermediate version"
+
+      - name: "start_service"
+        description: "Start Prometheus service"
+        command: "systemctl start prometheus"
+
+      - name: "monitor_migration"
+        description: "Monitor TSDB migration"
+        timeout: 300
+
+      - name: "health_check"
+        description: "Verify Prometheus health"
+
+  stage2:
+    version: "3.8.1"
+    migration_type: "major_upgrade"
+    estimated_time: "10-15 minutes"
+
+    breaking_changes:
+      flags_removed:
+        - "--storage.tsdb.no-lockfile"
+        - "--storage.tsdb.allow-overlapping-blocks"
+      flags_renamed:
+        - old: "--storage.tsdb.wal-compression"
+          new: "--storage.tsdb.wal-compression-type=zstd"
+        - old: "--storage.tsdb.retention"
+          new: "--storage.tsdb.retention.time"
+
+    steps:
+      - name: "backup"
+        description: "Create full TSDB backup"
+        script: "tsdb-backup.sh"
+
+      - name: "migrate_config"
+        description: "Migrate configuration for 3.x"
+        script: "config-migrate.sh --migrate"
+
+      - name: "stop_service"
+        description: "Stop Prometheus service"
+        command: "systemctl stop prometheus"
+
+      - name: "install_binary"
+        description: "Install target version"
+
+      - name: "update_service"
+        description: "Update systemd service file"
+
+      - name: "start_service"
+        description: "Start Prometheus service"
+        command: "systemctl start prometheus"
+
+      - name: "monitor_migration"
+        description: "Monitor TSDB migration"
+        timeout: 600
+
+      - name: "health_check"
+        description: "Verify Prometheus health"
+
+# Rollback configuration
+rollback:
+  supported: true
+
+  steps:
+    - name: "stop_service"
+      command: "systemctl stop prometheus"
+
+    - name: "restore_binary"
+      description: "Restore binary from backup"
+
+    - name: "restore_config"
+      description: "Restore configuration from backup"
+
+    - name: "restore_service"
+      description: "Restore systemd service file"
+
+    - name: "reload_systemd"
+      command: "systemctl daemon-reload"
+
+    - name: "start_service"
+      command: "systemctl start prometheus"
+
+    - name: "health_check"
+      description: "Verify Prometheus health"
+
+  # TSDB data restoration is manual (too risky for automatic)
+  tsdb_restoration:
+    automatic: false
+    manual_steps:
+      - "Stop Prometheus service"
+      - "Remove current TSDB data directory"
+      - "Restore TSDB data from backup"
+      - "Ensure correct ownership (prometheus:prometheus)"
+      - "Start Prometheus service"
+      - "Verify TSDB health"
+
+# Scripts included in this module
+scripts:
+  - name: "install.sh"
+    description: "Main installation and upgrade script"
+    executable: true
+
+  - name: "tsdb-backup.sh"
+    description: "TSDB backup utility"
+    executable: true
+
+  - name: "config-migrate.sh"
+    description: "Configuration migration for 3.x upgrade"
+    executable: true
