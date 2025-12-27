@@ -1,0 +1,220 @@
+# SLO/SLI Configuration for Observability Stack
+# Based on Google SRE practices and the multi-window multi-burn-rate algorithm
+
+# Global settings
+global:
+  # Default SLO window (rolling period)
+  window: 30d
+  # Alert evaluation interval
+  evaluation_interval: 1m
+
+# Service Level Objectives
+slos:
+  #=============================================================================
+  # Web/API Services
+  #=============================================================================
+
+  - name: http_availability
+    description: "HTTP service availability (successful responses)"
+    service: web
+    sli:
+      type: availability
+      # Good events: HTTP 2xx and 3xx responses
+      good_events: |
+        sum(rate(http_requests_total{status=~"2..|3.."}[{{window}}]))
+      # Total events: All HTTP requests
+      total_events: |
+        sum(rate(http_requests_total[{{window}}]))
+    objectives:
+      - target: 0.999    # 99.9% availability (43.8 min/month downtime)
+        window: 30d
+      - target: 0.995    # 99.5% availability (3.6 hrs/month downtime)
+        window: 7d
+    alerts:
+      # Page immediately if burning through monthly budget in 1 hour
+      page:
+        burn_rate: 14.4
+        short_window: 5m
+        long_window: 1h
+      # Ticket if burning through budget in 6 hours
+      ticket:
+        burn_rate: 6
+        short_window: 30m
+        long_window: 6h
+
+  - name: http_latency_p99
+    description: "HTTP request latency P99 under threshold"
+    service: web
+    sli:
+      type: latency
+      threshold: 500ms
+      # Good events: Requests faster than threshold
+      good_events: |
+        sum(rate(http_request_duration_seconds_bucket{le="0.5"}[{{window}}]))
+      total_events: |
+        sum(rate(http_request_duration_seconds_count[{{window}}]))
+    objectives:
+      - target: 0.99     # 99% of requests under 500ms
+        window: 30d
+    alerts:
+      page:
+        burn_rate: 14.4
+        short_window: 5m
+        long_window: 1h
+      ticket:
+        burn_rate: 3
+        short_window: 1h
+        long_window: 6h
+
+  #=============================================================================
+  # Prometheus
+  #=============================================================================
+
+  - name: prometheus_availability
+    description: "Prometheus query API availability"
+    service: prometheus
+    sli:
+      type: availability
+      good_events: |
+        sum(rate(prometheus_http_requests_total{handler="/api/v1/query",code=~"2.."}[{{window}}]))
+      total_events: |
+        sum(rate(prometheus_http_requests_total{handler="/api/v1/query"}[{{window}}]))
+    objectives:
+      - target: 0.999
+        window: 30d
+    alerts:
+      page:
+        burn_rate: 14.4
+        short_window: 5m
+        long_window: 1h
+
+  - name: prometheus_scrape_success
+    description: "Prometheus target scrape success rate"
+    service: prometheus
+    sli:
+      type: availability
+      good_events: |
+        sum(up == 1)
+      total_events: |
+        count(up)
+    objectives:
+      - target: 0.99
+        window: 30d
+    alerts:
+      ticket:
+        burn_rate: 6
+        short_window: 15m
+        long_window: 1h
+
+  #=============================================================================
+  # Loki
+  #=============================================================================
+
+  - name: loki_ingestion_availability
+    description: "Loki log ingestion availability"
+    service: loki
+    sli:
+      type: availability
+      good_events: |
+        sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push",status_code=~"2.."}[{{window}}]))
+      total_events: |
+        sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push"}[{{window}}]))
+    objectives:
+      - target: 0.999
+        window: 30d
+    alerts:
+      page:
+        burn_rate: 14.4
+        short_window: 5m
+        long_window: 1h
+
+  - name: loki_query_latency
+    description: "Loki query latency P95 under 10s"
+    service: loki
+    sli:
+      type: latency
+      threshold: 10s
+      good_events: |
+        sum(rate(loki_request_duration_seconds_bucket{route=~"loki_api_v1_query.*",le="10"}[{{window}}]))
+      total_events: |
+        sum(rate(loki_request_duration_seconds_count{route=~"loki_api_v1_query.*"}[{{window}}]))
+    objectives:
+      - target: 0.95
+        window: 30d
+
+  #=============================================================================
+  # Grafana
+  #=============================================================================
+
+  - name: grafana_availability
+    description: "Grafana dashboard availability"
+    service: grafana
+    sli:
+      type: availability
+      good_events: |
+        sum(rate(grafana_http_request_duration_seconds_count{status_code=~"2.."}[{{window}}]))
+      total_events: |
+        sum(rate(grafana_http_request_duration_seconds_count[{{window}}]))
+    objectives:
+      - target: 0.999
+        window: 30d
+
+  #=============================================================================
+  # Infrastructure
+  #=============================================================================
+
+  - name: node_availability
+    description: "Node/host availability"
+    service: infrastructure
+    sli:
+      type: availability
+      # Good events: node_exporter is up
+      good_events: |
+        sum(up{job="node_exporter"} == 1)
+      total_events: |
+        count(up{job="node_exporter"})
+    objectives:
+      - target: 0.9999   # 99.99% (4.3 min/month)
+        window: 30d
+    alerts:
+      page:
+        burn_rate: 14.4
+        short_window: 2m
+        long_window: 15m
+
+  - name: disk_availability
+    description: "Disk space availability (>10% free)"
+    service: infrastructure
+    sli:
+      type: threshold
+      good_events: |
+        count(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} > 0.1)
+      total_events: |
+        count(node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})
+    objectives:
+      - target: 0.99
+        window: 7d
+
+# Burn rate multipliers for multi-window alerting
+# Based on: https://sre.google/workbook/alerting-on-slos/
+burn_rate_windows:
+  # Fast burn: consuming 2% of 30-day budget in 1 hour = 14.4x burn rate
+  critical:
+    burn_rate: 14.4
+    short_window: 5m
+    long_window: 1h
+    budget_consumed: 2%
+
+  # Medium burn: consuming 5% of 30-day budget in 6 hours = 6x burn rate
+  warning:
+    burn_rate: 6
+    short_window: 30m
+    long_window: 6h
+    budget_consumed: 5%
+
+  # Slow burn: consuming 10% of 30-day budget in 3 days = 1x burn rate
+  info:
+    burn_rate: 1
+    short_window: 6h
+    long_window: 3d
+    budget_consumed: 10%

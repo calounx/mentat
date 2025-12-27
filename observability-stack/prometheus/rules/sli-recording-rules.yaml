@@ -1,0 +1,267 @@
+# SLI Recording Rules
+# These rules pre-calculate SLI metrics for efficient SLO dashboards and alerts
+
+groups:
+  #=============================================================================
+  # HTTP/API SLI Recording Rules
+  #=============================================================================
+  - name: sli:http:recording
+    interval: 30s
+    rules:
+      # Request success rate (availability SLI)
+      - record: sli:http_requests:availability:ratio_rate5m
+        expr: |
+          sum(rate(http_requests_total{status=~"2..|3.."}[5m])) by (job, service)
+          /
+          sum(rate(http_requests_total[5m])) by (job, service)
+
+      - record: sli:http_requests:availability:ratio_rate30m
+        expr: |
+          sum(rate(http_requests_total{status=~"2..|3.."}[30m])) by (job, service)
+          /
+          sum(rate(http_requests_total[30m])) by (job, service)
+
+      - record: sli:http_requests:availability:ratio_rate1h
+        expr: |
+          sum(rate(http_requests_total{status=~"2..|3.."}[1h])) by (job, service)
+          /
+          sum(rate(http_requests_total[1h])) by (job, service)
+
+      - record: sli:http_requests:availability:ratio_rate6h
+        expr: |
+          sum(rate(http_requests_total{status=~"2..|3.."}[6h])) by (job, service)
+          /
+          sum(rate(http_requests_total[6h])) by (job, service)
+
+      - record: sli:http_requests:availability:ratio_rate1d
+        expr: |
+          sum(rate(http_requests_total{status=~"2..|3.."}[1d])) by (job, service)
+          /
+          sum(rate(http_requests_total[1d])) by (job, service)
+
+      - record: sli:http_requests:availability:ratio_rate30d
+        expr: |
+          sum(rate(http_requests_total{status=~"2..|3.."}[30d])) by (job, service)
+          /
+          sum(rate(http_requests_total[30d])) by (job, service)
+
+      # Latency SLI (requests under threshold)
+      - record: sli:http_requests:latency_500ms:ratio_rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{le="0.5"}[5m])) by (job, service)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (job, service)
+
+      - record: sli:http_requests:latency_500ms:ratio_rate1h
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{le="0.5"}[1h])) by (job, service)
+          /
+          sum(rate(http_request_duration_seconds_count[1h])) by (job, service)
+
+      - record: sli:http_requests:latency_500ms:ratio_rate30d
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{le="0.5"}[30d])) by (job, service)
+          /
+          sum(rate(http_request_duration_seconds_count[30d])) by (job, service)
+
+      # Error rate (inverse of availability)
+      - record: sli:http_requests:error:ratio_rate5m
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (job, service)
+          /
+          sum(rate(http_requests_total[5m])) by (job, service)
+
+  #=============================================================================
+  # Prometheus SLI Recording Rules
+  #=============================================================================
+  - name: sli:prometheus:recording
+    interval: 30s
+    rules:
+      # Prometheus API availability
+      - record: sli:prometheus_api:availability:ratio_rate5m
+        expr: |
+          sum(rate(prometheus_http_requests_total{handler=~"/api/v1/.*",code=~"2.."}[5m]))
+          /
+          sum(rate(prometheus_http_requests_total{handler=~"/api/v1/.*"}[5m]))
+
+      - record: sli:prometheus_api:availability:ratio_rate1h
+        expr: |
+          sum(rate(prometheus_http_requests_total{handler=~"/api/v1/.*",code=~"2.."}[1h]))
+          /
+          sum(rate(prometheus_http_requests_total{handler=~"/api/v1/.*"}[1h]))
+
+      - record: sli:prometheus_api:availability:ratio_rate30d
+        expr: |
+          sum(rate(prometheus_http_requests_total{handler=~"/api/v1/.*",code=~"2.."}[30d]))
+          /
+          sum(rate(prometheus_http_requests_total{handler=~"/api/v1/.*"}[30d]))
+
+      # Scrape success rate
+      - record: sli:prometheus_scrape:success:ratio
+        expr: |
+          sum(up == 1) / count(up)
+
+      # Target scrape duration
+      - record: sli:prometheus_scrape:duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99, sum(rate(prometheus_target_scrape_duration_seconds_bucket[5m])) by (le))
+
+  #=============================================================================
+  # Loki SLI Recording Rules
+  #=============================================================================
+  - name: sli:loki:recording
+    interval: 30s
+    rules:
+      # Loki ingestion availability
+      - record: sli:loki_push:availability:ratio_rate5m
+        expr: |
+          sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push",status_code=~"2.."}[5m]))
+          /
+          sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push"}[5m]))
+
+      - record: sli:loki_push:availability:ratio_rate1h
+        expr: |
+          sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push",status_code=~"2.."}[1h]))
+          /
+          sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push"}[1h]))
+
+      - record: sli:loki_push:availability:ratio_rate30d
+        expr: |
+          sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push",status_code=~"2.."}[30d]))
+          /
+          sum(rate(loki_request_duration_seconds_count{route="loki_api_v1_push"}[30d]))
+
+      # Loki query availability
+      - record: sli:loki_query:availability:ratio_rate5m
+        expr: |
+          sum(rate(loki_request_duration_seconds_count{route=~"loki_api_v1_query.*",status_code=~"2.."}[5m]))
+          /
+          sum(rate(loki_request_duration_seconds_count{route=~"loki_api_v1_query.*"}[5m]))
+
+      # Loki query latency (under 10s)
+      - record: sli:loki_query:latency_10s:ratio_rate5m
+        expr: |
+          sum(rate(loki_request_duration_seconds_bucket{route=~"loki_api_v1_query.*",le="10"}[5m]))
+          /
+          sum(rate(loki_request_duration_seconds_count{route=~"loki_api_v1_query.*"}[5m]))
+
+  #=============================================================================
+  # Infrastructure SLI Recording Rules
+  #=============================================================================
+  - name: sli:infrastructure:recording
+    interval: 30s
+    rules:
+      # Node availability
+      - record: sli:node:availability:ratio
+        expr: |
+          sum(up{job="node_exporter"} == 1) / count(up{job="node_exporter"})
+
+      # Disk space availability (>10% free)
+      - record: sli:disk:availability:ratio
+        expr: |
+          count(
+            (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) > 0.1
+          )
+          /
+          count(node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})
+
+      # Memory availability (>10% free)
+      - record: sli:memory:availability:ratio
+        expr: |
+          count(
+            (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.1
+          )
+          /
+          count(node_memory_MemTotal_bytes)
+
+      # CPU saturation (< 90% utilization)
+      - record: sli:cpu:availability:ratio_rate5m
+        expr: |
+          count(
+            (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) < 0.9
+          )
+          /
+          count(count by (instance) (node_cpu_seconds_total{mode="idle"}))
+
+  #=============================================================================
+  # Error Budget Recording Rules
+  #=============================================================================
+  - name: slo:error_budget:recording
+    interval: 1m
+    rules:
+      # HTTP availability error budget remaining (30d)
+      - record: slo:http_availability:error_budget_remaining:ratio
+        expr: |
+          1 - (
+            (1 - sli:http_requests:availability:ratio_rate30d)
+            /
+            (1 - 0.999)
+          )
+        labels:
+          slo: http_availability
+          target: "99.9"
+
+      # Prometheus API error budget remaining
+      - record: slo:prometheus_api:error_budget_remaining:ratio
+        expr: |
+          1 - (
+            (1 - sli:prometheus_api:availability:ratio_rate30d)
+            /
+            (1 - 0.999)
+          )
+        labels:
+          slo: prometheus_availability
+          target: "99.9"
+
+      # Loki push error budget remaining
+      - record: slo:loki_push:error_budget_remaining:ratio
+        expr: |
+          1 - (
+            (1 - sli:loki_push:availability:ratio_rate30d)
+            /
+            (1 - 0.999)
+          )
+        labels:
+          slo: loki_availability
+          target: "99.9"
+
+  #=============================================================================
+  # Burn Rate Recording Rules (for multi-window alerting)
+  #=============================================================================
+  - name: slo:burn_rate:recording
+    interval: 30s
+    rules:
+      # HTTP availability burn rate (short windows)
+      - record: slo:http_availability:burn_rate:ratio_rate5m
+        expr: |
+          (1 - sli:http_requests:availability:ratio_rate5m) / (1 - 0.999)
+
+      - record: slo:http_availability:burn_rate:ratio_rate30m
+        expr: |
+          (1 - sli:http_requests:availability:ratio_rate30m) / (1 - 0.999)
+
+      - record: slo:http_availability:burn_rate:ratio_rate1h
+        expr: |
+          (1 - sli:http_requests:availability:ratio_rate1h) / (1 - 0.999)
+
+      - record: slo:http_availability:burn_rate:ratio_rate6h
+        expr: |
+          (1 - sli:http_requests:availability:ratio_rate6h) / (1 - 0.999)
+
+      # Prometheus API burn rate
+      - record: slo:prometheus_api:burn_rate:ratio_rate5m
+        expr: |
+          (1 - sli:prometheus_api:availability:ratio_rate5m) / (1 - 0.999)
+
+      - record: slo:prometheus_api:burn_rate:ratio_rate1h
+        expr: |
+          (1 - sli:prometheus_api:availability:ratio_rate1h) / (1 - 0.999)
+
+      # Loki push burn rate
+      - record: slo:loki_push:burn_rate:ratio_rate5m
+        expr: |
+          (1 - sli:loki_push:availability:ratio_rate5m) / (1 - 0.999)
+
+      - record: slo:loki_push:burn_rate:ratio_rate1h
+        expr: |
+          (1 - sli:loki_push:availability:ratio_rate1h) / (1 - 0.999)

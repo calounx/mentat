@@ -1,0 +1,281 @@
+# SLO Alerting Rules
+# Multi-window, multi-burn-rate alerts based on Google SRE practices
+
+groups:
+  #=============================================================================
+  # HTTP/API SLO Alerts
+  #=============================================================================
+  - name: slo:http:alerts
+    rules:
+      # Critical: Fast burn - 14.4x burn rate
+      # Consumes 2% of 30-day budget in 1 hour
+      - alert: SLOHttpAvailabilityBurnRateCritical
+        expr: |
+          (
+            slo:http_availability:burn_rate:ratio_rate5m > 14.4
+            and
+            slo:http_availability:burn_rate:ratio_rate1h > 14.4
+          )
+          or
+          (
+            sli:http_requests:availability:ratio_rate5m < 0.999
+            and
+            sli:http_requests:availability:ratio_rate1h < 0.999
+          )
+        for: 2m
+        labels:
+          severity: critical
+          slo: http_availability
+          burn_rate: "14.4"
+        annotations:
+          summary: "HTTP availability SLO burn rate critical"
+          description: |
+            HTTP service is consuming error budget at 14.4x the sustainable rate.
+            At this rate, the entire 30-day error budget will be exhausted in 2 hours.
+            Current 5m success rate: {{ $value | printf "%.4f" }}
+          runbook: "https://runbooks.example.com/slo-http-availability"
+
+      # Warning: Medium burn - 6x burn rate
+      # Consumes 5% of 30-day budget in 6 hours
+      - alert: SLOHttpAvailabilityBurnRateWarning
+        expr: |
+          (
+            slo:http_availability:burn_rate:ratio_rate30m > 6
+            and
+            slo:http_availability:burn_rate:ratio_rate6h > 6
+          )
+        for: 5m
+        labels:
+          severity: warning
+          slo: http_availability
+          burn_rate: "6"
+        annotations:
+          summary: "HTTP availability SLO burn rate elevated"
+          description: |
+            HTTP service is consuming error budget at 6x the sustainable rate.
+            Current 30m success rate: {{ $value | printf "%.4f" }}
+
+      # Info: Slow burn - error budget depleting
+      - alert: SLOHttpAvailabilityErrorBudgetLow
+        expr: |
+          slo:http_availability:error_budget_remaining:ratio < 0.25
+        for: 15m
+        labels:
+          severity: warning
+          slo: http_availability
+        annotations:
+          summary: "HTTP availability error budget below 25%"
+          description: |
+            Only {{ $value | printf "%.1f" }}% of the monthly error budget remains.
+            Consider reducing deployments or investigating reliability issues.
+
+      # Critical: Error budget exhausted
+      - alert: SLOHttpAvailabilityErrorBudgetExhausted
+        expr: |
+          slo:http_availability:error_budget_remaining:ratio < 0
+        for: 5m
+        labels:
+          severity: critical
+          slo: http_availability
+        annotations:
+          summary: "HTTP availability error budget exhausted"
+          description: |
+            The monthly error budget has been completely consumed.
+            The service is not meeting its 99.9% availability SLO.
+            Error budget: {{ $value | printf "%.1f" }}%
+
+      # Success rate direct monitoring
+      - alert: HttpSuccessRateLow
+        expr: |
+          sli:http_requests:availability:ratio_rate5m < 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP success rate below 95%"
+          description: |
+            HTTP success rate is {{ $value | printf "%.2f" }}% over the last 5 minutes.
+            This indicates significant errors affecting users.
+
+      - alert: HttpSuccessRateCritical
+        expr: |
+          sli:http_requests:availability:ratio_rate5m < 0.90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP success rate critically low (below 90%)"
+          description: |
+            HTTP success rate has dropped to {{ $value | printf "%.2f" }}%.
+            Immediate investigation required.
+
+  #=============================================================================
+  # Prometheus SLO Alerts
+  #=============================================================================
+  - name: slo:prometheus:alerts
+    rules:
+      - alert: SLOPrometheusApiBurnRateCritical
+        expr: |
+          slo:prometheus_api:burn_rate:ratio_rate5m > 14.4
+          and
+          slo:prometheus_api:burn_rate:ratio_rate1h > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          slo: prometheus_availability
+        annotations:
+          summary: "Prometheus API SLO burn rate critical"
+          description: "Prometheus API is experiencing high error rate"
+
+      - alert: PrometheusSuccessRateLow
+        expr: |
+          sli:prometheus_api:availability:ratio_rate5m < 0.99
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus API success rate below 99%"
+          description: |
+            Prometheus API success rate: {{ $value | printf "%.2f" }}%
+
+      - alert: PrometheusScrapeSuccessRateLow
+        expr: |
+          sli:prometheus_scrape:success:ratio < 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus scrape success rate below 95%"
+          description: |
+            {{ $value | printf "%.1f" }}% of targets are being scraped successfully.
+            Some targets may be down or unreachable.
+
+  #=============================================================================
+  # Loki SLO Alerts
+  #=============================================================================
+  - name: slo:loki:alerts
+    rules:
+      - alert: SLOLokiPushBurnRateCritical
+        expr: |
+          slo:loki_push:burn_rate:ratio_rate5m > 14.4
+          and
+          slo:loki_push:burn_rate:ratio_rate1h > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          slo: loki_availability
+        annotations:
+          summary: "Loki ingestion SLO burn rate critical"
+          description: "Loki is rejecting log pushes at a critical rate"
+
+      - alert: LokiIngestionSuccessRateLow
+        expr: |
+          sli:loki_push:availability:ratio_rate5m < 0.99
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki ingestion success rate below 99%"
+          description: |
+            Loki ingestion success rate: {{ $value | printf "%.2f" }}%
+            Logs may be getting dropped.
+
+      - alert: LokiQuerySuccessRateLow
+        expr: |
+          sli:loki_query:availability:ratio_rate5m < 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki query success rate below 95%"
+          description: |
+            Loki query success rate: {{ $value | printf "%.2f" }}%
+            Users may be experiencing log query failures.
+
+  #=============================================================================
+  # Infrastructure SLO Alerts
+  #=============================================================================
+  - name: slo:infrastructure:alerts
+    rules:
+      - alert: NodeAvailabilityLow
+        expr: |
+          sli:node:availability:ratio < 0.99
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node availability below 99%"
+          description: |
+            Only {{ $value | printf "%.1f" }}% of nodes are available.
+            Some hosts may be down.
+
+      - alert: DiskSpaceSuccessRateLow
+        expr: |
+          sli:disk:availability:ratio < 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space availability below 90%"
+          description: |
+            {{ $value | printf "%.1f" }}% of disks have more than 10% free space.
+            Some disks are running low on space.
+
+      - alert: MemorySuccessRateLow
+        expr: |
+          sli:memory:availability:ratio < 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory availability below 90%"
+          description: |
+            {{ $value | printf "%.1f" }}% of hosts have more than 10% free memory.
+
+      - alert: CPUSuccessRateLow
+        expr: |
+          sli:cpu:availability:ratio_rate5m < 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU availability below 90%"
+          description: |
+            {{ $value | printf "%.1f" }}% of hosts have CPU utilization under 90%.
+            Some hosts are experiencing high CPU load.
+
+  #=============================================================================
+  # Global Success Rate Summary
+  #=============================================================================
+  - name: slo:success_rate:summary
+    rules:
+      # Overall system health based on success rates
+      - alert: OverallSuccessRateDegraded
+        expr: |
+          (
+            (sli:http_requests:availability:ratio_rate5m < 0.99) +
+            (sli:prometheus_api:availability:ratio_rate5m < 0.99) +
+            (sli:loki_push:availability:ratio_rate5m < 0.99) +
+            (sli:node:availability:ratio < 0.99)
+          ) >= 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple services showing degraded success rates"
+          description: "Two or more services have success rates below 99%"
+
+      - alert: OverallSuccessRateCritical
+        expr: |
+          (
+            (sli:http_requests:availability:ratio_rate5m < 0.95) +
+            (sli:prometheus_api:availability:ratio_rate5m < 0.95) +
+            (sli:loki_push:availability:ratio_rate5m < 0.95) +
+            (sli:node:availability:ratio < 0.95)
+          ) >= 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Multiple services showing critical success rates"
+          description: "Two or more services have success rates below 95%"
