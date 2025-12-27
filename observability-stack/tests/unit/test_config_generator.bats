@@ -17,12 +17,8 @@ setup() {
     TEST_TMP="$BATS_TEST_TMPDIR/config_gen_tests_$$"
     mkdir -p "$TEST_TMP"/{config/hosts,modules,prometheus/rules,grafana/dashboards}
 
-    # Disable colors
-    RED=''
-    GREEN=''
-    YELLOW=''
-    BLUE=''
-    NC=''
+    # Note: Color variables (RED, GREEN, etc.) are readonly from common.sh
+    # Tests run with colors enabled - output is captured by BATS anyway
 }
 
 teardown() {

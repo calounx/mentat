@@ -17,13 +17,8 @@ setup() {
     TEST_TMP="$BATS_TEST_TMPDIR/common_tests_$$"
     mkdir -p "$TEST_TMP"
 
-    # Disable colors for testing
-    RED=''
-    GREEN=''
-    YELLOW=''
-    BLUE=''
-    CYAN=''
-    NC=''
+    # Note: Color variables (RED, GREEN, etc.) are readonly from common.sh
+    # Tests run with colors enabled - output is captured by BATS anyway
 }
 
 # Cleanup after each test
