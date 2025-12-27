@@ -1,22 +1,65 @@
 #!/bin/bash
 #===============================================================================
 # Common Functions for Deployment Scripts
+#
+# ARCHITECTURE:
+# This library provides deployment-specific functions and sources shared
+# utilities from scripts/lib via shared.sh. This design:
+#   - Eliminates code duplication between deploy/ and scripts/
+#   - Provides fallbacks when scripts/lib is unavailable
+#   - Maintains a single source of truth for common functions
+#
+# Deployment-specific functions in this file:
+#   - Firewall configuration (setup_firewall_*)
+#   - Systemd service management (create_systemd_service, enable_and_start)
+#   - GitHub release downloads with checksum verification
+#   - Pre-flight validation and placeholder detection
+#   - Version management for installations
+#
+# Shared utilities (from shared.sh):
+#   - Logging (log_info, log_warn, log_error, etc.)
+#   - Architecture detection (get_architecture)
+#   - Service management (wait_for_service, check_port_available)
+#   - Version comparison (version_compare)
 #===============================================================================
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Guard against multiple sourcing
+[[ -n "${DEPLOY_COMMON_LOADED:-}" ]] && return 0
+DEPLOY_COMMON_LOADED=1
 
-# Logging
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
-log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+# Determine library directory
+DEPLOY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source shared library (provides common utilities with fallbacks)
+if [[ -f "$DEPLOY_LIB_DIR/shared.sh" ]]; then
+    source "$DEPLOY_LIB_DIR/shared.sh"
+fi
+
+#===============================================================================
+# COLORS AND LOGGING (fallbacks if shared.sh not loaded)
+#===============================================================================
+
+if [[ -z "${_GREEN:-}" ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    NC='\033[0m'
+fi
+
+# Logging functions (fallbacks if not provided by shared.sh)
+if ! declare -f log_info >/dev/null 2>&1; then
+    log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+    log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+    log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+    log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
+    log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+fi
+
+#===============================================================================
+# DEPLOY-SPECIFIC: Banner
+#===============================================================================
 
 print_banner() {
     echo -e "${CYAN}"
@@ -32,20 +75,24 @@ EOF
 }
 
 #===============================================================================
-# System Functions
+# SHARED UTILITIES (fallbacks if shared.sh not loaded)
 #===============================================================================
 
-get_architecture() {
-    local arch
-    arch=$(uname -m)
-    case $arch in
-        x86_64)  echo "amd64" ;;
-        aarch64) echo "arm64" ;;
-        armv7l)  echo "armv7" ;;
-        *)       echo "$arch" ;;
-    esac
-}
+# Architecture detection (fallback)
+if ! declare -f get_architecture >/dev/null 2>&1; then
+    get_architecture() {
+        local arch
+        arch=$(uname -m)
+        case $arch in
+            x86_64)  echo "amd64" ;;
+            aarch64) echo "arm64" ;;
+            armv7l)  echo "armv7" ;;
+            *)       echo "$arch" ;;
+        esac
+    }
+fi
 
+# Legacy function - use ensure_system_user for idempotent version
 create_system_user() {
     local user="$1"
     local group="${2:-$user}"
@@ -59,28 +106,34 @@ create_system_user() {
     fi
 }
 
-wait_for_service() {
-    local service="$1"
-    local max_wait="${2:-30}"
-    local count=0
+# Service wait (fallback)
+if ! declare -f wait_for_service >/dev/null 2>&1; then
+    wait_for_service() {
+        local service="$1"
+        local max_wait="${2:-30}"
+        local count=0
 
-    while ! systemctl is-active --quiet "$service"; do
-        sleep 1
-        count=$((count + 1))
-        if [[ $count -ge $max_wait ]]; then
+        while ! systemctl is-active --quiet "$service"; do
+            sleep 1
+            count=$((count + 1))
+            if [[ $count -ge $max_wait ]]; then
+                return 1
+            fi
+        done
+        return 0
+    }
+fi
+
+# Port check (fallback)
+if ! declare -f check_port_available >/dev/null 2>&1; then
+    check_port_available() {
+        local port="$1"
+        if ss -tlnp | grep -q ":${port} "; then
             return 1
         fi
-    done
-    return 0
-}
-
-check_port_available() {
-    local port="$1"
-    if ss -tlnp | grep -q ":${port} "; then
-        return 1
-    fi
-    return 0
-}
+        return 0
+    }
+fi
 
 #===============================================================================
 # Download Functions

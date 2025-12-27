@@ -484,9 +484,11 @@ tests/
 │   └── test_security.bats
 ├── errors/                       # Error handling tests
 │   └── test_error_handling.bats
-├── fixtures/                     # Test data
-│   ├── sample_module.yaml
-│   └── sample_host_config.yaml
+├── fixtures/                     # Test data (hyphen-naming convention)
+│   ├── sample-config.yaml        # Global config example
+│   ├── sample-module.yaml        # Simple module manifest
+│   ├── sample-module-full.yaml   # Complete module manifest
+│   └── sample-host-config.yaml   # Host configuration example
 └── README.md                     # Full documentation
 ```
 
