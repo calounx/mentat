@@ -494,11 +494,57 @@ show_completion() {
 }
 
 #===============================================================================
+# Pre-flight Validation
+#===============================================================================
+
+run_preflight_checks() {
+    local config_file="$STACK_DIR/config/global.yaml"
+
+    echo
+    log_step "Running pre-flight checks..."
+
+    # Check root privileges
+    if [[ $EUID -ne 0 ]]; then
+        log_error "This installer must be run as root (use sudo)"
+        exit 1
+    fi
+
+    # Check internet connectivity
+    if ! curl -s --connect-timeout 5 https://github.com >/dev/null 2>&1; then
+        log_error "No internet connectivity (cannot reach github.com)"
+        exit 1
+    fi
+
+    # Check disk space (minimum 5GB free)
+    local free_space
+    free_space=$(df / --output=avail -B1G 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
+    if [[ "$free_space" -lt 5 ]]; then
+        log_error "Insufficient disk space: ${free_space}GB free, need at least 5GB"
+        exit 1
+    fi
+
+    # Validate config has no placeholders (optional - only if config exists)
+    if [[ -f "$config_file" ]]; then
+        if ! validate_config_no_placeholders "$config_file"; then
+            echo
+            log_warn "Configuration has placeholder values."
+            log_warn "The installer will collect these values interactively."
+            echo
+        fi
+    fi
+
+    log_success "Pre-flight checks passed"
+}
+
+#===============================================================================
 # Main
 #===============================================================================
 
 main() {
     print_banner
+
+    # Run pre-flight checks before anything else
+    run_preflight_checks
 
     select_role
 

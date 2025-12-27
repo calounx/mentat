@@ -3,6 +3,11 @@
 # Observability VPS Installation
 #
 # Installs: Prometheus, Loki, Tempo, Grafana, Alertmanager, Nginx
+#
+# Features:
+#   - Centralized version management via config/versions.yaml
+#   - Idempotent installation (safe to run multiple times)
+#   - Pre-flight validation
 #===============================================================================
 
 set -euo pipefail
@@ -11,12 +16,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
 STACK_DIR="$(dirname "$DEPLOY_DIR")"
 
-# Versions (can be overridden)
-PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-2.48.1}"
-LOKI_VERSION="${LOKI_VERSION:-3.0.0}"
-TEMPO_VERSION="${TEMPO_VERSION:-2.3.1}"
-ALERTMANAGER_VERSION="${ALERTMANAGER_VERSION:-0.27.0}"
-NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-1.7.0}"
+#===============================================================================
+# Version Resolution
+# Versions are sourced from config/versions.yaml with environment overrides
+#===============================================================================
+
+resolve_versions() {
+    log_step "Resolving component versions..."
+
+    # Use get_component_version from deploy/lib/common.sh
+    # Falls back to hardcoded defaults if versions.yaml unavailable
+    PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-$(get_component_version prometheus 2.48.1)}"
+    LOKI_VERSION="${LOKI_VERSION:-$(get_component_version loki 3.0.0)}"
+    TEMPO_VERSION="${TEMPO_VERSION:-$(get_component_version tempo 2.3.1)}"
+    ALERTMANAGER_VERSION="${ALERTMANAGER_VERSION:-$(get_component_version alertmanager 0.27.0)}"
+    NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-$(get_component_version node_exporter 1.7.0)}"
+
+    log_info "  Prometheus:     ${PROMETHEUS_VERSION}"
+    log_info "  Loki:           ${LOKI_VERSION}"
+    log_info "  Tempo:          ${TEMPO_VERSION}"
+    log_info "  Alertmanager:   ${ALERTMANAGER_VERSION}"
+    log_info "  Node Exporter:  ${NODE_EXPORTER_VERSION}"
+}
 
 #===============================================================================
 # Main Installation Function
@@ -24,6 +45,9 @@ NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-1.7.0}"
 
 install_observability_stack() {
     log_step "Installing Observability Stack..."
+
+    # Resolve versions from config/versions.yaml
+    resolve_versions
 
     install_system_packages
     install_prometheus
@@ -70,13 +94,19 @@ install_system_packages() {
 install_prometheus() {
     log_step "Installing Prometheus ${PROMETHEUS_VERSION}..."
 
+    # Idempotency check: skip if already installed with correct version
+    if binary_installed /usr/local/bin/prometheus "$PROMETHEUS_VERSION"; then
+        log_info "Prometheus ${PROMETHEUS_VERSION} already installed, skipping"
+        return 0
+    fi
+
     local arch
     arch=$(get_architecture)
     local tarball="prometheus-${PROMETHEUS_VERSION}.linux-${arch}.tar.gz"
     local url="https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/${tarball}"
 
-    # Create user
-    create_system_user prometheus prometheus
+    # Create user (idempotent)
+    ensure_system_user prometheus prometheus
 
     # Download and extract
     cd /tmp
@@ -87,14 +117,14 @@ install_prometheus() {
     cp "prometheus-${PROMETHEUS_VERSION}.linux-${arch}/prometheus" /usr/local/bin/
     cp "prometheus-${PROMETHEUS_VERSION}.linux-${arch}/promtool" /usr/local/bin/
 
-    # Create directories
-    mkdir -p /etc/prometheus /var/lib/prometheus
-    chown prometheus:prometheus /var/lib/prometheus
+    # Create directories (idempotent)
+    ensure_directory /etc/prometheus root:root 755
+    ensure_directory /var/lib/prometheus prometheus:prometheus 755
 
     # Cleanup
     rm -rf "/tmp/prometheus-${PROMETHEUS_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
-    # Create systemd service
+    # Create systemd service (always update to ensure consistency)
     cat > /etc/systemd/system/prometheus.service << EOF
 [Unit]
 Description=Prometheus
@@ -130,13 +160,19 @@ EOF
 install_loki() {
     log_step "Installing Loki ${LOKI_VERSION}..."
 
+    # Idempotency check: skip if already installed with correct version
+    if binary_installed /usr/local/bin/loki "$LOKI_VERSION"; then
+        log_info "Loki ${LOKI_VERSION} already installed, skipping"
+        return 0
+    fi
+
     local arch
     arch=$(get_architecture)
     local binary="loki-linux-${arch}"
     local url="https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/${binary}.zip"
 
-    # Create user
-    create_system_user loki loki
+    # Create user (idempotent)
+    ensure_system_user loki loki
 
     # Download and extract
     cd /tmp
@@ -147,9 +183,9 @@ install_loki() {
     chmod +x "${binary}"
     mv "${binary}" /usr/local/bin/loki
 
-    # Create directories
-    mkdir -p /etc/loki /var/lib/loki
-    chown -R loki:loki /var/lib/loki
+    # Create directories (idempotent)
+    ensure_directory /etc/loki root:root 755
+    ensure_directory /var/lib/loki loki:loki 755
 
     # Cleanup
     rm -f /tmp/loki.zip
@@ -184,13 +220,19 @@ EOF
 install_tempo() {
     log_step "Installing Tempo ${TEMPO_VERSION}..."
 
+    # Idempotency check: skip if already installed with correct version
+    if binary_installed /usr/local/bin/tempo "$TEMPO_VERSION"; then
+        log_info "Tempo ${TEMPO_VERSION} already installed, skipping"
+        return 0
+    fi
+
     local arch
     arch=$(get_architecture)
     local binary="tempo_${TEMPO_VERSION}_linux_${arch}"
     local url="https://github.com/grafana/tempo/releases/download/v${TEMPO_VERSION}/${binary}.tar.gz"
 
-    # Create user
-    create_system_user tempo tempo
+    # Create user (idempotent)
+    ensure_system_user tempo tempo
 
     # Download and extract
     cd /tmp
@@ -201,9 +243,9 @@ install_tempo() {
     chmod +x tempo
     mv tempo /usr/local/bin/tempo
 
-    # Create directories
-    mkdir -p /etc/tempo /var/lib/tempo
-    chown -R tempo:tempo /var/lib/tempo
+    # Create directories (idempotent)
+    ensure_directory /etc/tempo root:root 755
+    ensure_directory /var/lib/tempo tempo:tempo 755
 
     # Create default config
     cat > /etc/tempo/tempo.yaml << 'EOF'
@@ -277,13 +319,19 @@ EOF
 install_alertmanager() {
     log_step "Installing Alertmanager ${ALERTMANAGER_VERSION}..."
 
+    # Idempotency check: skip if already installed with correct version
+    if binary_installed /usr/local/bin/alertmanager "$ALERTMANAGER_VERSION"; then
+        log_info "Alertmanager ${ALERTMANAGER_VERSION} already installed, skipping"
+        return 0
+    fi
+
     local arch
     arch=$(get_architecture)
     local tarball="alertmanager-${ALERTMANAGER_VERSION}.linux-${arch}.tar.gz"
     local url="https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/${tarball}"
 
-    # Create user
-    create_system_user alertmanager alertmanager
+    # Create user (idempotent)
+    ensure_system_user alertmanager alertmanager
 
     # Download and extract
     cd /tmp
@@ -294,9 +342,9 @@ install_alertmanager() {
     cp "alertmanager-${ALERTMANAGER_VERSION}.linux-${arch}/alertmanager" /usr/local/bin/
     cp "alertmanager-${ALERTMANAGER_VERSION}.linux-${arch}/amtool" /usr/local/bin/
 
-    # Create directories
-    mkdir -p /etc/alertmanager /var/lib/alertmanager
-    chown alertmanager:alertmanager /var/lib/alertmanager
+    # Create directories (idempotent)
+    ensure_directory /etc/alertmanager root:root 755
+    ensure_directory /var/lib/alertmanager alertmanager:alertmanager 755
 
     # Cleanup
     rm -rf "/tmp/alertmanager-${ALERTMANAGER_VERSION}.linux-${arch}" "/tmp/${tarball}"
@@ -357,13 +405,19 @@ install_grafana() {
 install_node_exporter() {
     log_step "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
+    # Idempotency check: skip if already installed with correct version
+    if binary_installed /usr/local/bin/node_exporter "$NODE_EXPORTER_VERSION"; then
+        log_info "Node Exporter ${NODE_EXPORTER_VERSION} already installed, skipping"
+        return 0
+    fi
+
     local arch
     arch=$(get_architecture)
     local tarball="node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}.tar.gz"
     local url="https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/${tarball}"
 
-    # Create user
-    create_system_user node_exporter node_exporter
+    # Create user (idempotent)
+    ensure_system_user node_exporter node_exporter
 
     # Download and extract
     cd /tmp

@@ -340,3 +340,246 @@ backup_config() {
 generate_password() {
     openssl rand -base64 16 2>/dev/null || head -c 16 /dev/urandom | base64
 }
+
+#===============================================================================
+# Placeholder Detection & Pre-flight Validation
+#===============================================================================
+
+# SECURITY: Check if a value appears to be a placeholder that needs changing
+# Usage: is_placeholder "value"
+# Returns: 0 if it's a placeholder, 1 if it appears to be a real value
+is_placeholder() {
+    local value="$1"
+
+    local -a PLACEHOLDER_PATTERNS=(
+        "CHANGE_ME"
+        "YOUR_"
+        "EXAMPLE"
+        "PLACEHOLDER"
+        "REPLACE_"
+        "TODO"
+        "FIXME"
+        "XXX"
+        "_IP$"
+    )
+
+    for pattern in "${PLACEHOLDER_PATTERNS[@]}"; do
+        if [[ "$value" =~ $pattern ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# SECURITY: Validate global.yaml has no placeholder values for critical fields
+# Usage: validate_config_no_placeholders "config_file"
+# Returns: 0 if all good, 1 if placeholders found
+validate_config_no_placeholders() {
+    local config_file="${1:-}"
+    local errors=()
+
+    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+        log_warn "Config file not found: $config_file"
+        return 0  # Skip validation if no config file
+    fi
+
+    log_step "Validating configuration for placeholder values..."
+
+    # Critical fields that must not contain placeholders
+    local -a critical_fields=(
+        "network.observability_vps_ip:Observability VPS IP"
+        "smtp.password:SMTP password"
+        "grafana.admin_password:Grafana admin password"
+        "security.prometheus_basic_auth_password:Prometheus auth password"
+        "security.loki_basic_auth_password:Loki auth password"
+    )
+
+    for field_spec in "${critical_fields[@]}"; do
+        local field="${field_spec%%:*}"
+        local description="${field_spec#*:}"
+
+        # Extract value using grep/sed (works without yq)
+        local value=""
+        local key="${field##*.}"
+        value=$(grep -E "^\s*${key}:" "$config_file" 2>/dev/null | head -1 | sed 's/.*:\s*//' | tr -d '"' | tr -d "'" || echo "")
+
+        if [[ -n "$value" ]] && is_placeholder "$value"; then
+            errors+=("$description contains placeholder: $value")
+        fi
+    done
+
+    if [[ ${#errors[@]} -gt 0 ]]; then
+        log_error "Configuration contains placeholder values that must be changed:"
+        for err in "${errors[@]}"; do
+            log_error "  - $err"
+        done
+        log_error ""
+        log_error "Please edit config/global.yaml and replace all placeholder values"
+        log_error "before running the installer."
+        return 1
+    fi
+
+    log_success "Configuration validation passed"
+    return 0
+}
+
+# Pre-flight check for deployment readiness
+# Usage: preflight_check [config_file]
+# Returns: 0 if ready, 1 if issues found
+preflight_check() {
+    local config_file="${1:-}"
+    local errors=()
+
+    log_step "Running pre-flight checks..."
+
+    # Check root privileges
+    if [[ $EUID -ne 0 ]]; then
+        errors+=("Must run as root (use sudo)")
+    fi
+
+    # Check internet connectivity
+    if ! curl -s --connect-timeout 5 https://github.com >/dev/null 2>&1; then
+        errors+=("No internet connectivity (cannot reach github.com)")
+    fi
+
+    # Validate config has no placeholders (if config file provided)
+    if [[ -n "$config_file" ]] && [[ -f "$config_file" ]]; then
+        if ! validate_config_no_placeholders "$config_file"; then
+            errors+=("Configuration contains placeholder values")
+        fi
+    fi
+
+    # Check disk space (minimum 5GB free)
+    local free_space
+    free_space=$(df / --output=avail -B1G 2>/dev/null | tail -1 | tr -d ' ' || echo "0")
+    if [[ "$free_space" -lt 5 ]]; then
+        errors+=("Insufficient disk space: ${free_space}GB free, need at least 5GB")
+    fi
+
+    if [[ ${#errors[@]} -gt 0 ]]; then
+        log_error "Pre-flight checks failed:"
+        for err in "${errors[@]}"; do
+            log_error "  - $err"
+        done
+        return 1
+    fi
+
+    log_success "Pre-flight checks passed"
+    return 0
+}
+
+#===============================================================================
+# Version Management
+#===============================================================================
+
+# Get version from versions.yaml or use fallback
+# Usage: get_component_version "component_name" "fallback_version"
+# Returns: Version string
+get_component_version() {
+    local component="$1"
+    local fallback="${2:-}"
+    local versions_file="${STACK_DIR:-}/config/versions.yaml"
+
+    # Check for environment override first
+    local env_var="VERSION_OVERRIDE_${component^^}"
+    env_var="${env_var//-/_}"
+    if [[ -n "${!env_var:-}" ]]; then
+        echo "${!env_var}"
+        return 0
+    fi
+
+    # Try to read from versions.yaml
+    if [[ -f "$versions_file" ]]; then
+        local version
+        version=$(grep -A5 "^  ${component}:" "$versions_file" 2>/dev/null | \
+            grep "fallback_version:" | head -1 | \
+            sed 's/.*fallback_version:\s*//' | tr -d '"' | tr -d "'" || echo "")
+        if [[ -n "$version" ]]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+
+    # Use fallback
+    echo "$fallback"
+}
+
+#===============================================================================
+# Idempotency Helpers
+#===============================================================================
+
+# Check if a system user exists
+# Usage: user_exists "username"
+# Returns: 0 if exists, 1 if not
+user_exists() {
+    id "$1" >/dev/null 2>&1
+}
+
+# Check if a service exists
+# Usage: service_exists "service_name"
+# Returns: 0 if exists, 1 if not
+service_exists() {
+    systemctl list-unit-files "${1}.service" >/dev/null 2>&1
+}
+
+# Check if a binary is installed at expected location
+# Usage: binary_installed "binary_path" [expected_version]
+# Returns: 0 if installed (and version matches if provided), 1 otherwise
+binary_installed() {
+    local binary_path="$1"
+    local expected_version="${2:-}"
+
+    if [[ ! -x "$binary_path" ]]; then
+        return 1
+    fi
+
+    if [[ -n "$expected_version" ]]; then
+        local installed_version
+        installed_version=$("$binary_path" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+        if [[ "$installed_version" != "$expected_version" ]]; then
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+# Idempotent system user creation
+# Usage: ensure_system_user "user" [group]
+ensure_system_user() {
+    local user="$1"
+    local group="${2:-$user}"
+
+    if ! getent group "$group" >/dev/null 2>&1; then
+        log_info "Creating group: $group"
+        groupadd --system "$group"
+    else
+        log_info "Group already exists: $group"
+    fi
+
+    if ! id "$user" >/dev/null 2>&1; then
+        log_info "Creating user: $user"
+        useradd --system --no-create-home --shell /usr/sbin/nologin -g "$group" "$user"
+    else
+        log_info "User already exists: $user"
+    fi
+}
+
+# Idempotent directory creation with ownership
+# Usage: ensure_directory "path" [owner] [mode]
+ensure_directory() {
+    local path="$1"
+    local owner="${2:-root:root}"
+    local mode="${3:-755}"
+
+    if [[ -d "$path" ]]; then
+        log_info "Directory exists: $path"
+    else
+        log_info "Creating directory: $path"
+        mkdir -p "$path"
+    fi
+
+    chown "$owner" "$path"
+    chmod "$mode" "$path"
+}
