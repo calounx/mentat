@@ -91,18 +91,19 @@ install_binary() {
     local download_url="https://github.com/prometheus/node_exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
     local checksum_url="https://github.com/prometheus/node_exporter/releases/download/v${MODULE_VERSION}/sha256sums.txt"
 
-    # Use secure download function from common.sh (with fallback for compatibility)
-    if type download_and_verify &>/dev/null; then
-        if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
-            log_error "SECURITY: Failed to download and verify $archive_name"
-            return 1
-        fi
-    else
-        log_warn "SECURITY: download_and_verify not available, downloading without verification"
-        if ! wget -q --timeout=60 --tries=3 "$download_url" -O "$archive_name"; then
-            log_error "Failed to download $MODULE_NAME from $download_url"
-            return 1
-        fi
+    # SECURITY: Always require checksum verification - fail if unavailable
+    if ! type download_and_verify &>/dev/null; then
+        log_error "SECURITY: download_and_verify function not available"
+        log_error "Cannot install without checksum verification"
+        return 1
+    fi
+
+    # SECURITY: Fail installation if checksum verification fails
+    # NEVER fall back to unverified downloads
+    if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+        log_error "SECURITY: Checksum verification failed for node_exporter"
+        log_error "Refusing to install unverified binary"
+        return 1
     fi
 
     # Extract

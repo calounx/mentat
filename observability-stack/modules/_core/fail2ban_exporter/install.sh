@@ -47,20 +47,37 @@ install_binary() {
     log_info "Installing $MODULE_NAME v$MODULE_VERSION..."
     cd /tmp
 
-    # SECURITY: Download (checksum if available)
+    # SECURITY: Download with checksum verification
     local archive_name="fail2ban_exporter_${MODULE_VERSION}_linux_amd64.tar.gz"
-    wget -q "https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${MODULE_VERSION}/downloads/${archive_name}"
+    local download_url="https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${MODULE_VERSION}/downloads/${archive_name}"
+    local checksum_url="https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${MODULE_VERSION}/downloads/checksums.txt"
+
+    # SECURITY: Always require checksum verification - fail if unavailable
+    if ! type download_and_verify &>/dev/null; then
+        log_error "SECURITY: download_and_verify function not available"
+        log_error "Cannot install without checksum verification"
+        return 1
+    fi
+
+    # SECURITY: Fail installation if checksum verification fails
+    # NEVER fall back to unverified downloads
+    if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+        log_error "SECURITY: Checksum verification failed for fail2ban_exporter"
+        log_error "Refusing to install unverified binary"
+        return 1
+    fi
+
     tar xzf "$archive_name"
 
-    # SECURITY: Safe installation
-    if type safe_chmod &>/dev/null && type safe_chown &>/dev/null; then
+    # SECURITY: Safe binary installation
+    if type safe_chown &>/dev/null && type safe_chmod &>/dev/null; then
         cp fail2ban_exporter "$INSTALL_PATH"
-        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
         safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
     else
         cp fail2ban_exporter "$INSTALL_PATH"
-        chmod 755 "$INSTALL_PATH"
         chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        chmod 755 "$INSTALL_PATH"
     fi
 
     rm -rf "$archive_name" fail2ban_exporter LICENSE README.md

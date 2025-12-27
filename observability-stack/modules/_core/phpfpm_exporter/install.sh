@@ -57,21 +57,40 @@ install_binary() {
     log_info "Installing $MODULE_NAME v$MODULE_VERSION..."
     cd /tmp
 
-    # SECURITY: Download binary (checksum verification if available)
-    local binary_url="https://github.com/hipages/php-fpm_exporter/releases/download/v${MODULE_VERSION}/php-fpm_exporter_${MODULE_VERSION}_linux_amd64"
-    wget -q "$binary_url" -O "$INSTALL_PATH.tmp"
+    # SECURITY: Download with checksum verification
+    local archive_name="php-fpm_exporter_${MODULE_VERSION}_linux_amd64.tar.gz"
+    local download_url="https://github.com/hipages/php-fpm_exporter/releases/download/v${MODULE_VERSION}/${archive_name}"
+    local checksum_url="https://github.com/hipages/php-fpm_exporter/releases/download/v${MODULE_VERSION}/checksums.txt"
 
-    mv "$INSTALL_PATH.tmp" "$INSTALL_PATH"
-
-    # SECURITY: Safe permissions
-    if type safe_chmod &>/dev/null && type safe_chown &>/dev/null; then
-        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
-        safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
-    else
-        chmod 755 "$INSTALL_PATH"
-        chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+    # SECURITY: Always require checksum verification - fail if unavailable
+    if ! type download_and_verify &>/dev/null; then
+        log_error "SECURITY: download_and_verify function not available"
+        log_error "Cannot install without checksum verification"
+        return 1
     fi
 
+    # SECURITY: Fail installation if checksum verification fails
+    # NEVER fall back to unverified downloads
+    if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+        log_error "SECURITY: Checksum verification failed for phpfpm_exporter"
+        log_error "Refusing to install unverified binary"
+        return 1
+    fi
+
+    tar xzf "$archive_name"
+
+    # SECURITY: Safe binary installation
+    if type safe_chown &>/dev/null && type safe_chmod &>/dev/null; then
+        cp php-fpm_exporter "$INSTALL_PATH"
+        safe_chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH" || chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        safe_chmod 755 "$INSTALL_PATH" "$BINARY_NAME binary" || chmod 755 "$INSTALL_PATH"
+    else
+        cp php-fpm_exporter "$INSTALL_PATH"
+        chown "$USER_NAME:$USER_NAME" "$INSTALL_PATH"
+        chmod 755 "$INSTALL_PATH"
+    fi
+
+    rm -rf php-fpm_exporter "$archive_name"
     log_success "$MODULE_NAME binary installed"
 }
 

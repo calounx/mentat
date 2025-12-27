@@ -110,7 +110,8 @@ components:
     risk_level: low
     dependencies: []
     service: "nginx_exporter"
-    binary_path: "/usr/local/bin/nginx_exporter"
+    # H-11: Fixed binary path to match actual binary name
+    binary_path: "/usr/local/bin/nginx-prometheus-exporter"
     health_check:
       type: "http"
       endpoint: "http://localhost:9113/metrics"

@@ -584,18 +584,19 @@ install_binary() {
     local download_url="https://github.com/prometheus/prometheus/releases/download/v${version}/${archive_name}"
     local checksum_url="https://github.com/prometheus/prometheus/releases/download/v${version}/sha256sums.txt"
 
-    # SECURITY: Download with checksum verification
-    if type download_and_verify &>/dev/null; then
-        if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
-            log_error "SECURITY: Failed to download and verify $archive_name"
-            return 1
-        fi
-    else
-        log_warn "SECURITY: download_and_verify not available, downloading without verification"
-        if ! wget -q --timeout=60 --tries=3 "$download_url" -O "$archive_name"; then
-            log_error "Failed to download Prometheus from $download_url"
-            return 1
-        fi
+    # SECURITY: Always require checksum verification - fail if unavailable
+    if ! type download_and_verify &>/dev/null; then
+        log_error "SECURITY: download_and_verify function not available"
+        log_error "Cannot install without checksum verification"
+        return 1
+    fi
+
+    # SECURITY: Fail installation if checksum verification fails
+    # NEVER fall back to unverified downloads
+    if ! download_and_verify "$download_url" "$archive_name" "$checksum_url"; then
+        log_error "SECURITY: Checksum verification failed for Prometheus"
+        log_error "Refusing to install unverified binary"
+        return 1
     fi
 
     # Extract
@@ -607,11 +608,25 @@ install_binary() {
 
     local extract_dir="prometheus-${version}.linux-amd64"
 
-    # Stop service before replacing binary
+    # H-7: Stop service before replacing binary with verification
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
         log_info "Stopping Prometheus service..."
         systemctl stop "$SERVICE_NAME"
-        sleep 3
+
+        # Wait for process to actually stop with timeout
+        local wait_count=0
+        local max_wait=30
+        while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt $max_wait ]]; do
+            log_info "Waiting for $SERVICE_NAME to stop... ($wait_count/$max_wait)"
+            sleep 1
+            ((wait_count++))
+        done
+
+        if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
+            log_warn "Service did not stop gracefully, sending SIGKILL"
+            pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
+            sleep 2
+        fi
     fi
 
     # Install binaries

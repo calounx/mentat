@@ -484,7 +484,8 @@ health_check() {
 
             while [[ $attempts -lt $max_attempts ]]; do
                 local status_code
-                status_code=$(curl -s -o /dev/null -w "%{http_code}" "$endpoint" 2>/dev/null || echo "000")
+                # H-10: Add --max-time 10 to prevent hanging on unresponsive endpoints
+                status_code=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "$endpoint" 2>/dev/null || echo "000")
 
                 if [[ "$status_code" == "$expected_status" ]]; then
                     log_success "Health check passed for $component (HTTP $status_code)"
@@ -537,8 +538,9 @@ verify_metrics() {
     log_debug "Verifying metrics for $component..."
 
     # Check if metrics endpoint returns data
+    # H-10: Add --max-time 10 to prevent hanging on unresponsive endpoints
     local metrics
-    if metrics=$(curl -s "$endpoint" 2>/dev/null); then
+    if metrics=$(curl -s --max-time 10 "$endpoint" 2>/dev/null); then
         local metric_count
         metric_count=$(echo "$metrics" | grep -c "^[a-z]" || echo "0")
 

@@ -127,6 +127,14 @@ create_service() {
         log_info "Using existing stub_status at: $STUB_STATUS_URL"
     else
         log_info "No existing stub_status found, creating one on port 8080..."
+
+        # H-1: Check if port 8080 is available before creating stub_status config
+        if ss -tlnp 2>/dev/null | grep -q ':8080 ' || netstat -tlnp 2>/dev/null | grep -q ':8080 '; then
+            log_error "Port 8080 is already in use, cannot create stub_status endpoint"
+            log_error "Please configure stub_status manually on an available port"
+            return 1
+        fi
+
         cat > /etc/nginx/conf.d/stub_status.conf << 'EOF'
 server {
     listen 127.0.0.1:8080;
@@ -140,7 +148,13 @@ server {
     }
 }
 EOF
-        nginx -t && systemctl reload nginx
+        # H-2: Add cleanup of stub_status.conf if nginx -t fails
+        if ! nginx -t; then
+            log_error "Nginx configuration test failed, removing stub_status.conf"
+            rm -f /etc/nginx/conf.d/stub_status.conf
+            return 1
+        fi
+        systemctl reload nginx
         STUB_STATUS_URL="http://127.0.0.1:8080/nginx_status"
     fi
 
@@ -209,7 +223,26 @@ main() {
         return 0
     fi
 
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    # H-7: Add service stop verification before binary replacement
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        log_info "Stopping existing $SERVICE_NAME..."
+        systemctl stop "$SERVICE_NAME"
+
+        # Wait for process to actually stop with timeout
+        local wait_count=0
+        local max_wait=30
+        while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt $max_wait ]]; do
+            log_info "Waiting for $SERVICE_NAME to stop... ($wait_count/$max_wait)"
+            sleep 1
+            ((wait_count++))
+        done
+
+        if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
+            log_warn "Service did not stop gracefully, sending SIGKILL"
+            pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
+            sleep 2
+        fi
+    fi
     pkill -f "$INSTALL_PATH" 2>/dev/null || true
     sleep 1
 
