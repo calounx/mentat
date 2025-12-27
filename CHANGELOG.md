@@ -5,6 +5,51 @@ All notable changes to CHOM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Planned
+- Email verification flow
+- Password reset functionality
+- Two-factor authentication
+- Staging environment support
+- White-label customization
+- Custom domain SSL via Let's Encrypt
+- Automated backup scheduling
+- Alert management UI
+
+## [1.1.0] - 2025-12-27
+
+### Added
+
+#### Stripe Billing Integration
+- Stripe webhook controller with handlers for subscription lifecycle events
+- Support for `customer.subscription.created/updated/deleted` events
+- Invoice processing (`invoice.paid`, `invoice.payment_failed`, `invoice.finalized`)
+- Customer management (`customer.created`, `customer.updated`)
+- Charge refund tracking with audit logging
+- Automatic tier and status synchronization from Stripe subscriptions
+- CSRF exception configured for webhook endpoint
+
+#### Testing
+- Comprehensive test suite for Stripe webhook handlers (33 tests)
+- Model factories for Organization, Tenant, Subscription, and User
+- Edge case coverage for missing data and status transitions
+
+### Changed
+
+#### Frontend Optimization
+- Replaced bloated welcome page with clean CHOM-branded landing page (88% size reduction)
+- Bundled Alpine.js with Vite instead of CDN dependency
+- Unified asset loading with Vite for all views (login, register, layout)
+- Added CDN fallback for development when Vite assets not built
+
+#### Database
+- Made `stripe_price_id` nullable in subscriptions table
+- Changed subscription status from enum to string for Stripe compatibility
+
+### Fixed
+- Welcome page test compatibility with Vite manifest detection
+
 ## [1.0.0] - 2025-12-27
 
 ### Added
@@ -77,15 +122,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cached backup size calculations
 - Optimized aggregation queries
 - Async job queuing for long operations
-
-## [Unreleased]
-
-### Planned
-- Email verification flow
-- Password reset functionality
-- Two-factor authentication
-- Staging environment support
-- White-label customization
-- Custom domain SSL via Let's Encrypt
-- Automated backup scheduling
-- Alert management UI

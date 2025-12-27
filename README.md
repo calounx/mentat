@@ -2,44 +2,47 @@
 
 A multi-tenant SaaS platform for WordPress hosting management with integrated observability.
 
-## Overview
+## Features
 
-CHOM is a Laravel-based control plane that orchestrates VPS infrastructure and observability stack into a unified hosting platform. It provides:
+- **Multi-tenant Architecture** - Organizations, tenants, and team management with role-based access control
+- **Site Management** - WordPress, HTML, and Laravel site provisioning with SSL certificates
+- **VPS Fleet Management** - Automated server allocation with health monitoring
+- **Backup System** - Automated backups with configurable retention policies
+- **Observability** - Integrated Prometheus metrics and Loki logs with Grafana dashboards
+- **Stripe Billing** - Subscription management with webhook handlers for lifecycle events
+- **Team Collaboration** - Invite team members with Owner, Admin, Member, or Viewer roles
 
-- **Multi-tenant Architecture**: Organizations, tenants, and team management
-- **Site Management**: WordPress, HTML, and Laravel site provisioning
-- **VPS Fleet Management**: Automated server allocation and load balancing
-- **Backup Management**: Automated backups with retention policies
-- **Observability**: Integrated Prometheus metrics and Loki logs
-- **Team Collaboration**: Role-based access control (Owner, Admin, Member, Viewer)
+## Tech Stack
 
-## Requirements
+| Layer | Technology |
+|-------|------------|
+| Backend | Laravel 12, PHP 8.2+ |
+| Frontend | Livewire 3, Alpine.js, Tailwind CSS 4 |
+| Build | Vite |
+| Database | SQLite / MySQL / PostgreSQL |
+| Billing | Stripe (Laravel Cashier) |
+| Observability | Prometheus, Loki, Grafana |
 
-- PHP 8.2+
-- SQLite / MySQL 8.0+ / PostgreSQL 12+
-- Composer 2.x
-- Node.js 18+ (for frontend assets)
-
-## Installation
+## Quick Start
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/calounx/chom.git
 cd chom
-
-# Install dependencies
 composer install
+npm install
 
-# Copy environment file
+# Configure environment
 cp .env.example .env
-
-# Generate application key
 php artisan key:generate
 
-# Run migrations
+# Setup database
 php artisan migrate
 
-# Start the development server
+# Build frontend assets
+npm run build
+
+# Start development server
 php artisan serve
 ```
 
@@ -50,7 +53,12 @@ php artisan serve
 ```env
 # Database
 DB_CONNECTION=sqlite
-DB_DATABASE=/path/to/database.sqlite
+DB_DATABASE=/absolute/path/to/database.sqlite
+
+# Stripe Billing
+STRIPE_KEY=pk_test_...
+STRIPE_SECRET=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 
 # VPS Manager SSH
 CHOM_SSH_KEY_PATH=storage/app/ssh/chom_deploy_key
@@ -78,7 +86,7 @@ CHOM_GRAFANA_API_KEY=your-api-key
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
 ┌──────────────┐   ┌────────────────┐   ┌─────────────┐
-│  VPSManage   │   │ Observability  │   │   Stripe    │
+│  VPSManager  │   │ Observability  │   │   Stripe    │
 │  (SSH+CLI)   │   │ Stack (HTTP)   │   │  (Webhooks) │
 └──────────────┘   └────────────────┘   └─────────────┘
 ```
@@ -91,71 +99,102 @@ CHOM_GRAFANA_API_KEY=your-api-key
 | Pro | $79/mo | 25 | 100GB | + Staging, Priority support |
 | Enterprise | $249/mo | Unlimited | Unlimited | + White-label, Dedicated IP |
 
-## API Documentation
+## Stripe Webhooks
+
+CHOM handles the following Stripe webhook events:
+
+| Event | Action |
+|-------|--------|
+| `customer.subscription.created` | Creates subscription record, activates tenant |
+| `customer.subscription.updated` | Updates tier and status |
+| `customer.subscription.deleted` | Marks subscription canceled, suspends tenant |
+| `invoice.paid` | Updates subscription status to active |
+| `invoice.payment_failed` | Marks subscription past due |
+| `charge.refunded` | Logs refund in audit trail |
+
+Configure your webhook endpoint in Stripe Dashboard: `https://yourdomain.com/stripe/webhook`
+
+## API Reference
 
 ### Authentication
 
-```bash
-# Register
-POST /api/v1/auth/register
-
-# Login
-POST /api/v1/auth/login
-
-# Get current user
-GET /api/v1/auth/me
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/auth/register` | Create new organization and user |
+| POST | `/api/v1/auth/login` | Get authentication token |
+| GET | `/api/v1/auth/me` | Get current user profile |
 
 ### Sites
 
-```bash
-# List sites
-GET /api/v1/sites
-
-# Create site
-POST /api/v1/sites
-
-# Issue SSL
-POST /api/v1/sites/{id}/ssl
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/sites` | List all sites |
+| POST | `/api/v1/sites` | Create new site |
+| GET | `/api/v1/sites/{id}` | Get site details |
+| POST | `/api/v1/sites/{id}/ssl` | Issue SSL certificate |
 
 ### Backups
 
-```bash
-# List backups
-GET /api/v1/backups
-
-# Create backup
-POST /api/v1/sites/{id}/backups
-
-# Restore backup
-POST /api/v1/backups/{id}/restore
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/backups` | List all backups |
+| POST | `/api/v1/sites/{id}/backups` | Create backup |
+| POST | `/api/v1/backups/{id}/restore` | Restore from backup |
 
 ## Development
 
 ```bash
-# Run tests
+# Run all tests
 php artisan test
 
-# Clear caches
-php artisan optimize:clear
+# Run with coverage
+php artisan test --coverage
+
+# Watch for changes (development)
+npm run dev
+
+# Build for production
+npm run build
 
 # Run queue worker
 php artisan queue:work
+
+# Clear all caches
+php artisan optimize:clear
+```
+
+## Project Structure
+
+```
+app/
+├── Http/Controllers/
+│   ├── Api/           # REST API controllers
+│   └── Webhooks/      # Stripe webhook handlers
+├── Livewire/          # Livewire components
+├── Models/            # Eloquent models
+├── Policies/          # Authorization policies
+└── Services/          # Business logic services
+
+resources/
+├── css/app.css        # Tailwind CSS entry
+├── js/app.js          # Alpine.js entry
+└── views/             # Blade templates
+
+deploy/                # Infrastructure deployment scripts
 ```
 
 ## Security
 
-- All API endpoints use Laravel Sanctum for token-based authentication
-- Rate limiting: 5 req/min for auth, 60 req/min for API, 10 req/min for sensitive operations
-- SSH connections use key-based authentication
-- Prometheus/Loki queries are tenant-scoped to prevent data leakage
+- **Authentication**: Laravel Sanctum for token-based API auth
+- **Rate Limiting**: 5 req/min (auth), 60 req/min (API), 10 req/min (sensitive)
+- **SSH**: Key-based authentication for VPS operations
+- **Tenant Isolation**: Prometheus/Loki queries scoped by tenant ID
+- **CSRF Protection**: Enabled for all web routes (except webhooks)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-For support, please contact support@chom.io
+For support, contact support@chom.io
