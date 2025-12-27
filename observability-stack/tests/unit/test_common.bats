@@ -10,12 +10,16 @@ setup() {
     STACK_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
     LIB_DIR="$STACK_ROOT/scripts/lib"
 
-    # Source the common library
-    source "$LIB_DIR/common.sh"
-
     # Create temporary test directory
     TEST_TMP="$BATS_TEST_TMPDIR/common_tests_$$"
     mkdir -p "$TEST_TMP"
+
+    # Set log directory to temp location (before sourcing common.sh)
+    # This prevents permission errors when logging
+    export LOG_BASE_DIR="$TEST_TMP"
+
+    # Source the common library
+    source "$LIB_DIR/common.sh"
 
     # Note: Color variables (RED, GREEN, etc.) are readonly from common.sh
     # Tests run with colors enabled - output is captured by BATS anyway
@@ -229,33 +233,33 @@ EOF
 }
 
 @test "version_compare detects greater version" {
-    version_compare "2.0.0" "1.0.0"
-    [[ $? -eq 1 ]]
+    run version_compare "2.0.0" "1.0.0"
+    [[ $status -eq 1 ]]
 
-    version_compare "1.5.0" "1.4.0"
-    [[ $? -eq 1 ]]
+    run version_compare "1.5.0" "1.4.0"
+    [[ $status -eq 1 ]]
 
-    version_compare "1.0.10" "1.0.9"
-    [[ $? -eq 1 ]]
+    run version_compare "1.0.10" "1.0.9"
+    [[ $status -eq 1 ]]
 }
 
 @test "version_compare detects lesser version" {
-    version_compare "1.0.0" "2.0.0"
-    [[ $? -eq 2 ]]
+    run version_compare "1.0.0" "2.0.0"
+    [[ $status -eq 2 ]]
 
-    version_compare "1.4.0" "1.5.0"
-    [[ $? -eq 2 ]]
+    run version_compare "1.4.0" "1.5.0"
+    [[ $status -eq 2 ]]
 
-    version_compare "1.0.9" "1.0.10"
-    [[ $? -eq 2 ]]
+    run version_compare "1.0.9" "1.0.10"
+    [[ $status -eq 2 ]]
 }
 
 @test "version_compare handles different length versions" {
     version_compare "1.0" "1.0.0"
     [[ $? -eq 0 ]]
 
-    version_compare "2.0" "1.9.9"
-    [[ $? -eq 1 ]]
+    run version_compare "2.0" "1.9.9"
+    [[ $status -eq 1 ]]
 }
 
 @test "check_binary_version validates correct version" {
@@ -341,7 +345,8 @@ EOF
 
     [[ ! -d "$test_dir" ]]
 
-    ensure_dir "$test_dir"
+    # Use current user/group for testing (root privileges required for default root:root)
+    ensure_dir "$test_dir" "$(id -un)" "$(id -gn)"
 
     [[ -d "$test_dir" ]]
 }
@@ -350,7 +355,8 @@ EOF
     test_dir="$TEST_TMP/existing_directory"
     mkdir -p "$test_dir"
 
-    ensure_dir "$test_dir"
+    # Use current user/group for testing
+    ensure_dir "$test_dir" "$(id -un)" "$(id -gn)"
 
     [[ -d "$test_dir" ]]
 }

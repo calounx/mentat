@@ -407,8 +407,9 @@ if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
     fi
 fi
 
-# Backward compatibility wrappers with deprecation warnings
-# These call the new yaml-parser.sh functions
+# Backward compatibility wrapper for yaml_get
+# Other YAML functions (yaml_get_nested, yaml_get_deep, yaml_get_array, yaml_has_key)
+# are now provided by yaml-parser.sh which was sourced above
 
 # Get a simple key: value from a YAML file
 # Usage: yaml_get "file.yaml" "key"
@@ -418,57 +419,6 @@ yaml_get() {
         log_debug "DEPRECATED: yaml_get() - use yaml_get_value() instead"
     fi
     yaml_get_value "$@"
-}
-
-# Get a nested key value (one level deep)
-# Usage: yaml_get_nested "file.yaml" "parent" "child"
-# Note: Now uses robust parser from yaml-parser.sh
-yaml_get_nested() {
-    # This function is still valid, just reimplemented in yaml-parser.sh
-    # Call through to the new implementation
-    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
-        log_error "YAML parser not loaded"
-        return 1
-    fi
-    # The yaml-parser.sh version is already available
-    command yaml_get_nested "$@"
-}
-
-# Get deeply nested key value (two levels deep)
-# Usage: yaml_get_deep "file.yaml" "level1" "level2" "level3"
-# Note: Now uses robust parser from yaml-parser.sh
-yaml_get_deep() {
-    # This function is still valid, just reimplemented in yaml-parser.sh
-    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
-        log_error "YAML parser not loaded"
-        return 1
-    fi
-    command yaml_get_deep "$@"
-}
-
-# Get an array of values from YAML (list items under a key)
-# Usage: yaml_get_array "file.yaml" "key"
-# Returns lines, one per item
-# Note: Now uses robust parser from yaml-parser.sh
-yaml_get_array() {
-    # This function is still valid, just reimplemented in yaml-parser.sh
-    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
-        log_error "YAML parser not loaded"
-        return 1
-    fi
-    command yaml_get_array "$@"
-}
-
-# Check if a key exists in YAML
-# Usage: yaml_has_key "file.yaml" "key"
-# Note: Now uses robust parser from yaml-parser.sh
-yaml_has_key() {
-    # This function is still valid, just reimplemented in yaml-parser.sh
-    if [[ -z "${YAML_PARSER_LOADED:-}" ]]; then
-        log_error "YAML parser not loaded"
-        return 1
-    fi
-    command yaml_has_key "$@"
 }
 
 #===============================================================================

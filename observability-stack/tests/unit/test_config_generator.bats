@@ -9,13 +9,16 @@ setup() {
     STACK_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
     LIB_DIR="$STACK_ROOT/scripts/lib"
 
-    source "$LIB_DIR/common.sh"
-    source "$LIB_DIR/module-loader.sh"
-    source "$LIB_DIR/config-generator.sh"
-
     # Create temporary test directory
     TEST_TMP="$BATS_TEST_TMPDIR/config_gen_tests_$$"
     mkdir -p "$TEST_TMP"/{config/hosts,modules,prometheus/rules,grafana/dashboards}
+
+    # Set log directory to temp location (before sourcing common.sh)
+    export LOG_BASE_DIR="$TEST_TMP"
+
+    source "$LIB_DIR/common.sh"
+    source "$LIB_DIR/module-loader.sh"
+    source "$LIB_DIR/config-generator.sh"
 
     # Note: Color variables (RED, GREEN, etc.) are readonly from common.sh
     # Tests run with colors enabled - output is captured by BATS anyway

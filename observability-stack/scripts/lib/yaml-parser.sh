@@ -90,9 +90,11 @@ _yaml_validate_path() {
         return 1
     fi
 
-    # Reject paths with newlines or null bytes
-    if [[ "$filepath" == *$'\n'* ]] || [[ "$filepath" == *$'\0'* ]]; then
-        log_error "YAML: File path contains newlines or null bytes"
+    # Reject paths with newlines
+    # Note: Null bytes cannot exist in bash strings, so checking for them is unnecessary
+    # and actually causes bugs (the pattern *$'\0'* matches everything in bash)
+    if [[ "$filepath" == *$'\n'* ]]; then
+        log_error "YAML: File path contains newlines"
         return 1
     fi
 
