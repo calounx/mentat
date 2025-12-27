@@ -18,14 +18,13 @@ We take security seriously. If you discover a security vulnerability, please fol
 
 ### How to Report
 
-1. **Email Security Team**
-   - Send details to: [security@yourdomain.com] (update with actual email)
-   - Use subject line: "SECURITY: [Brief Description]"
-   - Include detailed information (see template below)
+1. **GitHub Security Advisory**
+   - Go to: https://github.com/calounx/mentat/security/advisories/new
+   - This ensures private disclosure until a fix is ready
 
-2. **PGP Encryption (Optional)**
-   - If available, use our PGP key for sensitive information
-   - PGP Key: [Include key ID or link]
+2. **Alternative: GitHub Issue (Non-Critical)**
+   - For lower-severity issues, open a GitHub issue
+   - https://github.com/calounx/mentat/issues
 
 ### What to Include
 
@@ -342,13 +341,12 @@ After a fix is released:
 
 ## Security Contact
 
-**For security issues only:**
-- Email: [security@yourdomain.com] (update with actual email)
+**For security issues:**
+- GitHub Security Advisory: https://github.com/calounx/mentat/security/advisories/new
 - Response time: 24-48 hours
-- Secure communication: PGP available upon request
 
 **For general issues:**
-- GitHub Issues: https://github.com/[owner]/observability-stack/issues
+- GitHub Issues: https://github.com/calounx/mentat/issues
 - Documentation: README.md
 
 ---

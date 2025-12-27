@@ -1,6 +1,29 @@
 # Observability Stack
 
-Production-ready observability platform for Debian/Ubuntu servers. Complete metrics, logs, and traces collection without Docker.
+**Monitor all your servers from one place.** Get alerts before problems become outages.
+
+This is a production-ready observability platform that installs directly on Debian/Ubuntu—no Docker, no Kubernetes, no complexity. Just run one command and you'll have:
+
+- 📊 **Metrics** — CPU, memory, disk, network, database, web server
+- 📝 **Logs** — All your logs in one searchable place
+- 🔍 **Traces** — See requests flow through your systems
+- 🚨 **Alerts** — Email notifications when things go wrong
+
+## Quick Deploy (Fresh VPS)
+
+```bash
+# On a fresh Debian 13 VPS, run:
+curl -sSL https://raw.githubusercontent.com/calounx/mentat/master/observability-stack/deploy/bootstrap.sh | sudo bash
+```
+
+This interactive installer will guide you through setting up either:
+- **Observability VPS** — The central monitoring server
+- **VPSManager** — A Laravel app with full LEMP stack + monitoring
+- **Monitored Host** — Just the exporters for existing servers
+
+See [deploy/README.md](deploy/README.md) for the full deployment guide.
+
+---
 
 ## Stack Components
 
@@ -13,19 +36,21 @@ Production-ready observability platform for Debian/Ubuntu servers. Complete metr
 | **Alertmanager** | Alert routing | 9093 |
 | **Alloy** | OpenTelemetry collector | 12345 |
 
-## Quick Start
+## Manual Installation
+
+If you prefer manual setup or already have the repo cloned:
 
 ```bash
-# Clone and configure
-git clone <repo> && cd observability-stack
+git clone https://github.com/calounx/mentat.git
+cd mentat/observability-stack
+
+# Option 1: Use interactive installer (recommended)
+sudo ./deploy/install.sh
+
+# Option 2: Use legacy scripts
 cp config/global.yaml.example config/global.yaml
 nano config/global.yaml
-
-# Install on observability server
 sudo ./scripts/setup-observability.sh
-
-# Add monitored hosts
-sudo ./scripts/setup-monitored-host.sh <OBSERVABILITY_IP>
 ```
 
 ## Available Modules
