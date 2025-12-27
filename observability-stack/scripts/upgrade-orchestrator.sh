@@ -57,9 +57,12 @@ source "$SCRIPT_DIR/lib/upgrade-manager.sh"
 UPGRADE_CONFIG_FILE="$STACK_ROOT/config/upgrade.yaml"
 DRY_RUN=false
 FORCE_MODE=false
+# shellcheck disable=SC2034  # P1-1: Reserved for future use
 RESUME_MODE=false
+# shellcheck disable=SC2034  # P1-1: Reserved for future use
 ROLLBACK_MODE=false
 AUTO_YES=false
+# shellcheck disable=SC2034  # P1-1: Reserved for future use
 SKIP_BACKUP=false
 UPGRADE_MODE="standard"
 OPERATION=""
@@ -138,11 +141,13 @@ while [[ $# -gt 0 ]]; do
             ;;
         --resume)
             OPERATION="resume"
+            # shellcheck disable=SC2034  # P1-1: Reserved for future use
             RESUME_MODE=true
             shift
             ;;
         --rollback)
             OPERATION="rollback"
+            # shellcheck disable=SC2034  # P1-1: Reserved for future use
             ROLLBACK_MODE=true
             shift
             ;;
@@ -193,6 +198,25 @@ if [[ -z "$OPERATION" ]]; then
 fi
 
 #===============================================================================
+# DEPENDENCY CHECKS
+#===============================================================================
+
+# P0-2: Check for required external dependencies
+# Verifies that jq, curl, and python3 are available before proceeding
+check_dependencies() {
+    local missing=()
+    for cmd in jq curl python3; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_fatal "Missing required dependencies: ${missing[*]}"
+    fi
+}
+
+#===============================================================================
 # INITIALIZATION
 #===============================================================================
 
@@ -203,9 +227,17 @@ log_info ""
 # Check root permissions
 check_root
 
+# P0-2: Verify required dependencies are available
+check_dependencies
+
 # Validate config file exists
 if [[ ! -f "$UPGRADE_CONFIG_FILE" ]]; then
     log_fatal "Upgrade configuration not found: $UPGRADE_CONFIG_FILE"
+fi
+
+# P0-6: Validate configuration file structure
+if ! validate_upgrade_config "$UPGRADE_CONFIG_FILE"; then
+    log_fatal "Invalid upgrade configuration"
 fi
 
 # Initialize state management
@@ -216,6 +248,7 @@ case "$UPGRADE_MODE" in
     safe)
         log_info "Mode: SAFE (maximum safety, manual confirmations)"
         AUTO_YES=false
+        # shellcheck disable=SC2034  # P1-1: Reserved for future use
         SKIP_BACKUP=false
         ;;
     standard)
@@ -430,11 +463,15 @@ upgrade_phase() {
 
     confirm_operation "Proceed with phase $phase upgrade?"
 
-    # Update state
-    state_set_phase "$phase"
+    # Update state - P0-5: Add error handling for state updates
+    if ! state_set_phase "$phase"; then
+        log_error "Failed to update state for phase $phase"
+        return 1
+    fi
 
     local success_count=0
     local fail_count=0
+    # shellcheck disable=SC2034  # P1-1: Reserved for future skip tracking
     local skip_count=0
 
     # Upgrade each component
@@ -505,7 +542,11 @@ upgrade_all() {
 
     # Begin upgrade session
     if [[ "$DRY_RUN" != "true" ]]; then
-        state_begin_upgrade "$UPGRADE_MODE"
+        # P0-5: Add error handling for state updates
+        if ! state_begin_upgrade "$UPGRADE_MODE"; then
+            log_error "Failed to initialize upgrade state"
+            exit 1
+        fi
     fi
 
     local total_success=0
@@ -532,13 +573,20 @@ upgrade_all() {
 
     if [[ $total_fail -eq 0 ]]; then
         if [[ "$DRY_RUN" != "true" ]]; then
-            state_complete_upgrade
+            # P0-5: Add error handling for state updates
+            if ! state_complete_upgrade; then
+                log_error "Failed to update completion state"
+                exit 1
+            fi
         fi
         log_success "=== ALL UPGRADES COMPLETED SUCCESSFULLY ==="
         exit 0
     else
         if [[ "$DRY_RUN" != "true" ]]; then
-            state_fail_upgrade "Phase upgrades failed"
+            # P0-5: Add error handling for state updates
+            if ! state_fail_upgrade "Phase upgrades failed"; then
+                log_error "Failed to update failure state"
+            fi
         fi
         log_error "=== UPGRADE COMPLETED WITH FAILURES ==="
         exit 1
@@ -575,7 +623,11 @@ resume_upgrade() {
 
     if [[ -z "$components" ]]; then
         log_info "All components already completed"
-        state_complete_upgrade
+        # P0-5: Add error handling for state updates
+        if ! state_complete_upgrade; then
+            log_error "Failed to update completion state"
+            exit 1
+        fi
         exit 0
     fi
 
@@ -603,11 +655,18 @@ resume_upgrade() {
     log_info "  Failed: $fail_count"
 
     if [[ $fail_count -eq 0 ]]; then
-        state_complete_upgrade
+        # P0-5: Add error handling for state updates
+        if ! state_complete_upgrade; then
+            log_error "Failed to update completion state"
+            exit 1
+        fi
         log_success "Resume completed successfully"
         exit 0
     else
-        state_fail_upgrade "Resume completed with failures"
+        # P0-5: Add error handling for state updates
+        if ! state_fail_upgrade "Resume completed with failures"; then
+            log_error "Failed to update failure state"
+        fi
         log_error "Resume completed with failures"
         exit 1
     fi
@@ -642,18 +701,29 @@ case "$OPERATION" in
         fi
 
         if [[ "$DRY_RUN" != "true" ]]; then
-            state_begin_upgrade "$UPGRADE_MODE"
+            # P0-5: Add error handling for state updates
+            if ! state_begin_upgrade "$UPGRADE_MODE"; then
+                log_error "Failed to initialize upgrade state"
+                exit 1
+            fi
         fi
 
         if upgrade_single_component "$TARGET_COMPONENT" "$FORCE_MODE"; then
             if [[ "$DRY_RUN" != "true" ]]; then
-                state_complete_upgrade
+                # P0-5: Add error handling for state updates
+                if ! state_complete_upgrade; then
+                    log_error "Failed to update completion state"
+                    exit 1
+                fi
             fi
             log_success "Component upgrade completed"
             exit 0
         else
             if [[ "$DRY_RUN" != "true" ]]; then
-                state_fail_upgrade "Component upgrade failed"
+                # P0-5: Add error handling for state updates
+                if ! state_fail_upgrade "Component upgrade failed"; then
+                    log_error "Failed to update failure state"
+                fi
             fi
             log_error "Component upgrade failed"
             exit 1
@@ -667,18 +737,29 @@ case "$OPERATION" in
         fi
 
         if [[ "$DRY_RUN" != "true" ]]; then
-            state_begin_upgrade "$UPGRADE_MODE"
+            # P0-5: Add error handling for state updates
+            if ! state_begin_upgrade "$UPGRADE_MODE"; then
+                log_error "Failed to initialize upgrade state"
+                exit 1
+            fi
         fi
 
         if upgrade_phase "$TARGET_PHASE"; then
             if [[ "$DRY_RUN" != "true" ]]; then
-                state_complete_upgrade
+                # P0-5: Add error handling for state updates
+                if ! state_complete_upgrade; then
+                    log_error "Failed to update completion state"
+                    exit 1
+                fi
             fi
             log_success "Phase upgrade completed"
             exit 0
         else
             if [[ "$DRY_RUN" != "true" ]]; then
-                state_fail_upgrade "Phase upgrade failed"
+                # P0-5: Add error handling for state updates
+                if ! state_fail_upgrade "Phase upgrade failed"; then
+                    log_error "Failed to update failure state"
+                fi
             fi
             log_error "Phase upgrade failed"
             exit 1

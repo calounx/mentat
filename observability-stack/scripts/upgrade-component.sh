@@ -45,6 +45,23 @@ if [[ -z "$MODULE_VERSION" ]]; then
     log_fatal "MODULE_VERSION environment variable required"
 fi
 
+# P0-2: Check for required external dependencies
+check_dependencies() {
+    local missing=()
+    for cmd in jq curl python3; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_fatal "Missing required dependencies: ${missing[*]}"
+    fi
+}
+
+# Verify dependencies before proceeding
+check_dependencies
+
 log_info "Component Upgrade: $MODULE_NAME -> $MODULE_VERSION"
 
 #===============================================================================

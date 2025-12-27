@@ -309,14 +309,22 @@ get_test_stack_root() {
 # Source a library file in test context
 source_lib() {
     local lib_file="$1"
-    local lib_path="${BATS_TEST_DIRNAME}/../scripts/lib/${lib_file}"
 
-    if [[ -f "$lib_path" ]]; then
-        # shellcheck disable=SC1090
-        source "$lib_path"
-    else
-        return 1
-    fi
+    # Try multiple possible locations
+    local possible_paths=(
+        "${BATS_TEST_DIRNAME}/../scripts/lib/${lib_file}"
+        "${BATS_TEST_DIRNAME}/../../scripts/lib/${lib_file}"
+        "/home/calounx/repositories/mentat/observability-stack/scripts/lib/${lib_file}"
+    )
+
+    for lib_path in "${possible_paths[@]}"; do
+        if [[ -f "$lib_path" ]]; then
+            # shellcheck disable=SC1090
+            source "$lib_path" 2>/dev/null && return 0
+        fi
+    done
+
+    return 1
 }
 
 # Run command and capture output

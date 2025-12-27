@@ -1,0 +1,232 @@
+1..293
+ok 1 jq injection: malicious component name with command substitution
+ok 3 jq injection: component name with pipe to command
+ok 4 jq injection: component name with semicolon command separator
+ok 5 jq injection: component name with newline and command
+ok 6 jq injection: verify state file integrity after malicious input
+ok 8 jq injection: verify jq --arg usage in state_update
+ok 9 jq injection: safe handling of quotes in component name
+ok 10 jq injection: safe handling of special characters
+ok 12 jq injection: test error message injection
+ok 13 jq injection: test checkpoint name injection
+ok 14 jq injection: verify atomic updates prevent race condition exploits
+not ok 15 lock: single process can acquire lock
+# (in test file tests/security/test-lock-race-condition.bats, line 33)
+#   `[ -f "$LOCK_FILE" ]' failed
+ok 16 lock: second process cannot acquire lock while first holds it
+not ok 17 lock: race condition with concurrent acquisition attempts
+# (in test file tests/security/test-lock-race-condition.bats, line 93)
+#   `[ "$success_count" -eq 1 ]' failed
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# [0;31m[ERROR][0m Failed to acquire lock after 5s timeout
+# [0;31m[ERROR][0m Failed to acquire lock after 5s timeout
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+not ok 18 lock: stale lock detection and cleanup
+# (in test file tests/security/test-lock-race-condition.bats, line 108)
+#   `[ "$lock_pid" = "$$" ]' failed
+# cat: /var/lock/observability-setup.lock: No such file or directory
+ok 19 lock: flock is used when available
+not ok 20 lock: fallback mechanism works without flock
+# (in test file tests/security/test-lock-race-condition.bats, line 142)
+#   `[ "$status" -eq 0 ]' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../helpers.bash: line 54: rm: command not found
+ok 21 lock: lock is released on exit trap
+ok 22 lock: lock timeout is respected
+not ok 23 lock: concurrent upgrades are prevented
+# (in test file tests/security/test-lock-race-condition.bats, line 243)
+#   `[[ "$output" =~ "Upgrade 2 failed to acquire lock" ]]' failed
+# [0;34m[INFO][0m Waiting for lock (held by PID )...
+# /home/calounx/repositories/mentat/observability-stack/tests/security/../../scripts/lib/common.sh: line 81: /var/log/observability-setup.log: Permission denied
+ok 24 lock: lock ownership verification
+ok 25 lock: is_locked function works correctly
+ok 26 lock: directory creation failure is handled
+ok 27 lock: multiple sequential acquisitions work
+ok 28 lock: lock prevents race in state file updates
+ok 29 path traversal: component name with ../ sequences
+ok 30 path traversal: component name with absolute path
+ok 31 path traversal: component name with encoded sequences
+ok 32 path traversal: component name with null bytes
+ok 33 path traversal: component name with symlink attack
+ok 35 path traversal: backup path construction is safe
+ok 36 path traversal: checkpoint file paths are safe
+ok 38 path traversal: binary path validation
+ok 39 path traversal: config file paths are validated
+ok 40 path traversal: module paths are restricted
+ok 41 path traversal: prevent access to sensitive files via component name
+ok 42 path traversal: double encoding attack
+ok 43 path traversal: unicode normalization attack
+ok 44 path traversal: verify allowed character set for component names
+ok 45 path traversal: backup restoration prevents directory traversal
+not ok 46 detection command validator blocks shell metacharacters
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 47 detection command validator blocks command substitution
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 48 detection command validator only allows whitelisted commands
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 49 detection command validator accepts safe whitelisted commands
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 50 module names with path traversal are rejected
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 51 module names with absolute paths are rejected
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 52 module names with null bytes are rejected
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 53 host config names with path traversal are rejected
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 54 ensure_dir sets restrictive permissions
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 55 sensitive files are not world-readable
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 56 no hardcoded credentials in library files
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 57 no hardcoded credentials in module manifests
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 58 no AWS credentials in codebase
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 59 no private keys in codebase
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 60 yaml parsing handles malicious input safely
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 61 yaml parsing rejects code execution attempts
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 62 scripts check for root when required
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 63 no usage of sudo in library functions
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 64 template_render doesn't execute shell commands
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 65 template_render handles dangerous characters
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 66 log functions sanitize newlines
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 67 write_config_with_check doesn't follow symlinks
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 68 ensure_dir doesn't follow symlinks to escape directory
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 69 check_port uses safe timeout values
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 70 module manifests don't contain executable code
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 71 detection rules don't download from internet
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 72 temp file creation is secure
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 73 no predictable temp file names in code
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 74 port validation rejects invalid ports
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 75 version validation rejects malformed versions
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 76 error messages don't reveal sensitive paths
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 77 no debug information in production code
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 78 yaml parsing doesn't hang on large files
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+not ok 79 recursive operations have depth limits
+# (from function `setup' in test file tests/security/test_security.bats, line 20)
+#   `RED=''' failed
+# /home/calounx/repositories/mentat/observability-stack/tests/security/test_security.bats: line 20: RED: readonly variable
+ok 80 dependency: validate_prerequisites checks for required commands
+ok 81 dependency: missing command is detected
+ok 82 dependency: multiple commands can be validated
+ok 84 dependency: upgrade fails if dependency not satisfied
+ok 86 dependency: disk space requirement is checked
+ok 87 dependency: service exists check
+ok 88 dependency: memory requirement validation
+ok 89 dependency: network connectivity check
+ok 90 dependency: phase ordering is respected
+ok 92 dependency: binary exists before upgrade
+ok 93 dependency: config file validation
+ok 97 dependency: validate required YAML keys exist
+ok 98 state error: missing state file is handled
+ok 99 state error: corrupted state file is detected
+ok 101 state error: state verification detects corruption
+ok 105 state error: missing component in state is handled
+ok 106 state error: state lock timeout is enforced
+ok 108 state error: error context tracking works
+ok 109 state error: error aggregation collects multiple errors

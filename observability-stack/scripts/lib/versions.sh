@@ -117,6 +117,7 @@ parse_version() {
         PARSED_MINOR="${BASH_REMATCH[2]}"
         PARSED_PATCH="${BASH_REMATCH[3]}"
         PARSED_PRERELEASE="${BASH_REMATCH[5]:-}"
+        # shellcheck disable=SC2034  # P1-1: Exported for callers, currently unused
         PARSED_BUILD="${BASH_REMATCH[7]:-}"
         return 0
     else
@@ -538,6 +539,7 @@ _config_get() {
     load_version_config
 
     # Try component-specific config
+    # shellcheck disable=SC2034  # P1-1: Reserved for future enhanced config lookup
     local config_key="components.${component}.${key}"
     local value
 

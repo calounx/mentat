@@ -46,6 +46,7 @@ CHECKSUM_DIR="${CHECKSUM_DIR:-/var/lib/observability-upgrades/checksums}"
 # Detect installed version of a component
 # Usage: detect_installed_version "component_name"
 # Returns: version string or empty if not installed
+# SECURITY: Validates binary path and adds security checks (M-2 fix)
 detect_installed_version() {
     local component="$1"
     local binary_path
@@ -59,21 +60,52 @@ detect_installed_version() {
         return 1
     fi
 
+    # SECURITY: Validate binary path to prevent path traversal (M-2 fix)
+    if [[ "$binary_path" =~ \.\. ]]; then
+        log_error "SECURITY: Invalid binary path (path traversal): $binary_path"
+        return 1
+    fi
+
     # Check if binary exists and is executable
     if [[ ! -x "$binary_path" ]]; then
         log_debug "Binary not found or not executable: $binary_path"
         return 1
     fi
 
-    # Try to extract version
-    # Most Prometheus tools support --version flag
-    if version=$("$binary_path" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1); then
+    # SECURITY: Ensure binary is owned by root and not world-writable (M-2 fix)
+    if [[ -f "$binary_path" ]]; then
+        local perms owner
+        perms=$(stat -c '%a' "$binary_path" 2>/dev/null)
+        owner=$(stat -c '%U' "$binary_path" 2>/dev/null)
+
+        if [[ "$perms" =~ [2367]$ ]]; then
+            log_error "SECURITY: Binary is world-writable: $binary_path"
+            return 1
+        fi
+
+        if [[ "$owner" != "root" ]]; then
+            log_warn "SECURITY: Binary not owned by root: $binary_path (owner: $owner)"
+        fi
+    fi
+
+    # SECURITY: Try to extract version with timeout to prevent hanging (M-2 fix)
+    if version=$(timeout 5 "$binary_path" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1); then
+        # SECURITY: Validate version format (M-2 fix)
+        if ! validate_version "$version"; then
+            log_error "SECURITY: Invalid version format from binary: $version"
+            return 1
+        fi
         echo "$version"
         return 0
     fi
 
     # Try alternative version flags
-    if version=$("$binary_path" version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1); then
+    if version=$(timeout 5 "$binary_path" version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1); then
+        # SECURITY: Validate version format (M-2 fix)
+        if ! validate_version "$version"; then
+            log_error "SECURITY: Invalid version format from binary: $version"
+            return 1
+        fi
         echo "$version"
         return 0
     fi
@@ -241,8 +273,21 @@ validate_prerequisites() {
 # Create backup of component before upgrade
 # Usage: backup_component "component_name"
 # Returns: backup path on success, empty on failure
+# SECURITY: Validates component name to prevent path traversal (M-3 fix)
 backup_component() {
     local component="$1"
+
+    # SECURITY: Validate component name to prevent path traversal (M-3 fix)
+    if [[ "$component" =~ \.\. ]] || [[ "$component" =~ / ]]; then
+        log_error "SECURITY: Invalid component name (path traversal attempt): $component"
+        return 1
+    fi
+
+    if [[ ! "$component" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "SECURITY: Component name contains invalid characters: $component"
+        return 1
+    fi
+
     local timestamp
     timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_dir="$BACKUP_BASE_DIR/${component}/${timestamp}"
@@ -270,7 +315,12 @@ backup_component() {
     binary_path=$(yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "binary_path" 2>/dev/null || echo "")
 
     if [[ -n "$binary_path" && -f "$binary_path" ]]; then
-        local binary_backup="$backup_dir/$(basename "$binary_path")"
+        # SC2155: Separate declaration and assignment to detect command failures
+        local binary_backup
+        binary_backup="$backup_dir/$(basename "$binary_path")" || {
+            log_error "Failed to determine backup path for $binary_path"
+            return 1
+        }
         cp -p "$binary_path" "$binary_backup"
         log_debug "Backed up binary: $binary_path"
         ((backup_count++))
@@ -350,7 +400,12 @@ restore_from_backup() {
     binary_path=$(yaml_get_nested "$UPGRADE_CONFIG_FILE" "$component" "binary_path" 2>/dev/null || echo "")
 
     if [[ -n "$binary_path" ]]; then
-        local binary_backup="$backup_dir/$(basename "$binary_path")"
+        # SC2155: Separate declaration and assignment to detect command failures
+        local binary_backup
+        binary_backup="$backup_dir/$(basename "$binary_path")" || {
+            log_error "Failed to determine backup path for $binary_path"
+            return 1
+        }
         if [[ -f "$binary_backup" ]]; then
             cp -p "$binary_backup" "$binary_path"
             log_debug "Restored binary: $binary_path"
@@ -653,6 +708,39 @@ rollback_component() {
 #===============================================================================
 # UTILITY FUNCTIONS
 #===============================================================================
+
+# P0-6: Validate upgrade configuration file
+# Usage: validate_upgrade_config "config_file"
+# Returns: 0 if valid, 1 otherwise
+validate_upgrade_config() {
+    local config_file="$1"
+
+    log_info "Validating upgrade configuration..."
+
+    # Check if file exists
+    if [[ ! -f "$config_file" ]]; then
+        log_error "Configuration file not found: $config_file"
+        return 1
+    fi
+
+    # Check if valid YAML using python3
+    if ! python3 -c "import yaml, sys; yaml.safe_load(open('$config_file'))" 2>/dev/null; then
+        log_error "Configuration is not valid YAML"
+        return 1
+    fi
+
+    # Check required top-level keys
+    local required_keys=("components" "phases")
+    for key in "${required_keys[@]}"; do
+        if ! grep -q "^${key}:" "$config_file"; then
+            log_error "Missing required key: $key"
+            return 1
+        fi
+    done
+
+    log_success "Configuration validation passed"
+    return 0
+}
 
 # Get component risk level
 # Usage: get_risk_level "component_name"
