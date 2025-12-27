@@ -1,18 +1,56 @@
 # Promtail Module Manifest
 # Log shipping agent for Loki
+#
+# DEPRECATION NOTICE:
+#   Promtail has been deprecated in favor of Grafana Alloy.
+#   End-of-Life: March 2, 2026
+#   LTS Support Until: February 28, 2026
+#   Migration Target: Grafana Alloy
+#
+# Phase 3 Upgrade: 2.9.3 -> 3.6.3
 
 module:
   name: promtail
   display_name: Promtail
-  version: "2.9.3"
-  description: Log shipping agent that sends logs to Loki
+  version: "3.6.3"
+  description: Log shipping agent that sends logs to Loki (DEPRECATED - migrate to Alloy)
   maintainer: grafana
   category: logging
 
   capabilities:
-    metrics: false
+    metrics: true   # Promtail exposes its own metrics
     logs: true
     traces: false
+
+  # Deprecation status
+  deprecation:
+    deprecated: true
+    eol_date: "2026-03-02"
+    lts_support_until: "2026-02-28"
+    replacement: "grafana-alloy"
+    migration_guide: "https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/"
+    migration_timeline:
+      - phase: "Q1 2025"
+        action: "Upgrade to Promtail 3.6.3"
+      - phase: "Q2 2025"
+        action: "Plan and test Alloy migration in staging"
+      - phase: "Q3 2025"
+        action: "Execute Alloy rollout"
+      - phase: "Q4 2025"
+        action: "Complete migration before EOL"
+
+  # Phase 3 upgrade information
+  upgrade:
+    from_version: "2.9.3"
+    to_version: "3.6.3"
+    risk_level: medium
+    estimated_downtime: "1-2 minutes per host"
+    breaking_changes:
+      - "Version must match Loki major version"
+      - "Label limit enforced at 15 per series (Loki 3.4+)"
+    requires_data_migration: false
+    requires_config_migration: false
+    upgrade_order: "After Loki upgrade (Loki first, then Promtail)"
 
 # Service detection rules
 detection:
@@ -32,7 +70,7 @@ installation:
     archive_type: zip
     binary_name: promtail-linux-amd64
     install_path: /usr/local/bin/promtail
-    checksum_url: ""
+    checksum_url: "https://github.com/grafana/loki/releases/download/v${VERSION}/SHA256SUMS"
 
   system:
     user: promtail
@@ -70,7 +108,7 @@ exporter:
 
   health_check:
     endpoint: "http://localhost:9080/ready"
-    expected_metric: ""
+    expected_metric: "promtail_build_info"
     timeout: 5
 
 # Per-host configuration schema
@@ -102,27 +140,53 @@ dashboard:
   folder: ""
   variables: []
 
-# No alert rules for promtail itself
+# Alert rules for promtail
 alerts:
-  file: ""
-  groups: []
-  thresholds: {}
+  file: "alerts.yml"
+  groups:
+    - promtail_health
+  thresholds:
+    log_entries_dropped: 100
+    connection_errors: 5
 
+# Documentation
 documentation:
   setup_instructions: |
     Promtail requires Loki credentials to push logs.
     Configure loki_url, loki_user, and loki_password in host config.
+
+    IMPORTANT: Promtail is deprecated and will reach EOL on March 2, 2026.
+    Plan migration to Grafana Alloy before this date.
+
+  alloy_migration: |
+    To convert Promtail config to Alloy format:
+
+      alloy convert --source-format=promtail \
+        --output=/etc/alloy/config.alloy \
+        /etc/promtail/promtail.yaml
+
+    See: https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/
 
   troubleshooting:
     - issue: "Logs not appearing in Loki"
       solution: "Check Promtail logs with journalctl -u promtail"
     - issue: "Permission denied reading logs"
       solution: "Ensure promtail user is in adm group"
+    - issue: "Version mismatch warning"
+      solution: "Upgrade Loki FIRST, then Promtail to matching version"
+    - issue: "Too many labels error"
+      solution: "Reduce label count to under 15 per stream"
 
+# Lifecycle hooks
 hooks:
   pre_install: ""
   post_install: ""
-  pre_upgrade: ""
-  post_upgrade: ""
+  pre_upgrade: |
+    # Backup positions file before upgrade
+    # Check Loki version compatibility
+  post_upgrade: |
+    # Verify log shipping resumes
+    # Check for dropped log entries
+    # Display deprecation warning
   pre_uninstall: ""
   post_uninstall: ""

@@ -1,0 +1,188 @@
+# Loki Module Manifest
+# Log aggregation system for observability stack
+# Phase 3 Upgrade: 2.9.3 -> 3.6.3
+
+module:
+  name: loki
+  display_name: Loki
+  version: "3.6.3"
+  description: Log aggregation system with label-based indexing
+  maintainer: grafana
+  category: logging
+
+  capabilities:
+    metrics: true
+    logs: true
+    traces: false
+
+  # Phase 3 upgrade information
+  upgrade:
+    from_version: "2.9.3"
+    to_version: "3.6.3"
+    risk_level: medium
+    estimated_downtime: "5-10 minutes"
+    breaking_changes:
+      - "Loki UI moved to Grafana plugin (grafana-lokioperational-app)"
+      - "table_manager config section removed (use compactor instead)"
+      - "Bloom filter format changed in 3.3 (blocks regenerated)"
+      - "Label limit enforced at 15 per series (3.4+)"
+      - "Default schema is v13 with TSDB"
+    requires_data_migration: false
+    requires_config_migration: true
+
+# Service detection rules
+detection:
+  commands:
+    - "test -f /usr/local/bin/loki"
+  systemd_services:
+    - loki
+  files:
+    - /etc/loki/loki-config.yaml
+    - /etc/loki/config.yaml
+  confidence: 100
+
+# Installation configuration
+installation:
+  binary:
+    url: "https://github.com/grafana/loki/releases/download/v${VERSION}/loki-linux-amd64.zip"
+    archive_type: zip
+    binary_name: loki-linux-amd64
+    install_path: /usr/local/bin/loki
+    checksum_url: "https://github.com/grafana/loki/releases/download/v${VERSION}/SHA256SUMS"
+
+  system:
+    user: loki
+    group: loki
+    create_home: false
+    shell: /bin/false
+    additional_groups: []
+
+  dependencies:
+    modules: []
+    packages:
+      - unzip
+    optional_packages: []
+
+  config_dirs:
+    - path: /etc/loki
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki/chunks
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki/rules
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki/wal
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki/compactor
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki/tsdb-index
+      owner: loki
+      group: loki
+      mode: "0750"
+    - path: /var/lib/loki/tsdb-cache
+      owner: loki
+      group: loki
+      mode: "0750"
+
+# Runtime configuration
+exporter:
+  port: 3100
+
+  flags:
+    - "-config.file=/etc/loki/loki-config.yaml"
+
+  environment: {}
+
+  health_check:
+    endpoint: "http://localhost:3100/ready"
+    expected_metric: "loki_build_info"
+    timeout: 20
+
+# Per-host configuration schema
+host_config:
+  required: []
+
+  optional:
+    retention_period:
+      default: "360h"
+      description: "Log retention period (15 days default)"
+    ingestion_rate_mb:
+      default: 10
+      description: "Max ingestion rate in MB/s"
+    max_streams_per_user:
+      default: 10000
+      description: "Maximum number of active streams per user"
+
+# Prometheus scrape configuration (Loki exposes metrics)
+prometheus:
+  job_name: loki
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  labels:
+    service: loki
+  metric_relabel_configs: []
+
+# Grafana dashboard
+dashboard:
+  file: ""
+  title: ""
+  tags: []
+  folder: ""
+  variables: []
+
+# Alert rules
+alerts:
+  file: "alerts.yml"
+  groups:
+    - loki_health
+  thresholds:
+    ingestion_lag_seconds: 300
+    query_latency_seconds: 10
+
+# Documentation
+documentation:
+  setup_instructions: |
+    Loki requires configuration file at /etc/loki/loki-config.yaml
+    The upgrade system handles configuration migration automatically.
+
+    Post-upgrade steps for 3.x:
+    1. Install Grafana plugin: grafana-cli plugins install grafana-lokioperational-app
+    2. Verify label cardinality is under 15 per series
+    3. Check that compactor retention is working
+
+  troubleshooting:
+    - issue: "Loki won't start after upgrade"
+      solution: "Check journalctl -u loki for errors, verify config syntax"
+    - issue: "High memory usage"
+      solution: "Reduce cache sizes, check stream cardinality"
+    - issue: "Logs older than retention not deleted"
+      solution: "Verify compactor retention_enabled: true"
+    - issue: "Too many labels error"
+      solution: "Reduce Promtail label count to under 15 per stream"
+
+# Lifecycle hooks
+hooks:
+  pre_install: ""
+  post_install: ""
+  pre_upgrade: |
+    # Backup data before upgrade
+    # Clean bloom filter blocks for 3.3+ compatibility
+  post_upgrade: |
+    # Verify WAL replay complete
+    # Check health endpoints
+    # Log reminder about Grafana plugin
+  pre_uninstall: ""
+  post_uninstall: ""

@@ -138,19 +138,36 @@ components:
       binary_name: "prometheus-fail2ban-exporter-linux-amd64"
 
   # Promtail - Log shipping agent for Loki
+  # DEPRECATION NOTICE: Promtail EOL March 2, 2026
+  # Migration target: Grafana Alloy
   promtail:
-    strategy: latest
+    strategy: pinned
     github_repo: grafana/loki
-    fallback_version: "2.9.3"
+    fallback_version: "3.6.3"
     minimum_version: "2.8.0"
+
+    # Phase 3 upgrade configuration
+    upgrade:
+      from_version: "2.9.3"
+      to_version: "3.6.3"
+      risk_level: medium
+      estimated_downtime: "1-2 minutes per host"
+
+    # Deprecation information
+    deprecation:
+      deprecated: true
+      eol_date: "2026-03-02"
+      lts_support_until: "2026-02-28"
+      replacement: "grafana-alloy"
+      migration_guide: "https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/"
 
     constraints:
       architecture: linux-amd64
       exclude_prereleases: true
 
-    # Compatibility with Loki
+    # Compatibility with Loki - must match major version
     compatible_with:
-      loki: ">=2.9.0"
+      loki: ">=3.0.0"
 
     download:
       archive_type: zip
@@ -238,18 +255,33 @@ components:
     minimum_version: "10.0.0"
 
   # Loki - Log aggregation system
+  # Phase 3 Upgrade: 2.9.3 -> 3.6.3
   loki:
-    strategy: latest
+    strategy: pinned
     github_repo: grafana/loki
-    fallback_version: "2.9.3"
+    fallback_version: "3.6.3"
     minimum_version: "2.8.0"
+
+    # Phase 3 upgrade configuration
+    upgrade:
+      from_version: "2.9.3"
+      to_version: "3.6.3"
+      risk_level: medium
+      estimated_downtime: "5-10 minutes"
+      breaking_changes:
+        - "Loki UI moved to Grafana plugin (grafana-lokioperational-app)"
+        - "table_manager config removed (use compactor instead)"
+        - "Bloom filter format changed in 3.3"
+        - "Label limit enforced at 15 per series (3.4+)"
+        - "Default schema is v13 with TSDB"
+      requires_config_migration: true
 
     constraints:
       architecture: linux-amd64
       exclude_prereleases: true
 
     compatible_with:
-      promtail: ">=2.9.0"
+      promtail: ">=3.0.0"
 
     download:
       archive_type: zip
@@ -294,7 +326,7 @@ environments:
 
       promtail:
         strategy: pinned
-        version: "2.9.3"
+        version: "3.6.3"  # Phase 3 upgrade target (DEPRECATED - EOL March 2026)
 
       prometheus:
         strategy: pinned
@@ -302,7 +334,7 @@ environments:
 
       loki:
         strategy: pinned
-        version: "2.9.3"
+        version: "3.6.3"  # Phase 3 upgrade target
 
   # Staging environment - Test latest before production
   staging:
