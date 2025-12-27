@@ -122,14 +122,23 @@ service_restart() {
 
 # Service health check
 # Usage: service_health_check "service_name" "check_command"
+# SECURITY: Executes check_command via bash -c with validation
 service_health_check() {
     local service="$1"
     local check_command="$2"
-    
+
+    # SECURITY: Validate that check_command doesn't contain dangerous patterns
+    # Allow common health check patterns: curl, grep, test, systemctl, etc.
+    if [[ "$check_command" =~ \$\(|\`|;\ *rm|;\ *dd|>\&|eval|exec ]]; then
+        log_error "Unsafe command pattern detected in health check: $check_command"
+        return 1
+    fi
+
     log_debug "Running health check for: $service"
-    
+
+    # SECURITY: Use bash -c instead of eval for better isolation
     retry_until_timeout "Health check: $service" "$SERVICE_HEALTH_TIMEOUT" \
-        eval "$check_command"
+        bash -c "$check_command"
 }
 
 # Wait for service to be ready

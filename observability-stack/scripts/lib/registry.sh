@@ -196,7 +196,13 @@ registry_execute_hook() {
         if declare -f "$hook" &>/dev/null; then
             "$hook" "$module"
         else
-            eval "$hook"
+            # SECURITY: Validate hook command doesn't contain dangerous patterns
+            if [[ "$hook" =~ \$\(|\`|;\ *rm|;\ *dd|>\&|eval|exec ]]; then
+                log_error "Unsafe command pattern detected in hook: $hook"
+                return 1
+            fi
+            # SECURITY: Use bash -c instead of eval for better isolation
+            bash -c "$hook" "$module"
         fi
     fi
 }

@@ -251,6 +251,34 @@ start_service() {
     fi
 }
 
+verify_metrics() {
+    log_info "Verifying metrics endpoint..."
+
+    local max_attempts=10
+    local attempt=0
+    local success=false
+
+    while [[ $attempt -lt $max_attempts ]]; do
+        ((attempt++))
+        if curl -sf "http://localhost:$MODULE_PORT/metrics" | grep -q "node_cpu_seconds_total"; then
+            log_success "Metrics endpoint verified (attempt $attempt/$max_attempts)"
+            success=true
+            break
+        fi
+        log_info "Waiting for metrics endpoint... (attempt $attempt/$max_attempts)"
+        sleep 1
+    done
+
+    if [[ "$success" != "true" ]]; then
+        log_error "Failed to verify metrics endpoint after $max_attempts attempts"
+        log_info "Service logs:"
+        journalctl -u "$SERVICE_NAME" -n 20 --no-pager || true
+        return 1
+    fi
+
+    return 0
+}
+
 
 #===============================================================================
 # MAIN
@@ -292,30 +320,3 @@ main() {
 }
 
 main "$@"
-verify_metrics() {
-    log_info "Verifying metrics endpoint..."
-
-    local max_attempts=10
-    local attempt=0
-    local success=false
-
-    while [[ $attempt -lt $max_attempts ]]; do
-        ((attempt++))
-        if curl -sf "http://localhost:$MODULE_PORT/metrics" | grep -q "node_cpu_seconds_total"; then
-            log_success "Metrics endpoint verified (attempt $attempt/$max_attempts)"
-            success=true
-            break
-        fi
-        log_info "Waiting for metrics endpoint... (attempt $attempt/$max_attempts)"
-        sleep 1
-    done
-
-    if [[ "$success" != "true" ]]; then
-        log_error "Failed to verify metrics endpoint after $max_attempts attempts"
-        log_info "Service logs:"
-        journalctl -u "$SERVICE_NAME" -n 20 --no-pager || true
-        return 1
-    fi
-
-    return 0
-}

@@ -275,8 +275,8 @@ validate_ip() {
     fi
 
     if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        local IFS='.'
-        local -a octets=($ip)
+        local -a octets
+        IFS='.' read -ra octets <<< "$ip"
         if [[ ${octets[0]} -le 255 && ${octets[1]} -le 255 && \
               ${octets[2]} -le 255 && ${octets[3]} -le 255 ]]; then
             stat=0
@@ -1317,8 +1317,8 @@ is_valid_ip() {
     fi
 
     # Validate each octet (0-255)
-    local IFS='.'
-    local -a octets=($ip)
+    local -a octets
+    IFS='.' read -ra octets <<< "$ip"
 
     for octet in "${octets[@]}"; do
         # Remove leading zeros for arithmetic comparison

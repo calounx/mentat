@@ -86,7 +86,9 @@ prompt() {
         fi
     fi
 
-    eval "$var_name='$value'"
+    # SECURITY: Use printf -v instead of eval for variable assignment
+    # Prevents code injection if var_name contains malicious code
+    printf -v "$var_name" '%s' "$value"
 }
 
 confirm() {

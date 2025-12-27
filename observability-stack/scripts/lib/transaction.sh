@@ -156,11 +156,29 @@ EOF
         log_info "Executing rollback hook: $hook"
         echo "  - Rollback hook: $hook" >> "$TX_LOG_FILE"
 
-        if eval "$hook"; then
-            log_debug "Rollback hook succeeded: $hook"
+        # SECURITY: Check if hook is a function or command
+        if declare -f "$hook" &>/dev/null; then
+            # Execute as function
+            if "$hook"; then
+                log_debug "Rollback hook succeeded: $hook"
+            else
+                log_error "Rollback hook failed: $hook"
+                ((rollback_errors++))
+            fi
         else
-            log_error "Rollback hook failed: $hook"
-            ((rollback_errors++))
+            # SECURITY: Validate hook command doesn't contain dangerous patterns
+            if [[ "$hook" =~ \$\(|\`|;\ *rm|;\ *dd|>\&|eval|exec ]]; then
+                log_error "Unsafe command pattern detected in rollback hook: $hook"
+                ((rollback_errors++))
+                continue
+            fi
+            # SECURITY: Use bash -c instead of eval for better isolation
+            if bash -c "$hook"; then
+                log_debug "Rollback hook succeeded: $hook"
+            else
+                log_error "Rollback hook failed: $hook"
+                ((rollback_errors++))
+            fi
         fi
     done
 

@@ -1,0 +1,319 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip tests (emergency deploy)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  DEPLOYMENT_TIMEOUT: 1800  # 30 minutes
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-Deployment Validation
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.determine-env.outputs.environment }}
+      version: ${{ steps.get-version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: determine-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            # Tag pushes go to production
+            echo "environment=production" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get version
+        id: get-version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(git describe --tags --always)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+
+      - name: Install dependencies
+        if: ${{ !inputs.skip_tests }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck bats
+
+      - name: Run ShellCheck
+        if: ${{ !inputs.skip_tests }}
+        run: |
+          ./tests/test-shellcheck.sh
+
+      - name: Run unit tests
+        if: ${{ !inputs.skip_tests }}
+        run: |
+          bats tests/test-common.bats
+
+      - name: Validate configuration templates
+        run: |
+          # Validate YAML syntax
+          for yaml in config/*.yaml.example config/*.yaml.template; do
+            if [ -f "$yaml" ]; then
+              python3 -c "import yaml; yaml.safe_load(open('$yaml'))" || exit 1
+            fi
+          done
+
+      - name: Check for secrets in code
+        run: |
+          # Ensure no hardcoded secrets
+          ! grep -rE "(password|secret|api_key)[[:space:]]*=[[:space:]]*['\"][^'\"]{8,}" scripts/ modules/ || {
+            echo "ERROR: Found potential hardcoded secrets"
+            exit 1
+          }
+
+      - name: Generate deployment manifest
+        run: |
+          cat > deployment-manifest.json <<EOF
+          {
+            "version": "${{ steps.get-version.outputs.version }}",
+            "environment": "${{ steps.determine-env.outputs.environment }}",
+            "commit": "${{ github.sha }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "triggered_by": "${{ github.actor }}",
+            "workflow_run": "${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Upload deployment manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-manifest
+          path: deployment-manifest.json
+
+  deploy:
+    name: Deploy to ${{ needs.pre-deployment-checks.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    environment:
+      name: ${{ needs.pre-deployment-checks.outputs.environment }}
+      url: https://${{ secrets.GRAFANA_DOMAIN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download deployment manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-manifest
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pre-deployment backup
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            cd /opt/observability-stack
+
+            # Create timestamped backup
+            BACKUP_DIR="/var/backups/observability-stack/pre-deploy-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+
+            # Backup configurations
+            for dir in /etc/prometheus /etc/grafana /etc/loki /etc/alertmanager /etc/nginx; do
+              if [ -d "$dir" ]; then
+                cp -r "$dir" "$BACKUP_DIR/" || true
+              fi
+            done
+
+            # Backup current git state
+            git rev-parse HEAD > "$BACKUP_DIR/git-commit.txt"
+
+            echo "Backup created at: $BACKUP_DIR"
+          EOF
+
+      - name: Deploy observability stack
+        timeout-minutes: 30
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            cd /opt/observability-stack
+
+            # Update code
+            git fetch --all --tags
+            git checkout ${{ needs.pre-deployment-checks.outputs.version }}
+
+            # Run preflight checks
+            ./scripts/preflight-check.sh --observability-vps || {
+              echo "ERROR: Preflight checks failed"
+              exit 1
+            }
+
+            # Validate configuration
+            if [ -f ./scripts/validate-config.sh ]; then
+              ./scripts/validate-config.sh || {
+                echo "ERROR: Configuration validation failed"
+                exit 1
+              }
+            fi
+
+            # Deploy
+            ./scripts/setup-observability.sh 2>&1 | tee /var/log/observability-deploy.log
+          EOF
+
+      - name: Post-deployment health check
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            cd /opt/observability-stack
+
+            # Wait for services to stabilize
+            echo "Waiting 30 seconds for services to stabilize..."
+            sleep 30
+
+            # Run health checks
+            ./scripts/health-check.sh || {
+              echo "ERROR: Health checks failed"
+              exit 1
+            }
+          EOF
+
+      - name: Verify external access
+        run: |
+          # Wait for DNS propagation
+          sleep 10
+
+          # Check Grafana is accessible
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://${{ secrets.GRAFANA_DOMAIN }}/api/health)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Grafana health check failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          echo "Grafana is accessible (HTTP 200)"
+
+      - name: Run smoke tests
+        run: |
+          # Test Prometheus
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            -u "${{ secrets.PROMETHEUS_USER }}:${{ secrets.PROMETHEUS_PASSWORD }}" \
+            https://${{ secrets.GRAFANA_DOMAIN }}/prometheus/-/ready)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "WARNING: Prometheus not ready (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+
+  post-deployment:
+    name: Post-Deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, deploy]
+    if: always()
+
+    steps:
+      - name: Record deployment metrics
+        if: success()
+        run: |
+          echo "Deployment successful"
+          echo "Version: ${{ needs.pre-deployment-checks.outputs.version }}"
+          echo "Environment: ${{ needs.pre-deployment-checks.outputs.environment }}"
+          echo "Duration: ${{ job.duration }}"
+
+      - name: Create deployment tag
+        if: success() && needs.pre-deployment-checks.outputs.environment == 'production'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              auto_merge: false,
+              required_contexts: [],
+              description: 'Deployed version ${{ needs.pre-deployment-checks.outputs.version }}'
+            });
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "Deployment completed successfully"
+          echo "Access Grafana at: https://${{ secrets.GRAFANA_DOMAIN }}"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "Deployment failed!"
+          echo "Review logs and consider rollback"
+
+  rollback:
+    name: Rollback (Manual Trigger)
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: failure()
+    environment:
+      name: rollback-approval
+
+    steps:
+      - name: Rollback to previous version
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            cd /opt/observability-stack
+
+            # Find latest backup
+            LATEST_BACKUP=$(ls -t /var/backups/observability-stack/pre-deploy-* | head -1)
+
+            if [ -z "$LATEST_BACKUP" ]; then
+              echo "ERROR: No backup found for rollback"
+              exit 1
+            fi
+
+            echo "Rolling back to: $LATEST_BACKUP"
+
+            # Restore previous git version
+            PREV_COMMIT=$(cat "$LATEST_BACKUP/git-commit.txt")
+            git checkout "$PREV_COMMIT"
+
+            # Uninstall current version
+            ./scripts/setup-observability.sh --uninstall
+
+            # Restore configurations
+            for dir in prometheus grafana loki alertmanager nginx; do
+              if [ -d "$LATEST_BACKUP/$dir" ]; then
+                cp -r "$LATEST_BACKUP/$dir" "/etc/"
+              fi
+            done
+
+            # Reinstall
+            ./scripts/setup-observability.sh
+          EOF
+
+      - name: Verify rollback
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            './scripts/health-check.sh'
