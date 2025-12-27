@@ -1,5 +1,6 @@
 # Loki Configuration
 # Optimized for single-node deployment with 15-day retention
+# Enhanced for Grafana Logs Drilldown plugin support
 
 auth_enabled: false
 
@@ -7,6 +8,13 @@ server:
   http_listen_port: 3100
   grpc_listen_port: 9096
   log_level: info
+
+# Pattern Ingester - Required for Logs Drilldown plugin
+pattern_ingester:
+  enabled: true
+  metric_aggregation:
+    enabled: true
+    loki_address: localhost:3100
 
 common:
   instance_addr: 127.0.0.1
@@ -74,6 +82,10 @@ limits_config:
   max_line_size: 256kb
   reject_old_samples: true
   reject_old_samples_max_age: 168h  # 7 days
+  # Structured metadata - Required for Logs Drilldown plugin
+  allow_structured_metadata: true
+  # Volume endpoint - Required for Logs Drilldown plugin
+  volume_enabled: true
 
 chunk_store_config:
   chunk_cache_config:

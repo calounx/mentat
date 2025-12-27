@@ -1785,6 +1785,53 @@ EOF
     systemctl restart grafana-server
 
     log_success "Grafana configured and started"
+
+    # Install Grafana plugins after service is running
+    install_grafana_plugins
+}
+
+install_grafana_plugins() {
+    log_info "Installing Grafana plugins..."
+
+    # List of plugins to install
+    # grafana-lokiexplore-app: Logs Drilldown - queryless log exploration for Loki
+    # grafana-lokioperational-app: Loki Operational UI (optional, for Loki monitoring)
+    local plugins=(
+        "grafana-lokiexplore-app"      # Logs Drilldown plugin
+    )
+
+    local installed_count=0
+    local failed_count=0
+
+    for plugin in "${plugins[@]}"; do
+        # Check if plugin is already installed
+        if grafana-cli plugins ls 2>/dev/null | grep -q "$plugin"; then
+            log_skip "Plugin $plugin already installed"
+            continue
+        fi
+
+        log_info "Installing plugin: $plugin"
+        if grafana-cli plugins install "$plugin" 2>/dev/null; then
+            log_success "Plugin $plugin installed"
+            ((installed_count++))
+        else
+            log_warn "Failed to install plugin: $plugin (may require Grafana restart)"
+            ((failed_count++))
+        fi
+    done
+
+    # Restart Grafana if plugins were installed
+    if [[ $installed_count -gt 0 ]]; then
+        log_info "Restarting Grafana to load new plugins..."
+        systemctl restart grafana-server
+        sleep 5  # Wait for Grafana to fully start
+    fi
+
+    if [[ $failed_count -eq 0 ]]; then
+        log_success "All Grafana plugins installed successfully"
+    else
+        log_warn "Some plugins failed to install - check grafana-cli output"
+    fi
 }
 
 #===============================================================================

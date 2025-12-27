@@ -529,6 +529,20 @@ install_module() {
         return 1
     fi
 
+    # SECURITY: Validate module before execution
+    # This prevents execution of malicious or insecure modules
+    if [[ "${SKIP_MODULE_VALIDATION:-false}" != "true" ]]; then
+        log_info "Running security validation for module: $module_name"
+        if ! validate_module_security "$module_name"; then
+            log_error "SECURITY: Module '$module_name' failed security validation"
+            log_error "SECURITY: Installation blocked for safety"
+            log_error "To skip validation (NOT RECOMMENDED): export SKIP_MODULE_VALIDATION=true"
+            return 1
+        fi
+    else
+        log_warn "SECURITY WARNING: Module validation skipped (SKIP_MODULE_VALIDATION=true)"
+    fi
+
     log_info "Installing module: $module_name"
 
     # Source the install script with module context

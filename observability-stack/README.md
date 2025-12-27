@@ -25,6 +25,14 @@ obs setup --monitored-host OBSERVABILITY_VPS_IP
 
 For a detailed walkthrough, see [QUICK_START.md](QUICK_START.md).
 
+## Documentation
+
+- [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) - Complete documentation navigation and index
+- [QUICK_START.md](QUICK_START.md) - Step-by-step installation guide
+- [QUICKREF.md](QUICKREF.md) - Quick reference for common operations
+- [SECURITY.md](SECURITY.md) - Security policy and best practices
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+
 ## Unified CLI
 
 The observability stack includes a unified CLI that simplifies all operations:
