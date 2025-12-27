@@ -12,9 +12,9 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('organization_id')->constrained()->cascadeOnDelete();
             $table->string('stripe_subscription_id')->unique();
-            $table->string('stripe_price_id');
+            $table->string('stripe_price_id')->nullable();
             $table->enum('tier', ['starter', 'pro', 'enterprise']);
-            $table->enum('status', ['active', 'past_due', 'cancelled', 'incomplete', 'trialing'])->default('active');
+            $table->string('status')->default('active');
             $table->timestamp('trial_ends_at')->nullable();
             $table->timestamp('current_period_start');
             $table->timestamp('current_period_end');
