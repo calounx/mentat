@@ -1,128 +1,84 @@
-# Security Policy
+# Observability Stack - Security Guide
+
+> For general security policy, vulnerability reporting, and best practices, see the [main Security Policy](../SECURITY.md).
+
+This document covers security considerations specific to the Observability Stack deployment and operations.
 
 ## Supported Versions
 
-We release patches for security vulnerabilities in the following versions:
-
 | Version | Supported          |
 | ------- | ------------------ |
+| 4.0.x   | :white_check_mark: |
 | 3.0.x   | :white_check_mark: |
-| 2.x.x   | :x:                |
-| < 2.0   | :x:                |
+| < 3.0   | :x:                |
 
-## Reporting a Vulnerability
+## Reporting Vulnerabilities
 
-**PLEASE DO NOT REPORT SECURITY VULNERABILITIES THROUGH PUBLIC GITHUB ISSUES.**
+**Please use the unified reporting procedure outlined in [../SECURITY.md](../SECURITY.md#reporting-a-vulnerability).**
 
-We take security seriously. If you discover a security vulnerability, please follow responsible disclosure practices.
-
-### How to Report
-
-1. **GitHub Security Advisory**
-   - Go to: https://github.com/calounx/mentat/security/advisories/new
-   - This ensures private disclosure until a fix is ready
-
-2. **Alternative: GitHub Issue (Non-Critical)**
-   - For lower-severity issues, open a GitHub issue
-   - https://github.com/calounx/mentat/issues
-
-### What to Include
-
-Please include as much information as possible:
-
-```
-Subject: SECURITY: [Brief Description]
-
-Vulnerability Details:
-- Component/Script affected: [e.g., setup-observability.sh]
-- Type of vulnerability: [e.g., command injection, path traversal]
-- Attack vector: [How can it be exploited?]
-- Impact: [What can an attacker achieve?]
-- Affected versions: [Which versions are vulnerable?]
-
-Reproduction Steps:
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
-
-Proof of Concept:
-[Code or commands to demonstrate the vulnerability]
-
-Suggested Fix:
-[If you have ideas for fixing it]
-
-Additional Context:
-[Any other relevant information]
-```
-
-### What to Expect
-
-1. **Acknowledgment**: Within 24-48 hours
-2. **Initial Assessment**: Within 3-5 business days
-3. **Status Updates**: Weekly until resolved
-4. **Resolution**: Depends on severity
-   - Critical: 7 days
-   - High: 14 days
-   - Medium: 30 days
-   - Low: 90 days
-
-### Our Commitment
-
-- We will acknowledge your report promptly
-- We will investigate and validate the issue
-- We will keep you informed of our progress
-- We will notify you when the issue is fixed
-- We will publicly acknowledge your contribution (if you wish)
+For Observability Stack-specific vulnerabilities, include:
+- Component/script affected (e.g., `setup-observability.sh`)
+- Steps to reproduce
+- Impact assessment
 
 ---
 
-## Security Considerations
+## Secrets Management
 
-### Secrets Management
+### Built-in Encryption System
 
-**DO NOT commit secrets to the repository:**
-
-- API keys
-- Passwords
-- Private keys
-- Certificates
-- Tokens
-
-**Use the built-in secrets management:**
+The Observability Stack uses systemd credentials for secure secrets storage:
 
 ```bash
-# Store secrets securely
+# Initialize secrets securely
 ./scripts/init-secrets.sh
 
-# Secrets location
+# Secrets are stored encrypted at:
 /opt/observability-stack/secrets/
 
-# Secrets are encrypted using systemd credentials
-# Reference in config: ${SECRET:name}
+# Reference secrets in config files:
+${SECRET:grafana_admin_password}
+${SECRET:smtp_password}
 ```
 
-### Secure Installation
+### What Should Be Secret
 
-**Always:**
+**NEVER commit to repository:**
+- API keys and tokens
+- Passwords (Grafana, SMTP, HTTP Basic Auth)
+- Private keys and certificates
+- Domain names (use placeholders in examples)
+- Email addresses (use examples in templates)
+- `config/global.yaml` with real values
 
-1. Use strong passwords (16+ characters)
-2. Enable SSL/TLS for all external access
-3. Use firewall rules to restrict access
-4. Keep system and packages updated
-5. Use secure SMTP credentials
-6. Validate configuration before deployment
+**Secure file permissions:**
+```bash
+# Secrets directory permissions
+chmod 700 /opt/observability-stack/secrets/
+chmod 600 /opt/observability-stack/secrets/*
 
-**Never:**
+# Config file permissions (if contains sensitive data)
+chmod 600 config/global.yaml
+```
 
-1. Use default passwords in production
-2. Expose services directly to internet without auth
-3. Disable SSL/TLS in production
-4. Commit secrets or credentials
-5. Run with overly permissive firewall rules
+### Secrets Rotation
 
-### Configuration Security
+To rotate secrets:
 
-**Check your configuration:**
+```bash
+# 1. Update the secret file
+sudo nano /opt/observability-stack/secrets/grafana_admin_password
+
+# 2. Reload the affected service
+sudo systemctl reload grafana-server
+
+# 3. Update Grafana UI password
+# Log into Grafana and update in Settings > Profile
+```
+
+### Configuration Validation
+
+**Check your configuration before deployment:**
 
 ```bash
 # Validate configuration
@@ -132,236 +88,434 @@ Additional Context:
 grep -r "CHANGE_ME\|YOUR_\|EXAMPLE" config/
 
 # Check file permissions
-ls -la secrets/
-# Should be: -rw------- (600)
+ls -la /opt/observability-stack/secrets/
+# Should show: drwx------ and -rw-------
 ```
 
-### Network Security
+---
 
-**Firewall Configuration:**
+## Network Security
 
-```yaml
-Observability VPS:
-  - Port 22 (SSH): Restricted to your IP
-  - Port 80 (HTTP): Public (for ACME challenges only)
-  - Port 443 (HTTPS): Public (Grafana access)
-  - All other ports: Localhost only
+### Firewall Configuration
 
-Monitored Hosts:
-  - Port 22 (SSH): Restricted to your IP
-  - Exporter ports (9100-9253): Only from Observability VPS IP
-  - All other ports: Default deny
-```
-
-### Authentication
-
-**Multiple layers of authentication:**
-
-1. **Grafana**: Username/password (change default!)
-2. **Prometheus/Loki**: HTTP Basic Auth via Nginx
-3. **SSH**: Key-based authentication recommended
-4. **Exporters**: Firewall-restricted (no auth needed)
-
-### SSL/TLS
-
-**Automatic SSL with Let's Encrypt:**
+**Recommended UFW rules:**
 
 ```bash
-# Certificates are automatically:
-- Obtained during setup
-- Renewed before expiry
-- Monitored by systemd timer
+# Observability VPS
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow from YOUR_IP to any port 22  # SSH (restricted)
+ufw allow 80/tcp                        # HTTP (ACME challenges)
+ufw allow 443/tcp                       # HTTPS (Grafana)
+ufw enable
 
-# Manual renewal:
-certbot renew --force-renewal
-systemctl reload nginx
+# Monitored hosts
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow from YOUR_IP to any port 22              # SSH (restricted)
+ufw allow from OBSERVABILITY_VPS_IP to any port 9100  # Node Exporter
+ufw allow from OBSERVABILITY_VPS_IP to any port 9253  # phpfpm Exporter
+ufw enable
+```
+
+### Service Exposure
+
+**Port mapping:**
+
+| Service    | Port | Exposure | Authentication |
+|------------|------|----------|----------------|
+| Grafana    | 3000 | Nginx → 443 | Username/Password |
+| Prometheus | 9090 | Nginx → 443/prometheus | HTTP Basic Auth |
+| Loki       | 3100 | Nginx → 443/loki | HTTP Basic Auth |
+| Alertmanager | 9093 | Localhost only | None needed |
+| Node Exporter | 9100 | Firewall restricted | None needed |
+
+**Key principle:** Only Grafana is publicly accessible (via HTTPS with authentication). All other services are either localhost-only or firewall-restricted.
+
+### SSL/TLS Configuration
+
+**Automated with Let's Encrypt:**
+
+```bash
+# Certificates obtained automatically during setup
+# Auto-renewal via systemd timer: certbot-renewal.timer
+
+# Manual renewal if needed
+sudo certbot renew --force-renewal
+sudo systemctl reload nginx
+
+# Check certificate expiry
+sudo certbot certificates
+```
+
+**Strong TLS configuration (Nginx):**
+- TLS 1.2 and 1.3 only
+- Strong cipher suites
+- HSTS enabled
+- OCSP stapling
+
+---
+
+## Authentication & Authorization
+
+### Grafana Authentication
+
+**Initial setup:**
+```bash
+# Default credentials (CHANGE IMMEDIATELY):
+Username: admin
+Password: <from config/global.yaml or secrets>
+
+# Change on first login via Grafana UI:
+# Settings > Profile > Change Password
+```
+
+**Security hardening:**
+- Enable multi-factor authentication (optional)
+- Use strong passwords (16+ characters)
+- Configure session timeout
+- Enable audit logging
+- Limit organization access
+
+### Prometheus/Loki Authentication
+
+**HTTP Basic Auth via Nginx:**
+
+```bash
+# Create htpasswd file
+sudo htpasswd -c /etc/nginx/.htpasswd prometheus_user
+
+# Nginx automatically enforces authentication
+# Configure clients with credentials:
+curl -u prometheus_user:password https://domain.com/prometheus/api/v1/query
+```
+
+### SSH Authentication
+
+**Best practices:**
+
+```bash
+# Use SSH keys, not passwords
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Add public key to server
+ssh-copy-id -i ~/.ssh/id_ed25519.pub user@server
+
+# Disable password authentication
+sudo nano /etc/ssh/sshd_config
+# Set: PasswordAuthentication no
+sudo systemctl restart sshd
+
+# Restrict SSH to specific IPs (optional)
+ufw delete allow 22
+ufw allow from YOUR_IP to any port 22
 ```
 
 ---
 
 ## Security Features
 
-### Implemented Protections
+### Input Validation
 
-✅ **Input Validation**
-- All user inputs validated
-- Path traversal prevention
-- Command injection prevention
-- JQ injection prevention
-
-✅ **Secrets Management**
-- Encrypted storage via systemd credentials
-- Secure file permissions (600)
-- No secrets in git repository
-- No secrets in process arguments
-
-✅ **Network Security**
-- Automated firewall configuration
-- SSL/TLS by default
-- Basic auth for APIs
-- IP-based restrictions
-
-✅ **Access Control**
-- Root-only installation
-- Service-specific users
-- Principle of least privilege
-- File permission enforcement
-
-### Security Testing
-
-**Automated security tests:**
+All scripts implement comprehensive input validation:
 
 ```bash
-# Run security test suite
-make test-security
-
-# Specific security tests
-bats tests/security/test-jq-injection.bats
-bats tests/security/test-path-traversal.bats
-bats tests/security/test-lock-race-condition.bats
-
-# ShellCheck for common issues
-make test-shellcheck
+✓ Path traversal prevention (../ sequences blocked)
+✓ Command injection prevention (sanitized user inputs)
+✓ JQ injection prevention (safe JSON processing)
+✓ Domain/email validation (regex patterns)
+✓ Version string validation (semantic versioning)
 ```
 
-### Security Audit History
+### File Permissions
+
+Enforced automatically by installation scripts:
+
+```bash
+# Service files
+-rw-r--r-- /etc/systemd/system/*.service
+
+# Secrets
+drwx------ /opt/observability-stack/secrets/
+-rw------- /opt/observability-stack/secrets/*
+
+# Scripts
+-rwxr-xr-x /opt/observability-stack/scripts/*.sh
+
+# Config files
+-rw-r--r-- /opt/observability-stack/config/*.yaml
+```
+
+### Lock Files
+
+Prevent concurrent script execution:
+
+```bash
+# Atomic lock creation
+mkdir /var/lock/observability-stack-setup.lock 2>/dev/null || exit 1
+
+# Automatic cleanup on script exit
+trap 'rmdir /var/lock/observability-stack-setup.lock 2>/dev/null' EXIT
+```
+
+---
+
+## Security Testing
+
+### Automated Test Suite
+
+**Run all security tests:**
+
+```bash
+cd observability-stack
+make test-security
+```
+
+**Individual test categories:**
+
+```bash
+# JQ injection vulnerability tests
+bats tests/security/test-jq-injection.bats
+
+# Path traversal vulnerability tests
+bats tests/security/test-path-traversal.bats
+
+# Lock file race condition tests
+bats tests/security/test-lock-race-condition.bats
+
+# Version validation tests
+bats tests/security/test-version-validation.bats
+```
+
+**Static analysis:**
+
+```bash
+# ShellCheck for shell script issues
+make test-shellcheck
+
+# Dependency vulnerability scanning
+# (manually check for component updates)
+```
+
+### Manual Security Audits
+
+**Pre-deployment checklist:**
+
+```bash
+# 1. Validate configuration
+./scripts/validate-config.sh
+
+# 2. Run preflight checks
+./observability preflight --observability-vps
+
+# 3. Review secrets
+sudo ls -la /opt/observability-stack/secrets/
+# Should show: drwx------ and -rw-------
+
+# 4. Test authentication
+curl -k https://your-domain.com/grafana/api/health
+# Should require authentication
+
+# 5. Verify firewall
+sudo ufw status verbose
+# Should show only necessary ports open
+```
+
+---
+
+## Security Audit History
 
 | Date | Version | Auditor | Findings | Status |
 |------|---------|---------|----------|--------|
-| 2025-12-27 | v3.0.0 | Claude Sonnet 4.5 | 4 issues found | ✅ All fixed |
-| | | | H-1: JQ injection | ✅ Fixed |
-| | | | H-2: Lock race | ✅ Fixed |
-| | | | M-2: Version validation | ✅ Fixed |
-| | | | M-3: Path traversal | ✅ Fixed |
+| 2025-12-27 | v4.0.0 | Claude Sonnet 4.5 | 4 issues found | All fixed |
+| | | | H-1: JQ injection in config parsing | Fixed in v4.0.0 |
+| | | | H-2: Lock file race condition | Fixed in v4.0.0 |
+| | | | M-2: Inadequate version validation | Fixed in v4.0.0 |
+| | | | M-3: Path traversal in host scripts | Fixed in v4.0.0 |
+| 2025-12-27 | v3.0.0 | Claude Sonnet 4.5 | Initial security review | All addressed |
+
+**Detailed audit reports:**
+- [Security Audit Report v4.0.0](docs/security/SECURITY-AUDIT-REPORT.md)
+- [Security Implementation Summary](docs/security/SECURITY-IMPLEMENTATION-SUMMARY.md)
 
 ---
 
-## Known Security Issues
+## Known Security Considerations
 
-### Currently None
+### Installation Scripts
 
-All known security issues in version 3.0.0 have been addressed.
+**Privilege requirements:**
+- Scripts require root access for system-level changes
+- Always review scripts before running: `less setup-observability.sh`
+- Download from trusted sources only
+- Verify checksums if available
 
-### Previously Addressed
+**What scripts do:**
+- Install system packages (apt)
+- Create system users and groups
+- Modify systemd services
+- Configure firewall rules
+- Set file permissions
 
-See [Security Audit Report](docs/security/SECURITY-AUDIT-REPORT.md) for details on previously identified and fixed issues.
+### Configuration Files
 
----
+**Sensitive data locations:**
 
-## Security Best Practices
+```bash
+# Contains secrets - DO NOT COMMIT
+config/global.yaml
 
-### For Users
+# Safe to commit (examples only)
+config/global.yaml.example
 
-**When Deploying:**
+# Auto-generated - verify before committing
+config/generated/*.yaml
+```
 
-1. Run preflight checks: `./observability preflight --observability-vps`
-2. Validate configuration: `./scripts/validate-config.sh`
-3. Change all default passwords
-4. Use strong passwords (16+ chars, mixed case, numbers, symbols)
-5. Enable firewall: `ufw enable`
-6. Keep system updated: `apt update && apt upgrade`
-7. Use SSH keys instead of passwords
-8. Restrict SSH access by IP if possible
+### Exporter Security
 
-**Regular Maintenance:**
+**Node Exporter (port 9100):**
+- Exposes system metrics
+- No built-in authentication
+- MUST be firewall-restricted to Prometheus server IP only
+- Consider using TLS (optional, adds complexity)
 
-1. Monitor for security alerts
-2. Update regularly: `./scripts/upgrade-orchestrator.sh --all`
-3. Review firewall rules: `ufw status`
-4. Check for failed login attempts: `journalctl -u sshd | grep Failed`
-5. Verify SSL certificate expiry: `certbot certificates`
-6. Review Grafana access logs
-7. Rotate secrets periodically
+**phpfpm Exporter (port 9253):**
+- Exposes PHP-FPM metrics
+- No built-in authentication
+- Firewall-restricted to Prometheus server IP only
 
-### For Developers
-
-**When Contributing:**
-
-1. Never commit secrets or credentials
-2. Use ShellCheck on all scripts
-3. Run security tests before submitting PR
-4. Follow secure coding guidelines
-5. Document security implications of changes
-6. Use proper input validation
-7. Avoid shell injection vulnerabilities
-8. Handle errors securely
-
-**Code Review Checklist:**
-
-- [ ] No hardcoded secrets
-- [ ] Input validation present
-- [ ] No command injection vulnerabilities
-- [ ] Proper error handling
-- [ ] File permissions set correctly
-- [ ] Network exposure minimized
-- [ ] Authentication required where needed
-- [ ] Secure defaults used
+**MySQL Exporter (optional):**
+- Requires MySQL credentials
+- Store credentials securely
+- Use read-only MySQL user with limited privileges
 
 ---
 
-## Vulnerability Disclosure Timeline
+## Incident Response
 
-### Our Process
+### Security Event Detection
 
-1. **Day 0**: Vulnerability reported
-2. **Day 1-2**: Acknowledgment sent to reporter
-3. **Day 3-5**: Initial assessment and validation
-4. **Day 7-30**: Fix developed (depending on severity)
-5. **Day 30-45**: Fix tested and released
-6. **Day 45-60**: Public disclosure with credit
+**Monitor these logs:**
 
-### Public Disclosure
+```bash
+# Authentication failures
+journalctl -u sshd | grep Failed
+journalctl -u grafana-server | grep authentication
 
-After a fix is released:
+# Nginx access logs (unusual activity)
+tail -f /var/log/nginx/access.log
 
-1. Security advisory published on GitHub
-2. CHANGELOG.md updated with security notes
-3. All users notified of security update
-4. Reporter credited (if desired)
+# Firewall blocks
+journalctl -k | grep UFW
+
+# Systemd service failures
+systemctl --failed
+```
+
+### Breach Response Procedure
+
+**If you suspect a security breach:**
+
+1. **Immediate actions:**
+   ```bash
+   # Isolate the server
+   sudo ufw default deny incoming
+
+   # Stop affected services
+   sudo systemctl stop grafana-server prometheus loki
+
+   # Create forensic snapshot
+   sudo journalctl > /tmp/incident-$(date +%Y%m%d-%H%M%S).log
+   ```
+
+2. **Investigation:**
+   - Review authentication logs
+   - Check for unauthorized users: `cat /etc/passwd`
+   - Review recent file modifications: `find / -mtime -1 -type f`
+   - Check for suspicious processes: `ps aux | less`
+   - Review Grafana access logs
+
+3. **Remediation:**
+   - Rotate all credentials immediately
+   - Review and update firewall rules
+   - Apply security patches
+   - Restore from known-good backup if needed
+
+4. **Recovery:**
+   - Re-enable services only after verifying security
+   - Monitor closely for 72 hours
+   - Document incident and lessons learned
+
+5. **Reporting:**
+   - Report to main repository: [Security Advisory](https://github.com/calounx/mentat/security/advisories/new)
+   - Update security documentation based on findings
 
 ---
 
-## Security Resources
+## Best Practices Summary
+
+### Deployment
+
+1. Run preflight checks before installation
+2. Use strong, unique passwords (16+ characters)
+3. Change all default credentials immediately
+4. Enable and configure firewall
+5. Use SSH keys instead of passwords
+6. Validate configuration before going live
+7. Enable SSL/TLS (automatic with Let's Encrypt)
+
+### Operations
+
+1. Monitor logs weekly for suspicious activity
+2. Review Grafana dashboards for anomalies
+3. Keep system packages updated: `apt update && apt upgrade`
+4. Rotate secrets every 90 days
+5. Test backup restoration quarterly
+6. Review user access quarterly
+7. Check SSL certificate expiry monthly
+
+### Updates
+
+1. Read changelog before updating
+2. Backup configuration files
+3. Test updates in staging environment (if available)
+4. Run security tests after updates: `make test-security`
+5. Verify all services after updates: `systemctl status grafana-server prometheus loki`
+
+---
+
+## Additional Resources
 
 ### Internal Documentation
 
-- [Security Audit Report](docs/security/SECURITY-AUDIT-REPORT.md)
-- [Security Implementation Summary](docs/security/SECURITY-IMPLEMENTATION-SUMMARY.md)
-- [Security Quick Reference](SECURITY_QUICK_REFERENCE.md)
-- [Secrets Management Guide](docs/SECRETS.md)
+- [Main Security Policy](../SECURITY.md) - Unified security policy and reporting
+- [Security Test Guide](tests/SECURITY_TEST_GUIDE.md) - How to run security tests
+- [Secrets Management Guide](docs/SECRETS.md) - Detailed secrets documentation
+- [Security Quick Reference](SECURITY_QUICK_REFERENCE.md) - One-page security checklist
 
 ### External Resources
 
+- [Grafana Security](https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/)
+- [Prometheus Security](https://prometheus.io/docs/operating/security/)
+- [Loki Security](https://grafana.com/docs/loki/latest/operations/authentication/)
 - [OWASP Bash Security](https://owasp.org/www-community/vulnerabilities/Command_Injection)
-- [ShellCheck](https://www.shellcheck.net/)
-- [CIS Benchmarks](https://www.cisecurity.org/cis-benchmarks/)
-- [Debian Security](https://www.debian.org/security/)
+- [CIS Debian Benchmarks](https://www.cisecurity.org/benchmark/debian_linux)
 
 ---
 
-## Security Contact
+## Contact
 
-**For security issues:**
-- GitHub Security Advisory: https://github.com/calounx/mentat/security/advisories/new
-- Response time: 24-48 hours
+**For security vulnerabilities:**
+- Report via: [GitHub Security Advisory](https://github.com/calounx/mentat/security/advisories/new)
+- See reporting procedures in [main Security Policy](../SECURITY.md)
 
 **For general issues:**
 - GitHub Issues: https://github.com/calounx/mentat/issues
-- Documentation: README.md
+- Documentation: [README.md](README.md)
 
 ---
 
-## Acknowledgments
-
-We would like to thank the following security researchers for responsibly disclosing vulnerabilities:
-
-- [Name] - [Brief description] - [Date]
-- (Future acknowledgments will be added here)
-
----
-
-**Last Updated:** 2025-12-27
-
-**Security Policy Version:** 1.0
-
-**Next Review:** 2026-01-27 (quarterly reviews)
+**Last Updated:** 2025-12-28
+**Document Version:** 2.0 (consolidated)
+**Applies to:** Observability Stack v4.0.x and v3.0.x
