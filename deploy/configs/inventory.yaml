@@ -1,0 +1,54 @@
+# CHOM Infrastructure Inventory
+# Configure your VPS servers here
+
+observability:
+  # OVH VPS 1 - Small instance for monitoring stack
+  hostname: obs.example.com
+  ip: 0.0.0.0  # Replace with actual IP
+  ssh_user: root
+  ssh_port: 22
+  specs:
+    cpu: 1
+    memory_mb: 2048
+    disk_gb: 20
+  components:
+    - prometheus
+    - loki
+    - grafana
+    - alertmanager
+    - nginx
+  config:
+    grafana_domain: grafana.example.com
+    alertmanager_email: alerts@example.com
+    retention_days: 15
+    smtp:
+      host: smtp.example.com
+      port: 587
+      user: ""
+      password: ""
+
+vpsmanager:
+  # OVH VPS 2 - Main instance for WordPress hosting
+  hostname: wp.example.com
+  ip: 0.0.0.0  # Replace with actual IP
+  ssh_user: root
+  ssh_port: 22
+  specs:
+    cpu: 2
+    memory_mb: 4096
+    disk_gb: 80
+  components:
+    - nginx
+    - php-fpm
+    - mariadb
+    - redis
+    - vpsmanager
+  config:
+    php_versions:
+      - "8.2"
+      - "8.4"
+    default_php: "8.2"
+    observability_server: obs.example.com
+
+# SSH key for deployment (will be generated if not exists)
+ssh_key_path: ./keys/chom_deploy_key
