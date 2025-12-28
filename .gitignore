@@ -51,3 +51,39 @@ chom/*.log
 # OS files
 chom/.DS_Store
 chom/Thumbs.db
+
+# ------------------------------------------------------------------------------
+# Observability Stack (observability-stack/)
+# ------------------------------------------------------------------------------
+# Configuration files with sensitive data
+observability-stack/config/global.yaml
+observability-stack/config/hosts/*.yaml
+!observability-stack/config/hosts/example-host.yaml.template
+
+# Secrets directory (except README)
+observability-stack/secrets/*
+!observability-stack/secrets/README.md
+
+# Test artifacts
+observability-stack/test-results*.xml
+observability-stack/shellcheck-results.txt
+observability-stack/coverage-summary.md
+
+# State files
+observability-stack/.upgrade-state.json
+
+# SSH keys
+observability-stack/*.pem
+observability-stack/*.key
+!observability-stack/*.key.example
+
+# Build artifacts
+observability-stack/dist/
+observability-stack/build/
+
+# OS files (general)
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

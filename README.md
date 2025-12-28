@@ -27,6 +27,57 @@ mentat/
 
 ---
 
+## 🚀 Quick Start - Which Deployment Should I Use?
+
+### Decision Tree
+
+**I want to...**
+
+1. **Monitor existing servers** → Use **Observability Stack**
+   - Deploy to a dedicated monitoring VPS
+   - Add exporters to servers you want to monitor
+   - Access dashboards via Grafana
+
+2. **Build a hosting platform** → Use **CHOM + Observability Stack**
+   - Deploy Observability Stack first (monitoring infrastructure)
+   - Deploy CHOM on a separate VPS (control plane)
+   - CHOM will manage sites and integrate with observability
+
+3. **Just try it locally** → Use **CHOM Development Mode**
+   - Clone the repo and run `cd chom && php artisan serve`
+   - Great for testing features and development
+
+### Deployment Paths
+
+| What You Need | Deploy Observability Stack | Deploy CHOM | Notes |
+|---------------|:-------------------------:|:-----------:|-------|
+| **Monitor servers only** | ✅ | ❌ | Use `observability-stack/deploy/bootstrap.sh` |
+| **Full hosting platform** | ✅ First | ✅ Second | Deploy obs stack, then configure CHOM to connect |
+| **Local development** | ❌ | ✅ | Use `php artisan serve` for CHOM |
+| **VPSManager (Laravel + Monitoring)** | ✅ Via installer | ❌ | Use bootstrap.sh and select "VPSManager" role |
+
+### Deployment Directories Explained
+
+**Two separate deployment systems exist:**
+
+1. **`observability-stack/deploy/`** - Standalone monitoring infrastructure
+   - Script: `bootstrap.sh` or `install.sh`
+   - Uses: Latest versions from this repository
+   - For: Dedicated observability VPS or adding exporters to existing servers
+
+2. **`chom/deploy/`** - CHOM infrastructure deployment
+   - Scripts: `setup-observability-vps.sh`, `setup-vpsmanager-vps.sh`
+   - Uses: Hardcoded stable versions
+   - For: Setting up the full CHOM hosting platform
+
+**When to use which:**
+
+- **Use `observability-stack/deploy/`** if you want standalone monitoring
+- **Use `chom/deploy/`** if you're deploying the full CHOM platform
+- **Don't mix them** - choose one deployment approach per VPS
+
+---
+
 # Observability Stack
 
 **Monitor all your servers from one place.** Get alerts before problems become outages.

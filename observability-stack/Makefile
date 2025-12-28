@@ -134,15 +134,15 @@ pre-commit: test-quick validate-yaml syntax-check ## Run pre-commit checks
 .PHONY: setup-hooks
 setup-hooks: ## Setup git pre-commit hooks
 	@echo "$(BLUE)Setting up git hooks...$(NC)"
-	@mkdir -p .git/hooks
-	@cat > .git/hooks/pre-commit <<'EOF'
-#!/bin/bash
-# Pre-commit hook - run tests before commit
-echo "Running pre-commit checks..."
-make pre-commit || exit 1
-echo "Pre-commit checks passed!"
-EOF
-	@chmod +x .git/hooks/pre-commit
+	@mkdir -p ../.git/hooks
+	@printf '%s\n' \
+		'#!/bin/bash' \
+		'# Pre-commit hook - run tests before commit' \
+		'echo "Running pre-commit checks..."' \
+		'cd observability-stack && make pre-commit || exit 1' \
+		'echo "Pre-commit checks passed!"' \
+		> ../.git/hooks/pre-commit
+	@chmod +x ../.git/hooks/pre-commit
 	@echo "$(GREEN)Git hooks installed!$(NC)"
 	@echo "Tests will run automatically before each commit"
 

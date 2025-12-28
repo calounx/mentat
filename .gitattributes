@@ -1,0 +1,63 @@
+# Auto-detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Shell scripts must always use LF
+*.sh text eol=lf
+
+# PHP files
+*.php diff=php
+
+# JavaScript files
+*.js text
+*.mjs text
+*.json text
+
+# YAML files
+*.yaml linguist-language=YAML
+*.yml linguist-language=YAML
+
+# Markdown files
+*.md diff=markdown
+
+# Configuration files
+*.conf text
+*.config text
+*.env text
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Archives
+*.tar binary
+*.gz binary
+*.zip binary
+
+# Fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Export ignore (exclude from git archive)
+.github export-ignore
+.claude export-ignore
+.editorconfig export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
+CONTRIBUTING.md export-ignore
+observability-stack/tests/ export-ignore
+chom/tests/ export-ignore
+chom/.phpunit.cache export-ignore
+observability-stack/Makefile export-ignore
+
+# Linguist language overrides
+observability-stack/scripts/*.sh linguist-language=Shell
+observability-stack/deploy/*.sh linguist-language=Shell
+chom/app/**/*.php linguist-language=PHP
+chom/resources/js/**/*.js linguist-language=JavaScript
+chom/resources/views/**/*.blade.php linguist-language=Blade
