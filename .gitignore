@@ -1,3 +1,53 @@
+# ==============================================================================
+# Mentat Repository - Unified .gitignore
+# ==============================================================================
 
-# Claude Code agent configuration
+# ------------------------------------------------------------------------------
+# Claude Code Configuration
+# ------------------------------------------------------------------------------
 .claude/
+
+# ------------------------------------------------------------------------------
+# CHOM Laravel Application (chom/)
+# ------------------------------------------------------------------------------
+# Environment files
+chom/.env
+chom/.env.backup
+chom/.env.production
+
+# IDE and editor files
+chom/.fleet
+chom/.idea
+chom/.nova
+chom/.vscode
+chom/.zed
+chom/.phpactor.json
+
+# Laravel and PHP
+chom/.phpunit.cache
+chom/.phpunit.result.cache
+chom/auth.json
+chom/vendor/
+
+# Node.js and NPM
+chom/node_modules/
+
+# Laravel public assets
+chom/public/build
+chom/public/hot
+chom/public/storage
+
+# Laravel storage
+chom/storage/*.key
+chom/storage/pail
+
+# Homestead
+chom/Homestead.json
+chom/Homestead.yaml
+
+# Logs
+chom/*.log
+
+# OS files
+chom/.DS_Store
+chom/Thumbs.db
