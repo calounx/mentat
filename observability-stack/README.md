@@ -36,6 +36,74 @@ See [deploy/README.md](deploy/README.md) for the full deployment guide.
 | **Alertmanager** | Alert routing | 9093 |
 | **Alloy** | OpenTelemetry collector | 12345 |
 
+### Component Interaction & Data Flow
+
+```mermaid
+graph TB
+    subgraph "Monitored Hosts"
+        NE[Node Exporter<br/>:9100<br/>System Metrics]
+        NGINX_EXP[Nginx Exporter<br/>:9113<br/>Web Server Metrics]
+        MYSQL_EXP[MySQL Exporter<br/>:9104<br/>Database Metrics]
+        PHP_EXP[PHP-FPM Exporter<br/>:9253<br/>PHP Metrics]
+        PROMTAIL[Promtail<br/>Log Shipper]
+        APP[Application<br/>OTLP Traces]
+    end
+
+    subgraph "Observability VPS"
+        PROM[Prometheus<br/>:9090<br/>Metrics TSDB]
+        LOKI[Loki<br/>:3100<br/>Log Storage]
+        TEMPO[Tempo<br/>:4317/4318<br/>Trace Storage]
+        ALLOY[Alloy<br/>:12345<br/>OTEL Collector]
+        ALERT[Alertmanager<br/>:9093<br/>Alert Router]
+        GRAF[Grafana<br/>:3000<br/>Visualization]
+    end
+
+    subgraph "External"
+        EMAIL[Email<br/>SMTP]
+        SLACK[Slack<br/>Webhooks]
+    end
+
+    %% Metrics Flow
+    NE -->|HTTP /metrics| PROM
+    NGINX_EXP -->|HTTP /metrics| PROM
+    MYSQL_EXP -->|HTTP /metrics| PROM
+    PHP_EXP -->|HTTP /metrics| PROM
+
+    %% Logs Flow
+    PROMTAIL -->|HTTP Push| LOKI
+
+    %% Traces Flow
+    APP -->|OTLP gRPC| ALLOY
+    APP -->|OTLP HTTP| ALLOY
+    ALLOY -->|Traces| TEMPO
+
+    %% Alerting Flow
+    PROM -->|Firing Alerts| ALERT
+    LOKI -->|Firing Alerts| ALERT
+    ALERT -->|Notifications| EMAIL
+    ALERT -->|Notifications| SLACK
+
+    %% Visualization
+    PROM -->|PromQL Queries| GRAF
+    LOKI -->|LogQL Queries| GRAF
+    TEMPO -->|TraceQL Queries| GRAF
+
+    style PROM fill:#e85d75
+    style LOKI fill:#f4bf4f
+    style TEMPO fill:#00d4aa
+    style GRAF fill:#f05a28
+    style ALERT fill:#ff6b6b
+    style ALLOY fill:#00a8e8
+```
+
+**Data Flow Explanation:**
+
+1. **Metrics Collection**: Prometheus scrapes exporters on monitored hosts every 15-60s
+2. **Log Aggregation**: Promtail ships logs from monitored hosts to Loki in real-time
+3. **Trace Collection**: Applications send traces via OTLP to Alloy, which forwards to Tempo
+4. **Alerting**: Prometheus/Loki evaluate rules and send alerts to Alertmanager
+5. **Visualization**: Grafana queries all data sources to build dashboards
+
 ## Manual Installation
 
 If you prefer manual setup or already have the repo cloned:

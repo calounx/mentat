@@ -41,6 +41,8 @@ This installation system supports three different deployment scenarios. Choose t
 |-----|-----|------|
 | 1-2 vCPU | 2GB | 20GB |
 
+**Installation time:** 15-20 minutes (including configuration)
+
 ### 2. VPSManager (Full-Stack Laravel Application)
 
 **What it is:** A complete LEMP stack (Linux, Nginx, MySQL, PHP) configured for Laravel applications, plus monitoring exporters.
@@ -63,6 +65,8 @@ This installation system supports three different deployment scenarios. Choose t
 |-----|-----|------|
 | 2+ vCPU | 4GB | 40GB |
 
+**Installation time:** 25-35 minutes (including LEMP stack setup and Laravel deployment)
+
 ### 3. Monitored Host (Add Monitoring to Existing Server)
 
 **What it is:** Lightweight monitoring agents that send metrics and logs from an existing server to your Observability VPS.
@@ -82,9 +86,11 @@ This installation system supports three different deployment scenarios. Choose t
 |-----|-----|------|
 | any | 512MB | 5GB |
 
+**Installation time:** 3-5 minutes (lightweight exporter installation only)
+
 **Note:** The exporters use minimal resources (typically <50MB RAM, <1% CPU).
 
-## Step 1: Run the Installer
+## Step 1: Run the Installer (~1-2 minutes)
 
 **Option A: One-command install (recommended)**
 
@@ -100,7 +106,9 @@ cd mentat/observability-stack
 sudo ./deploy/install.sh
 ```
 
-## Step 2: Choose Your Role
+**Time estimate:** 1-2 minutes for download and initial setup
+
+## Step 2: Choose Your Role (~30 seconds)
 
 The installer will ask which role to install:
 
@@ -110,7 +118,9 @@ The installer will ask which role to install:
 
 Refer to "Understanding the Roles" section above to determine which role fits your needs.
 
-## Step 3: Answer the Prompts
+**Time estimate:** 30 seconds to select your role
+
+## Step 3: Answer the Prompts (~2-5 minutes)
 
 The installer will ask different questions based on the role you selected. Here's what to expect:
 
@@ -217,9 +227,11 @@ The installer will prompt you for:
    - **Example answer:** Usually just press Enter for default, or use `webservers`, `databases`, etc. to group similar hosts
    - **Note:** Job names help organize servers in Grafana queries
 
-## Step 4: Verify Installation
+## Step 4: Verify Installation (~3-5 minutes)
 
 After installation completes, verify everything is working correctly.
+
+**Time estimate:** 3-5 minutes to run verification commands and check service status
 
 ### For Observability VPS
 
@@ -355,7 +367,7 @@ ls -lh /tmp/*-targets.yaml
 
 **Expected output:** A YAML file with your hostname
 
-## Step 5: Access Grafana
+## Step 5: Access Grafana (~5 minutes)
 
 **For Observability VPS installations:**
 
@@ -384,7 +396,9 @@ ls -lh /tmp/*-targets.yaml
    - Click "Run query"
    - **Expected result:** You should see at least one entry with `value=1` (the Observability VPS itself)
 
-## Step 6: Connect Monitored Hosts
+**Time estimate:** 5 minutes to access Grafana and verify data sources
+
+## Step 6: Connect Monitored Hosts (~2-3 minutes per host)
 
 If you installed the "Monitored Host" role on other servers, you need to register them with Prometheus.
 

@@ -25,39 +25,46 @@ cd /home/calounx/repositories/mentat/observability-stack/tests
 ### Method 1: Using run-all-tests.sh (Recommended)
 
 ```bash
-# Run everything
+# Run everything (~5-8 minutes)
 ./run-all-tests.sh
 
 # Run specific suites
-./run-all-tests.sh --unit-only
-./run-all-tests.sh --integration-only
-./run-all-tests.sh --security-only
-./run-all-tests.sh --errors-only
+./run-all-tests.sh --unit-only          # ~2-3 minutes
+./run-all-tests.sh --integration-only   # ~3-5 minutes
+./run-all-tests.sh --security-only      # ~1-2 minutes
+./run-all-tests.sh --errors-only        # ~1 minute
 
 # Options
 ./run-all-tests.sh --verbose        # Detailed output
 ./run-all-tests.sh --fail-fast      # Stop on first failure
 ```
 
+**Time estimates:**
+- All tests: 5-8 minutes
+- Unit tests only: 2-3 minutes
+- Integration tests only: 3-5 minutes
+- Security tests only: 1-2 minutes
+- Error handling tests: ~1 minute
+
 ### Method 2: Using quick-test.sh (Convenient Shortcuts)
 
 ```bash
-./quick-test.sh all           # Run all tests
-./quick-test.sh unit          # Unit tests only
-./quick-test.sh integration   # Integration tests only
-./quick-test.sh security      # Security tests only
-./quick-test.sh errors        # Error handling tests only
+./quick-test.sh all           # Run all tests (~5-8 minutes)
+./quick-test.sh unit          # Unit tests only (~2-3 minutes)
+./quick-test.sh integration   # Integration tests only (~3-5 minutes)
+./quick-test.sh security      # Security tests only (~1-2 minutes)
+./quick-test.sh errors        # Error handling tests only (~1 minute)
 
-./quick-test.sh common        # Just common.sh tests
-./quick-test.sh loader        # Just module-loader.sh tests
-./quick-test.sh generator     # Just config-generator.sh tests
+./quick-test.sh common        # Just common.sh tests (~30 seconds)
+./quick-test.sh loader        # Just module-loader.sh tests (~45 seconds)
+./quick-test.sh generator     # Just config-generator.sh tests (~1 minute)
 
-./quick-test.sh fast          # Fast tests (unit + security)
-./quick-test.sh slow          # Slow tests (integration)
-./quick-test.sh check         # Quick health check
+./quick-test.sh fast          # Fast tests (unit + security) (~3-5 minutes)
+./quick-test.sh slow          # Slow tests (integration) (~3-5 minutes)
+./quick-test.sh check         # Quick health check (~10 seconds)
 
-./quick-test.sh setup         # Setup test environment
-./quick-test.sh clean         # Clean test artifacts
+./quick-test.sh setup         # Setup test environment (~30 seconds)
+./quick-test.sh clean         # Clean test artifacts (~5 seconds)
 ```
 
 ### Method 3: Direct BATS Execution

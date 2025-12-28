@@ -54,30 +54,126 @@ CHOM (Cloud Hosting & Observability Manager) is a Laravel-based hosting platform
 
 ## 🏛️ Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│           CHOM SaaS Control Plane (Laravel)             │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Dashboard (Livewire 3) │ REST API (Sanctum)     │   │
-│  └──────────────────────┴──────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Services: VPSManagerBridge, ObservabilityAdapter│   │
-│  └─────────────────────────────────────────────────┘   │
-└───────────────────────────┬─────────────────────────────┘
-                            │ SSH + HTTP
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌──────────────┐   ┌────────────────┐   ┌─────────────┐
-│ Managed VPS  │   │ Observability  │   │   Stripe    │
-│  (SSH+CLI)   │   │ Stack (HTTP)   │   │  (Webhooks) │
-└──────────────┘   └────────────────┘   └─────────────┘
+```mermaid
+graph TB
+    subgraph "CHOM Control Plane<br/>(Laravel 12 Application)"
+        subgraph "Frontend Layer"
+            DASH[Livewire 3 Dashboard<br/>Alpine.js + Tailwind CSS]
+            API[REST API<br/>Laravel Sanctum Auth]
+        end
+
+        subgraph "Application Services"
+            SITE_SVC[Site Service<br/>WordPress/Laravel/HTML]
+            VPS_SVC[VPS Service<br/>Fleet Management]
+            BACKUP_SVC[Backup Service<br/>Automated Backups]
+            BILLING_SVC[Billing Service<br/>Cashier Integration]
+        end
+
+        subgraph "Integration Layer"
+            VPS_BRIDGE[VPS Manager Bridge<br/>SSH + Remote CLI]
+            OBS_ADAPTER[Observability Adapter<br/>Metrics/Logs/Traces]
+            STRIPE_CLIENT[Stripe Client<br/>Webhook Handler]
+        end
+
+        subgraph "Data Layer"
+            DB[(Database<br/>SQLite/MySQL/PG)]
+            CACHE[(Redis<br/>Cache/Sessions/Queue)]
+        end
+    end
+
+    subgraph "Managed Infrastructure"
+        VPS1[Managed VPS 1<br/>Customer Sites<br/>WordPress/Laravel]
+        VPS2[Managed VPS 2<br/>Customer Sites<br/>WordPress/Laravel]
+        VPS3[Managed VPS 3<br/>Customer Sites<br/>WordPress/Laravel]
+    end
+
+    subgraph "Observability Stack"
+        PROM[Prometheus<br/>Metrics]
+        LOKI[Loki<br/>Logs]
+        GRAF[Grafana<br/>Dashboards]
+    end
+
+    subgraph "External Services"
+        STRIPE[Stripe<br/>Payment Gateway]
+        EMAIL[Email<br/>SMTP]
+        STORAGE[S3/Cloud Storage<br/>Backups]
+    end
+
+    %% User interactions
+    USER([Users]) -->|HTTPS| DASH
+    USER -->|API Calls| API
+
+    %% Frontend to Services
+    DASH --> SITE_SVC
+    DASH --> VPS_SVC
+    DASH --> BACKUP_SVC
+    DASH --> BILLING_SVC
+    API --> SITE_SVC
+    API --> VPS_SVC
+    API --> BACKUP_SVC
+
+    %% Services to Integration Layer
+    SITE_SVC --> VPS_BRIDGE
+    VPS_SVC --> VPS_BRIDGE
+    BACKUP_SVC --> VPS_BRIDGE
+    SITE_SVC --> OBS_ADAPTER
+    VPS_SVC --> OBS_ADAPTER
+    BILLING_SVC --> STRIPE_CLIENT
+
+    %% Integration to External
+    VPS_BRIDGE -->|SSH Commands| VPS1
+    VPS_BRIDGE -->|SSH Commands| VPS2
+    VPS_BRIDGE -->|SSH Commands| VPS3
+    OBS_ADAPTER -->|HTTP API| PROM
+    OBS_ADAPTER -->|HTTP API| LOKI
+    OBS_ADAPTER -->|HTTP API| GRAF
+    STRIPE_CLIENT -->|API Calls| STRIPE
+    STRIPE -->|Webhooks| STRIPE_CLIENT
+    BACKUP_SVC -->|Upload| STORAGE
+
+    %% Managed VPS to Observability
+    VPS1 -->|Metrics/Logs| PROM
+    VPS2 -->|Metrics/Logs| PROM
+    VPS3 -->|Metrics/Logs| PROM
+    VPS1 -->|Logs| LOKI
+    VPS2 -->|Logs| LOKI
+    VPS3 -->|Logs| LOKI
+
+    %% Data Layer
+    SITE_SVC --> DB
+    VPS_SVC --> DB
+    BACKUP_SVC --> DB
+    BILLING_SVC --> DB
+    SITE_SVC --> CACHE
+    VPS_SVC --> CACHE
+
+    %% Notifications
+    BILLING_SVC --> EMAIL
+    BACKUP_SVC --> EMAIL
+
+    style DASH fill:#ff2d20
+    style API fill:#ff2d20
+    style PROM fill:#e85d75
+    style LOKI fill:#f4bf4f
+    style GRAF fill:#f05a28
+    style STRIPE fill:#635bff
+    style DB fill:#4479a1
+    style CACHE fill:#dc382d
 ```
 
-**Key Components:**
-- **Control Plane**: Laravel 12 application managing all operations
-- **VPS Bridge**: SSH-based remote command execution on managed servers
-- **Observability Adapter**: Queries Prometheus, Loki, Grafana for metrics
-- **Stripe Integration**: Subscription and billing management
+**Architecture Layers:**
+
+1. **Frontend Layer**: Livewire dashboards and REST API with Sanctum authentication
+2. **Application Services**: Core business logic for sites, VPS, backups, and billing
+3. **Integration Layer**: Bridges to external systems (VPS via SSH, Observability via HTTP, Stripe webhooks)
+4. **Data Layer**: Database and Redis for persistence and caching
+
+**Key Data Flows:**
+
+- **Site Deployment**: User → Dashboard → Site Service → VPS Bridge → SSH to Managed VPS
+- **Metrics Viewing**: User → Dashboard → Observability Adapter → HTTP to Prometheus/Loki/Grafana
+- **Billing Events**: Stripe → Webhook → Stripe Client → Billing Service → Database
+- **Backups**: Scheduled Job → Backup Service → VPS Bridge → SSH Backup → S3 Upload
 
 ## 🚀 Quick Start
 
@@ -89,34 +185,36 @@ CHOM (Cloud Hosting & Observability Manager) is a Laravel-based hosting platform
 - **Database**: SQLite, MySQL, or PostgreSQL
 - **Observability Stack** (optional but recommended)
 
-### Installation
+### Installation (~10-15 minutes)
 
 ```bash
-# Clone repository
+# Clone repository (~1 minute)
 git clone https://github.com/calounx/mentat.git
 cd mentat/chom
 
-# Install PHP dependencies
+# Install PHP dependencies (~3-5 minutes)
 composer install
 
-# Install JavaScript dependencies
+# Install JavaScript dependencies (~2-3 minutes)
 npm install
 
-# Configure environment
+# Configure environment (~1 minute)
 cp .env.example .env
 php artisan key:generate
 
-# Setup database
+# Setup database (~1 minute)
 php artisan migrate
 
-# Build frontend assets
+# Build frontend assets (~2-3 minutes)
 npm run build
 
-# Start development server
+# Start development server (~10 seconds)
 php artisan serve
 ```
 
 Access at: http://localhost:8000
+
+**Total setup time:** 10-15 minutes depending on network speed and system performance
 
 ### Production Deployment
 

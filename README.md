@@ -61,6 +61,66 @@ mentat/
     └── ...
 ```
 
+### Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "Mentat Monorepo"
+        subgraph "Observability Stack"
+            PROM[Prometheus<br/>Metrics TSDB]
+            LOKI[Loki<br/>Log Aggregation]
+            TEMPO[Tempo<br/>Distributed Tracing]
+            GRAF[Grafana<br/>Visualization]
+            ALLOY[Alloy<br/>OTEL Collector]
+        end
+
+        subgraph "CHOM - SaaS Platform"
+            CHOM[Laravel 12<br/>Control Plane]
+            VPSMGR[VPS Manager<br/>Bridge]
+            OBSADAPT[Observability<br/>Adapter]
+        end
+    end
+
+    subgraph "External Systems"
+        VPS1[Managed VPS 1<br/>Customer Sites]
+        VPS2[Managed VPS 2<br/>Customer Sites]
+        STRIPE[Stripe<br/>Billing]
+    end
+
+    %% Data Flow
+    VPS1 -->|Metrics| PROM
+    VPS2 -->|Metrics| PROM
+    VPS1 -->|Logs| LOKI
+    VPS2 -->|Logs| LOKI
+    VPS1 -->|Traces| TEMPO
+
+    PROM --> GRAF
+    LOKI --> GRAF
+    TEMPO --> GRAF
+
+    CHOM -->|Query Metrics| OBSADAPT
+    OBSADAPT -->|HTTP API| PROM
+    OBSADAPT -->|HTTP API| LOKI
+    OBSADAPT -->|HTTP API| GRAF
+
+    CHOM -->|SSH Commands| VPSMGR
+    VPSMGR -->|Deploy/Manage| VPS1
+    VPSMGR -->|Deploy/Manage| VPS2
+
+    STRIPE -->|Webhooks| CHOM
+
+    style PROM fill:#e85d75
+    style LOKI fill:#f4bf4f
+    style TEMPO fill:#00d4aa
+    style GRAF fill:#f05a28
+    style CHOM fill:#ff2d20
+```
+
+**How They Work Together:**
+- **Observability Stack** provides monitoring infrastructure (Prometheus, Loki, Grafana)
+- **CHOM** manages customer sites and integrates with observability for metrics/logs
+- Both can be deployed independently or together for a complete hosting platform
+
 ---
 
 ## 🚀 Quick Start - Which Deployment Should I Use?

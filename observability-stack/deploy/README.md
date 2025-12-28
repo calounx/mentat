@@ -21,33 +21,90 @@ sudo ./deploy/install.sh
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────┐
-│  VPS 1: Observability (Small/Cheap VPS)  │
-│  ┌───────────┐ ┌──────┐ ┌─────────────┐  │
-│  │ Prometheus│ │ Loki │ │   Grafana   │  │
-│  └─────▲─────┘ └──▲───┘ └─────────────┘  │
-│        │          │                       │
-│        │ scrape   │ push logs             │
-└────────┼──────────┼───────────────────────┘
-         │          │
-┌────────┼──────────┼───────────────────────┐
-│  VPS 2: VPSManager (Application Server)   │
-│        │          │                       │
-│  ┌─────┴─────┐  ┌─┴────────┐             │
-│  │ Exporters │  │ Promtail │             │
-│  │node/nginx │  │  logs    │             │
-│  │mysql/php  │  │          │             │
-│  └───────────┘  └──────────┘             │
-│                                           │
-│  ┌───────────────────────────────────┐   │
-│  │        Laravel Application        │   │
-│  │  Nginx + PHP-FPM + MariaDB + Redis│   │
-│  └───────────────────────────────────┘   │
-└───────────────────────────────────────────┘
+### Deployment Architecture
+
+```mermaid
+graph TB
+    subgraph "VPS 1: Observability VPS<br/>(Central Monitoring)"
+        PROM[Prometheus<br/>:9090<br/>Metrics Storage]
+        LOKI[Loki<br/>:3100<br/>Log Storage]
+        TEMPO[Tempo<br/>:4317/4318<br/>Trace Storage]
+        GRAF[Grafana<br/>:3000<br/>Dashboards]
+        ALERT[Alertmanager<br/>:9093]
+        NGINX_OBS[Nginx<br/>Reverse Proxy + SSL]
+    end
+
+    subgraph "VPS 2: VPSManager<br/>(Laravel Application)"
+        subgraph "Application Stack"
+            NGINX_APP[Nginx<br/>Web Server]
+            PHP[PHP 8.2-FPM<br/>Laravel]
+            MARIA[MariaDB<br/>Database]
+            REDIS[Redis<br/>Cache/Queue]
+            SUPER[Supervisor<br/>Queue Workers]
+        end
+
+        subgraph "Monitoring Agents"
+            NE_VPS[Node Exporter<br/>:9100]
+            NGINX_EXP_VPS[Nginx Exporter<br/>:9113]
+            MYSQL_EXP_VPS[MySQL Exporter<br/>:9104]
+            PHP_EXP_VPS[PHP-FPM Exporter<br/>:9253]
+            PROMTAIL_VPS[Promtail<br/>Log Shipper]
+        end
+    end
+
+    subgraph "VPS 3: Monitored Host<br/>(Existing Server)"
+        SERVICE[Existing<br/>Services]
+        NE_MON[Node Exporter<br/>:9100]
+        NGINX_EXP_MON[Nginx Exporter<br/>:9113]
+        PROMTAIL_MON[Promtail<br/>Log Shipper]
+    end
+
+    subgraph "VPS 4+: Additional Hosts"
+        MORE[More Monitored<br/>Servers...]
+    end
+
+    %% Connections from VPSManager
+    NE_VPS -->|Metrics| PROM
+    NGINX_EXP_VPS -->|Metrics| PROM
+    MYSQL_EXP_VPS -->|Metrics| PROM
+    PHP_EXP_VPS -->|Metrics| PROM
+    PROMTAIL_VPS -->|Logs| LOKI
+    PHP -->|Traces OTLP| TEMPO
+
+    %% Connections from Monitored Host
+    NE_MON -->|Metrics| PROM
+    NGINX_EXP_MON -->|Metrics| PROM
+    PROMTAIL_MON -->|Logs| LOKI
+
+    %% Additional hosts
+    MORE -.->|Metrics/Logs| PROM
+    MORE -.->|Metrics/Logs| LOKI
+
+    %% Observability VPS internal
+    PROM --> GRAF
+    LOKI --> GRAF
+    TEMPO --> GRAF
+    PROM --> ALERT
+
+    %% User access
+    USER([User]) -->|HTTPS| NGINX_OBS
+    NGINX_OBS --> GRAF
+
+    style PROM fill:#e85d75
+    style LOKI fill:#f4bf4f
+    style TEMPO fill:#00d4aa
+    style GRAF fill:#f05a28
+    style PHP fill:#777bb4
+    style MARIA fill:#003545
 ```
 
-You can add more monitored hosts—they all report back to the central Observability VPS.
+**Three Deployment Roles:**
+
+1. **Observability VPS**: Central monitoring server (Prometheus, Loki, Grafana)
+2. **VPSManager**: Full Laravel application with LEMP stack + monitoring agents
+3. **Monitored Host**: Existing servers with exporters only
+
+You can deploy multiple Monitored Hosts and VPSManagers—they all report back to the central Observability VPS.
 
 ## Installation Roles
 
@@ -66,6 +123,8 @@ Installs the full monitoring stack:
 - 1-2 vCPU
 - 2GB RAM (minimum 1GB)
 - 20GB disk
+
+**Installation time:** 15-20 minutes
 
 ### 2. VPSManager (Laravel Application)
 
@@ -92,6 +151,8 @@ Deploys a complete Laravel application with full monitoring:
 - 4GB RAM
 - 40GB disk
 
+**Installation time:** 25-35 minutes
+
 ### 3. Monitored Host
 
 Installs exporters based on detected services:
@@ -106,6 +167,8 @@ Installs exporters based on detected services:
 - Debian 13 (or compatible)
 - 512MB RAM
 - Network access to Observability VPS
+
+**Installation time:** 3-5 minutes
 
 ## Configuration
 
