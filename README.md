@@ -8,6 +8,42 @@ Both projects work together to provide a complete hosting infrastructure with in
 
 ---
 
+## 🎯 Before You Begin
+
+### Prerequisites
+
+**System Requirements:**
+- **OS**: Debian 13 or Ubuntu 22.04+ (for production deployment)
+- **Access**: Root or sudo privileges
+- **Resources**: Minimum 2GB RAM, 20GB disk space, 1-2 vCPU
+
+**For Local Development (CHOM):**
+- **PHP** 8.2+
+- **Composer** 2.x
+- **Node.js** 18+ and npm
+- **Database**: SQLite, MySQL, or PostgreSQL
+
+**Technical Knowledge:**
+- Basic Linux command line
+- SSH and remote server management (for production)
+- Understanding of web servers and databases (helpful)
+
+**Estimated Time:**
+- Observability Stack deployment: 30-45 minutes
+- CHOM development setup: 15-20 minutes
+- Full production setup: 1-2 hours
+
+### Not Sure Where to Start?
+
+**Use the interactive deployment wizard:**
+```bash
+./deployment-wizard.sh
+```
+
+The wizard will ask you questions and guide you to the right deployment path.
+
+---
+
 ## 📁 Repository Structure
 
 ```
