@@ -41,6 +41,11 @@ fi
 
 # Detect if terminal supports colors
 supports_colors() {
+    # Disable colors if NO_COLOR is set or TERM is dumb
+    if [[ -n "${NO_COLOR:-}" ]] || [[ "${TERM:-}" == "dumb" ]]; then
+        return 1
+    fi
+
     # Check if stdout is a terminal and supports colors
     if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
         local colors
@@ -153,17 +158,20 @@ create_system_user() {
     fi
 }
 
-# Service wait (fallback)
-if ! declare -f wait_for_service >/dev/null 2>&1; then
-    wait_for_service() {
+# Service wait (renamed to avoid conflict with scripts/lib/common.sh)
+# Note: scripts/lib/common.sh has wait_for_service(host, port) for TCP checks
+#       This function is for systemd service status checking
+if ! declare -f wait_for_systemd_service >/dev/null 2>&1; then
+    wait_for_systemd_service() {
         local service="$1"
         local max_wait="${2:-30}"
         local count=0
 
-        while ! systemctl is-active --quiet "$service"; do
+        while ! systemctl is-active --quiet "$service" 2>/dev/null; do
             sleep 1
             count=$((count + 1))
             if [[ $count -ge $max_wait ]]; then
+                log_error "Service $service did not become active after $max_wait seconds"
                 return 1
             fi
         done
@@ -457,13 +465,17 @@ EOF
 enable_and_start() {
     local service="$1"
 
-    systemctl enable "$service"
+    log_info "Starting service: $service"
+
+    systemctl enable "$service" 2>&1 | grep -v "Created symlink" || true
     systemctl start "$service"
 
-    if wait_for_service "$service" 10; then
-        log_success "$service started"
+    # Use systemd-specific wait function (not the TCP port checker)
+    if wait_for_systemd_service "$service" 10; then
+        log_success "$service started successfully"
     else
         log_error "$service failed to start"
+        log_error "Recent logs from $service:"
         journalctl -u "$service" --no-pager -n 20
         return 1
     fi

@@ -118,9 +118,11 @@ if ! declare -f check_port_available >/dev/null 2>&1; then
     }
 fi
 
-# Service wait fallback
-if ! declare -f wait_for_service >/dev/null 2>&1; then
-    wait_for_service() {
+# Service wait fallback (renamed to avoid conflict with scripts/lib/common.sh)
+# Note: scripts/lib/common.sh has wait_for_service(host, port) for TCP checks
+#       This function is for systemd service status checking
+if ! declare -f wait_for_systemd_service >/dev/null 2>&1; then
+    wait_for_systemd_service() {
         local service="$1"
         local max_wait="${2:-30}"
         local count=0
