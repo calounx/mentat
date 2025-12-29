@@ -583,6 +583,32 @@ EOF
     ln -sf /etc/nginx/sites-available/observability /etc/nginx/sites-enabled/
     rm -f /etc/nginx/sites-enabled/default
 
+    # Create HTTP Basic Auth credentials for Prometheus/Alertmanager
+    if [[ -n "${GRAFANA_DOMAIN:-}" ]] || [[ "$ssl_configured" == "true" ]]; then
+        if [[ ! -f /etc/nginx/.htpasswd ]]; then
+            log_info "Creating HTTP Basic Auth for Prometheus/Alertmanager..."
+
+            # Generate random password if not set
+            if [[ -z "${PROMETHEUS_AUTH_PASSWORD:-}" ]]; then
+                PROMETHEUS_AUTH_PASSWORD=$(openssl rand -base64 16)
+            fi
+
+            # Create htpasswd file (username: admin)
+            echo "${PROMETHEUS_AUTH_PASSWORD}" | htpasswd -ci /etc/nginx/.htpasswd admin
+            chmod 640 /etc/nginx/.htpasswd
+            chown root:www-data /etc/nginx/.htpasswd
+
+            log_success "HTTP Basic Auth configured for Prometheus/Alertmanager"
+            log_info "Username: admin"
+            log_info "Password: ${PROMETHEUS_AUTH_PASSWORD}"
+
+            # Save to installation info
+            export PROMETHEUS_AUTH_PASSWORD
+        else
+            log_info "HTTP Basic Auth already configured (skipping)"
+        fi
+    fi
+
     nginx -t
     log_success "Nginx configuration generated"
 }

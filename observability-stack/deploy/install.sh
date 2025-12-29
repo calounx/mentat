@@ -486,10 +486,16 @@ show_completion() {
                 echo "    ${CYAN}http://${OBSERVABILITY_IP}:3000${NC} (direct Grafana access)"
             fi
             echo
-            echo "  Credentials:"
+            echo "  Grafana Credentials:"
             echo "    Username: admin"
             echo "    Password: $GRAFANA_PASSWORD"
             echo
+            if [[ -n "${PROMETHEUS_AUTH_PASSWORD:-}" ]]; then
+                echo "  Prometheus/Alertmanager HTTP Basic Auth:"
+                echo "    Username: admin"
+                echo "    Password: $PROMETHEUS_AUTH_PASSWORD"
+                echo
+            fi
             echo "  Services:"
             echo "    - Prometheus:    http://localhost:9090"
             echo "    - Loki:          http://localhost:3100"
