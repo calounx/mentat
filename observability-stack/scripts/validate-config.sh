@@ -19,11 +19,11 @@ CONFIG_FILE="${BASE_DIR}/config/global.yaml"
 STRICT_MODE=false
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Validation results
 ERRORS=()
@@ -85,22 +85,22 @@ done
 #===============================================================================
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
     ((PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
     ((FAILED++))
     ERRORS+=("$1")
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
     WARNINGS+=("$1")
     if [[ "$STRICT_MODE" == "true" ]]; then
         ((FAILED++))
@@ -471,7 +471,7 @@ main() {
     echo ""
     echo "Config file: $CONFIG_FILE"
     if [[ "$STRICT_MODE" == "true" ]]; then
-        echo -e "${YELLOW}Mode: STRICT (warnings = errors)${NC}"
+        echo "${YELLOW}Mode: STRICT (warnings = errors)${NC}"
     fi
 
     # Run all tests
@@ -492,19 +492,19 @@ main() {
     echo "Validation Summary"
     echo "=========================================="
     echo ""
-    echo -e "  ${GREEN}Passed:${NC}  $PASSED"
-    echo -e "  ${RED}Failed:${NC}  $FAILED"
-    echo -e "  ${YELLOW}Warnings:${NC} ${#WARNINGS[@]}"
+    echo "  ${GREEN}Passed:${NC}  $PASSED"
+    echo "  ${RED}Failed:${NC}  $FAILED"
+    echo "  ${YELLOW}Warnings:${NC} ${#WARNINGS[@]}"
     echo ""
 
     if [[ $FAILED -gt 0 ]]; then
-        echo -e "${RED}Configuration validation FAILED${NC}"
+        echo "${RED}Configuration validation FAILED${NC}"
         echo ""
         echo "Fix the errors above and run this script again."
         echo "For help, see: observability-stack/README.md"
         exit 1
     elif [[ ${#WARNINGS[@]} -gt 0 ]]; then
-        echo -e "${YELLOW}Configuration validation passed with WARNINGS${NC}"
+        echo "${YELLOW}Configuration validation passed with WARNINGS${NC}"
         echo ""
         echo "Consider addressing the warnings above for better security and reliability."
         if [[ "$STRICT_MODE" == "true" ]]; then
@@ -512,7 +512,7 @@ main() {
         fi
         exit 0
     else
-        echo -e "${GREEN}Configuration validation PASSED${NC}"
+        echo "${GREEN}Configuration validation PASSED${NC}"
         echo ""
         echo "Your configuration looks good!"
         echo "Next steps:"

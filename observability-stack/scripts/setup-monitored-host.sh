@@ -91,7 +91,7 @@ done
 run_uninstall() {
     echo ""
     echo "=========================================="
-    echo -e "${RED}Uninstalling Monitoring Agents${NC}"
+    echo "${RED}Uninstalling Monitoring Agents${NC}"
     echo "=========================================="
     echo ""
 
@@ -124,7 +124,7 @@ run_uninstall() {
 
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Uninstallation Complete${NC}"
+    echo "${GREEN}Uninstallation Complete${NC}"
     echo "=========================================="
 }
 
@@ -335,7 +335,7 @@ print_summary() {
 
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Monitored Host Setup Complete!${NC}"
+    echo "${GREEN}Monitored Host Setup Complete!${NC}"
     echo "=========================================="
     echo ""
     echo "Host: $(hostname)"
@@ -361,7 +361,7 @@ main() {
     echo "Monitored Host Agent Setup v2 (Modules)"
     echo "=========================================="
     if [[ "$FORCE_MODE" == "true" ]]; then
-        echo -e "${YELLOW}>>> FORCE MODE <<<${NC}"
+        echo "${YELLOW}>>> FORCE MODE <<<${NC}"
     fi
     echo ""
 

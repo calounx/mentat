@@ -7,27 +7,27 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 PASSED=0
 FAILED=0
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
     ((PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
     ((FAILED++))
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 echo ""
@@ -50,7 +50,7 @@ declare -A EXPECTED_VERSIONS=(
 #===============================================================================
 # Version Checks
 #===============================================================================
-echo -e "${BLUE}=== Version Verification ===${NC}"
+echo "${BLUE}=== Version Verification ===${NC}"
 
 for exporter in node_exporter nginx_exporter mysqld_exporter phpfpm_exporter fail2ban_exporter; do
     VERSION=$($exporter --version 2>&1 | grep -oP '(?<=version )\d+\.\d+\.\d+' | head -1 || echo "unknown")
@@ -68,7 +68,7 @@ echo ""
 #===============================================================================
 # Service Status
 #===============================================================================
-echo -e "${BLUE}=== Service Status ===${NC}"
+echo "${BLUE}=== Service Status ===${NC}"
 
 for exporter in node_exporter nginx_exporter mysqld_exporter phpfpm_exporter fail2ban_exporter; do
     STATUS=$(systemctl is-active "$exporter" 2>/dev/null || echo "inactive")
@@ -85,7 +85,7 @@ echo ""
 #===============================================================================
 # Metrics Endpoints
 #===============================================================================
-echo -e "${BLUE}=== Metrics Endpoints ===${NC}"
+echo "${BLUE}=== Metrics Endpoints ===${NC}"
 
 declare -A EXPORTER_PORTS=(
     ["node_exporter"]="9100"
@@ -111,7 +111,7 @@ echo ""
 #===============================================================================
 # Prometheus Scraping
 #===============================================================================
-echo -e "${BLUE}=== Prometheus Target Health ===${NC}"
+echo "${BLUE}=== Prometheus Target Health ===${NC}"
 
 if curl -s http://localhost:9090/-/ready &>/dev/null; then
     for exporter in node_exporter nginx_exporter mysqld_exporter phpfpm_exporter fail2ban_exporter; do
@@ -133,7 +133,7 @@ echo ""
 #===============================================================================
 # Key Metrics Present
 #===============================================================================
-echo -e "${BLUE}=== Key Metrics Validation ===${NC}"
+echo "${BLUE}=== Key Metrics Validation ===${NC}"
 
 # Node exporter metrics
 if curl -s http://localhost:9100/metrics | grep -q "node_cpu_seconds_total"; then
@@ -191,7 +191,7 @@ echo ""
 #===============================================================================
 # Error Log Checks
 #===============================================================================
-echo -e "${BLUE}=== Recent Error Checks ===${NC}"
+echo "${BLUE}=== Recent Error Checks ===${NC}"
 
 for exporter in node_exporter nginx_exporter mysqld_exporter phpfpm_exporter fail2ban_exporter; do
     ERRORS=$(journalctl -u "$exporter" -n 20 --no-pager --since "5 minutes ago" 2>/dev/null | \
@@ -210,7 +210,7 @@ echo ""
 #===============================================================================
 # Data Continuity Check
 #===============================================================================
-echo -e "${BLUE}=== Data Continuity ===${NC}"
+echo "${BLUE}=== Data Continuity ===${NC}"
 
 if curl -s http://localhost:9090/-/ready &>/dev/null; then
     # Check if metrics from last 10 minutes are available
@@ -237,18 +237,18 @@ echo "=========================================="
 echo "  Phase 1 Validation Summary"
 echo "=========================================="
 echo ""
-echo -e "${GREEN}Passed: $PASSED${NC}"
-echo -e "${RED}Failed: $FAILED${NC}"
+echo "${GREEN}Passed: $PASSED${NC}"
+echo "${RED}Failed: $FAILED${NC}"
 echo -e "Total:  $((PASSED + FAILED))"
 echo ""
 
 if [[ "$FAILED" -eq 0 ]]; then
-    echo -e "${GREEN}Phase 1: ALL EXPORTERS UPGRADED SUCCESSFULLY${NC}"
+    echo "${GREEN}Phase 1: ALL EXPORTERS UPGRADED SUCCESSFULLY${NC}"
     echo ""
     echo "Ready to proceed to Phase 2 (Prometheus)"
     exit 0
 else
-    echo -e "${RED}Phase 1: VALIDATION FAILED${NC}"
+    echo "${RED}Phase 1: VALIDATION FAILED${NC}"
     echo ""
     echo "DO NOT PROCEED to Phase 2 until issues are resolved"
     exit 1

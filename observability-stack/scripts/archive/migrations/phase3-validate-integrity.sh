@@ -23,11 +23,11 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+RED=$'\033[0;31m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Configuration
 LOKI_URL="${LOKI_URL:-http://localhost:3100}"
@@ -70,26 +70,26 @@ done
 
 # Functions
 log_test() {
-    echo -e "${BLUE}[TEST]${NC} $*"
+    echo "${BLUE}[TEST]${NC} $*"
 }
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $*"
+    echo "${GREEN}[PASS]${NC} $*"
     ((TESTS_PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $*"
+    echo "${RED}[FAIL]${NC} $*"
     ((TESTS_FAILED++))
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
+    echo "${YELLOW}[WARN]${NC} $*"
     ((TESTS_WARNED++))
 }
 
 log_info() {
-    echo -e "${NC}[INFO]${NC} $*"
+    echo "${NC}[INFO]${NC} $*"
 }
 
 check_loki_reachable() {
@@ -391,20 +391,20 @@ print_summary() {
     echo "======================================================================"
     echo "                   INTEGRITY VALIDATION SUMMARY"
     echo "======================================================================"
-    echo -e "Tests Passed:  ${GREEN}$TESTS_PASSED${NC}"
-    echo -e "Tests Failed:  ${RED}$TESTS_FAILED${NC}"
-    echo -e "Tests Warned:  ${YELLOW}$TESTS_WARNED${NC}"
+    echo "Tests Passed:  ${GREEN}$TESTS_PASSED${NC}"
+    echo "Tests Failed:  ${RED}$TESTS_FAILED${NC}"
+    echo "Tests Warned:  ${YELLOW}$TESTS_WARNED${NC}"
     echo "Total Tests:   $((TESTS_PASSED + TESTS_FAILED + TESTS_WARNED))"
     echo "======================================================================"
     echo ""
 
     if [[ $TESTS_FAILED -eq 0 ]]; then
-        echo -e "${GREEN}All critical tests passed!${NC}"
+        echo "${GREEN}All critical tests passed!${NC}"
         echo ""
         echo "Loki upgrade appears successful. Log integrity validated."
         return 0
     else
-        echo -e "${RED}Some tests failed!${NC}"
+        echo "${RED}Some tests failed!${NC}"
         echo ""
         echo "Review failed tests and investigate issues before proceeding."
         return 1
@@ -425,7 +425,7 @@ main() {
     # Prerequisite: Check Loki connectivity
     if ! check_loki_reachable; then
         echo ""
-        echo -e "${RED}CRITICAL: Cannot connect to Loki${NC}"
+        echo "${RED}CRITICAL: Cannot connect to Loki${NC}"
         echo "Ensure Loki is running and accessible at $LOKI_URL"
         exit 2
     fi

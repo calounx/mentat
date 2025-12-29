@@ -17,13 +17,13 @@ BASE_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_BASE="/var/backups/observability-stack"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m'
+NC=$'\033[0m'
 
 # Flags
 AUTO_MODE=false
@@ -37,25 +37,25 @@ DRY_RUN=false
 #===============================================================================
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo "${RED}[ERROR]${NC} $1"
     exit 1
 }
 
 log_step() {
     echo ""
-    echo -e "${CYAN}==>${NC} ${BOLD}$1${NC}"
+    echo "${CYAN}==>${NC} ${BOLD}$1${NC}"
 }
 
 #===============================================================================
@@ -475,7 +475,7 @@ execute_rollback() {
 
     echo ""
     echo "=========================================="
-    echo -e "${BOLD}${YELLOW}DEPLOYMENT ROLLBACK${NC}"
+    echo "${BOLD}${YELLOW}DEPLOYMENT ROLLBACK${NC}"
     echo "=========================================="
     echo ""
     echo "Backup source: $backup_dir"
@@ -487,14 +487,14 @@ execute_rollback() {
 
     if [[ "$DRY_RUN" == "true" ]]; then
         echo ""
-        echo -e "${YELLOW}>>> DRY RUN MODE - No changes will be made <<<${NC}"
+        echo "${YELLOW}>>> DRY RUN MODE - No changes will be made <<<${NC}"
     fi
 
     echo ""
 
     # Confirmation prompt
     if [[ "$FORCE_MODE" != "true" ]] && [[ "$DRY_RUN" != "true" ]]; then
-        echo -e "${YELLOW}WARNING:${NC} This will:"
+        echo "${YELLOW}WARNING:${NC} This will:"
         echo "  1. Stop all observability services"
         echo "  2. Restore configurations from backup"
         echo "  3. Restore previous code version"
@@ -523,11 +523,11 @@ execute_rollback() {
     echo ""
     echo "=========================================="
     if [[ "$DRY_RUN" == "true" ]]; then
-        echo -e "${BLUE}${BOLD}DRY RUN COMPLETE${NC}"
+        echo "${BLUE}${BOLD}DRY RUN COMPLETE${NC}"
         echo ""
         echo "No changes were made. Remove --dry-run to execute."
     else
-        echo -e "${GREEN}${BOLD}ROLLBACK COMPLETE${NC}"
+        echo "${GREEN}${BOLD}ROLLBACK COMPLETE${NC}"
         echo ""
         echo "System has been rolled back to:"
         echo "  Backup: $(basename "$backup_dir")"

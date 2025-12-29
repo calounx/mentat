@@ -21,10 +21,10 @@
 set -euo pipefail
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m' # No Color
 
 # Configuration
 BACKUP_BASE_DIR="/var/lib/observability-upgrades/backups/phase3-loki"
@@ -32,15 +32,15 @@ LOG_FILE="/var/log/loki-rollback-$(date +%Y%m%d_%H%M%S).log"
 
 # Functions
 log() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $*" | tee -a "$LOG_FILE"
+    echo "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $*" | tee -a "$LOG_FILE"
 }
 
 error() {
-    echo -e "${RED}[ERROR]${NC} $*" | tee -a "$LOG_FILE"
+    echo "${RED}[ERROR]${NC} $*" | tee -a "$LOG_FILE"
 }
 
 warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*" | tee -a "$LOG_FILE"
+    echo "${YELLOW}[WARN]${NC} $*" | tee -a "$LOG_FILE"
 }
 
 check_root() {
@@ -361,7 +361,7 @@ print_summary() {
     echo ""
 
     if [[ $rollback_success -eq 0 ]]; then
-        echo -e "${GREEN}Rollback completed successfully!${NC}"
+        echo "${GREEN}Rollback completed successfully!${NC}"
         echo ""
         echo "Next steps:"
         echo "1. Verify Grafana datasource: http://localhost:3000"
@@ -374,7 +374,7 @@ print_summary() {
         echo "2. Fix identified issues"
         echo "3. Follow Phase 3 upgrade guide"
     else
-        echo -e "${RED}Rollback encountered issues!${NC}"
+        echo "${RED}Rollback encountered issues!${NC}"
         echo ""
         echo "Troubleshooting steps:"
         echo "1. Check service logs: journalctl -u loki -n 100"

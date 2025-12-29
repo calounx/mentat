@@ -114,14 +114,14 @@ with_timer() {
         end_time=$(date +%s)
         local elapsed=$((end_time - start_time))
 
-        echo -e "\r\033[0;32m[ OK ]\033[0m $description (${elapsed}s)"
+        echo "\r\033[0;32m[ OK ]\033[0m $description (${elapsed}s)"
         return 0
     else
         local end_time
         end_time=$(date +%s)
         local elapsed=$((end_time - start_time))
 
-        echo -e "\r\033[0;31m[FAIL]\033[0m $description (${elapsed}s)"
+        echo "\r\033[0;31m[FAIL]\033[0m $description (${elapsed}s)"
         return 1
     fi
 }
@@ -148,7 +148,7 @@ step() {
     ((CURRENT_STEP++))
 
     echo ""
-    echo -e "\033[1;36m[Step $CURRENT_STEP/$TOTAL_STEPS]\033[0m $message"
+    echo "\033[1;36m[Step $CURRENT_STEP/$TOTAL_STEPS]\033[0m $message"
     echo ""
 }
 

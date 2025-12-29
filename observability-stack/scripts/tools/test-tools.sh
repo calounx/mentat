@@ -7,17 +7,17 @@
 set -e
 
 # Colors
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
+GREEN=$'\033[0;32m'
+BLUE=$'\033[0;34m'
 BOLD='\033[1m'
-NC='\033[0m'
+NC=$'\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$REPO_ROOT"
 
-echo -e "${BOLD}Testing Python YAML Tools${NC}"
+echo "${BOLD}Testing Python YAML Tools${NC}"
 echo "================================================================"
 echo ""
 
@@ -25,14 +25,14 @@ test_tool() {
     local name="$1"
     local cmd="$2"
 
-    echo -e "${BLUE}Testing: ${name}${NC}"
+    echo "${BLUE}Testing: ${name}${NC}"
     echo "Command: $cmd"
     echo ""
 
     if eval "$cmd > /dev/null 2>&1"; then
-        echo -e "${GREEN}✓ ${name} works${NC}"
+        echo "${GREEN}✓ ${name} works${NC}"
     else
-        echo -e "${GREEN}✓ ${name} works (expected exit code)${NC}"
+        echo "${GREEN}✓ ${name} works (expected exit code)${NC}"
     fi
     echo ""
 }
@@ -66,7 +66,7 @@ test_tool "lint_module.py" \
     "python3 scripts/tools/lint_module.py --help"
 
 echo "================================================================"
-echo -e "${GREEN}${BOLD}All tools are working correctly!${NC}"
+echo "${GREEN}${BOLD}All tools are working correctly!${NC}"
 echo ""
 echo "Run './validate-all.sh' to perform full validation."
 echo ""

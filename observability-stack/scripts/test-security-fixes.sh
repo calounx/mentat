@@ -22,10 +22,10 @@ test_result() {
     ((TESTS_TOTAL++))
 
     if [[ "$result" == "PASS" ]]; then
-        echo -e "${GREEN}[PASS]${NC} $test_name"
+        echo "${GREEN}[PASS]${NC} $test_name"
         ((TESTS_PASSED++))
     else
-        echo -e "${RED}[FAIL]${NC} $test_name"
+        echo "${RED}[FAIL]${NC} $test_name"
         ((TESTS_FAILED++))
     fi
 }
@@ -255,16 +255,16 @@ echo "Test Results Summary"
 echo "=========================================="
 echo ""
 echo "Total Tests:  $TESTS_TOTAL"
-echo -e "${GREEN}Passed:       $TESTS_PASSED${NC}"
-echo -e "${RED}Failed:       $TESTS_FAILED${NC}"
+echo "${GREEN}Passed:       $TESTS_PASSED${NC}"
+echo "${RED}Failed:       $TESTS_FAILED${NC}"
 echo ""
 
 if [[ $TESTS_FAILED -eq 0 ]]; then
-    echo -e "${GREEN}All security fixes are working correctly!${NC}"
+    echo "${GREEN}All security fixes are working correctly!${NC}"
     echo ""
     exit 0
 else
-    echo -e "${RED}Some tests failed. Please review the security fixes.${NC}"
+    echo "${RED}Some tests failed. Please review the security fixes.${NC}"
     echo ""
     exit 1
 fi

@@ -13,16 +13,16 @@ DIST_DIR="dist"
 PACKAGE_NAME="observability-stack"
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
-log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+log_info() { echo "${BLUE}[INFO]${NC} $*"; }
+log_success() { echo "${GREEN}[SUCCESS]${NC} $*"; }
+log_warn() { echo "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo "${RED}[ERROR]${NC} $*" >&2; }
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -142,16 +142,16 @@ DATA_DIR="/var/lib/observability-stack"
 LOG_DIR="/var/log/observability-stack"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
-log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+log_info() { echo "${BLUE}[INFO]${NC} $*"; }
+log_success() { echo "${GREEN}[SUCCESS]${NC} $*"; }
+log_warn() { echo "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo "${RED}[ERROR]${NC} $*" >&2; }
 
 # Get installer directory (works whether extracted or run from package)
 INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -528,12 +528,12 @@ INSTALL_BASE="${INSTALL_BASE:-/opt/observability-stack}"
 VERSION="1.0.0"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 
 print_usage() {
     cat << EOF
@@ -565,9 +565,9 @@ EOF
 }
 
 cmd_status() {
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}                 Observability Stack Status                 ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    echo "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    echo "${CYAN}                 Observability Stack Status                 ${NC}"
+    echo "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo ""
 
     local services=(
@@ -614,15 +614,15 @@ cmd_start() {
     if [[ "$service" == "all" ]]; then
         local services=(prometheus alertmanager loki promtail grafana-server node_exporter)
         for svc in "${services[@]}"; do
-            echo -e "${BLUE}Starting ${svc}...${NC}"
+            echo "${BLUE}Starting ${svc}...${NC}"
             systemctl start "$svc" 2>/dev/null || true
         done
     else
-        echo -e "${BLUE}Starting ${service}...${NC}"
+        echo "${BLUE}Starting ${service}...${NC}"
         systemctl start "$service"
     fi
 
-    echo -e "${GREEN}Done${NC}"
+    echo "${GREEN}Done${NC}"
 }
 
 cmd_stop() {
@@ -631,15 +631,15 @@ cmd_stop() {
     if [[ "$service" == "all" ]]; then
         local services=(node_exporter promtail loki alertmanager prometheus grafana-server)
         for svc in "${services[@]}"; do
-            echo -e "${YELLOW}Stopping ${svc}...${NC}"
+            echo "${YELLOW}Stopping ${svc}...${NC}"
             systemctl stop "$svc" 2>/dev/null || true
         done
     else
-        echo -e "${YELLOW}Stopping ${service}...${NC}"
+        echo "${YELLOW}Stopping ${service}...${NC}"
         systemctl stop "$service"
     fi
 
-    echo -e "${GREEN}Done${NC}"
+    echo "${GREEN}Done${NC}"
 }
 
 cmd_restart() {
@@ -659,7 +659,7 @@ cmd_upgrade() {
     if [[ -x "$INSTALL_BASE/scripts/upgrade-orchestrator.sh" ]]; then
         "$INSTALL_BASE/scripts/upgrade-orchestrator.sh" "$@"
     else
-        echo -e "${RED}Upgrade orchestrator not found${NC}"
+        echo "${RED}Upgrade orchestrator not found${NC}"
         exit 1
     fi
 }
@@ -677,11 +677,11 @@ cmd_backup() {
     local backup_dir="/var/lib/observability-stack/backups/$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$backup_dir"
 
-    echo -e "${BLUE}Creating backup in ${backup_dir}...${NC}"
+    echo "${BLUE}Creating backup in ${backup_dir}...${NC}"
 
     # Prometheus snapshot
     if curl -sf -X POST "http://localhost:9090/api/v1/admin/tsdb/snapshot" &>/dev/null; then
-        echo -e "${GREEN}Prometheus snapshot created${NC}"
+        echo "${GREEN}Prometheus snapshot created${NC}"
     fi
 
     # Config backup
@@ -689,20 +689,20 @@ cmd_backup() {
     cp -a /etc/loki "$backup_dir/" 2>/dev/null || true
     cp -a /etc/grafana "$backup_dir/" 2>/dev/null || true
 
-    echo -e "${GREEN}Backup complete: ${backup_dir}${NC}"
+    echo "${GREEN}Backup complete: ${backup_dir}${NC}"
 }
 
 cmd_validate() {
-    echo -e "${BLUE}Validating configuration...${NC}"
+    echo "${BLUE}Validating configuration...${NC}"
 
     local errors=0
 
     # Prometheus config
     if command -v promtool &>/dev/null; then
         if promtool check config /etc/prometheus/prometheus.yml 2>/dev/null; then
-            echo -e "${GREEN}✓ Prometheus config valid${NC}"
+            echo "${GREEN}✓ Prometheus config valid${NC}"
         else
-            echo -e "${RED}✗ Prometheus config invalid${NC}"
+            echo "${RED}✗ Prometheus config invalid${NC}"
             ((errors++))
         fi
     fi
@@ -710,17 +710,17 @@ cmd_validate() {
     # Alertmanager config
     if command -v amtool &>/dev/null; then
         if amtool check-config /etc/alertmanager/alertmanager.yml 2>/dev/null; then
-            echo -e "${GREEN}✓ Alertmanager config valid${NC}"
+            echo "${GREEN}✓ Alertmanager config valid${NC}"
         else
-            echo -e "${RED}✗ Alertmanager config invalid${NC}"
+            echo "${RED}✗ Alertmanager config invalid${NC}"
             ((errors++))
         fi
     fi
 
     if [[ $errors -eq 0 ]]; then
-        echo -e "${GREEN}All configurations valid${NC}"
+        echo "${GREEN}All configurations valid${NC}"
     else
-        echo -e "${RED}Found $errors configuration errors${NC}"
+        echo "${RED}Found $errors configuration errors${NC}"
         exit 1
     fi
 }
@@ -779,7 +779,7 @@ case "${1:-}" in
         print_usage
         ;;
     *)
-        echo -e "${RED}Unknown command: $1${NC}"
+        echo "${RED}Unknown command: $1${NC}"
         print_usage
         exit 1
         ;;

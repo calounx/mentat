@@ -59,18 +59,18 @@ _source_shared_libraries() {
 
 # Logging fallbacks (simple colored output)
 if ! declare -f log_info >/dev/null 2>&1; then
-    _RED='\033[0;31m'
-    _GREEN='\033[0;32m'
-    _YELLOW='\033[1;33m'
-    _BLUE='\033[0;34m'
-    _NC='\033[0m'
+    _RED=$'\033[0;31m'
+    _GREEN=$'\033[0;32m'
+    _YELLOW=$'\033[1;33m'
+    _BLUE=$'\033[0;34m'
+    _NC=$'\033[0m'
 
-    log_info()    { echo -e "${_GREEN}[INFO]${_NC} $1"; }
-    log_warn()    { echo -e "${_YELLOW}[WARN]${_NC} $1"; }
-    log_error()   { echo -e "${_RED}[ERROR]${_NC} $1" >&2; }
-    log_step()    { echo -e "${_BLUE}[STEP]${_NC} $1"; }
-    log_success() { echo -e "${_GREEN}[OK]${_NC} $1"; }
-    log_debug()   { [[ "${DEBUG:-false}" == "true" ]] && echo -e "[DEBUG] $1"; }
+    log_info()    { echo "${_GREEN}[INFO]${_NC} $1"; }
+    log_warn()    { echo "${_YELLOW}[WARN]${_NC} $1"; }
+    log_error()   { echo "${_RED}[ERROR]${_NC} $1" >&2; }
+    log_step()    { echo "${_BLUE}[STEP]${_NC} $1"; }
+    log_success() { echo "${_GREEN}[OK]${_NC} $1"; }
+    log_debug()   { [[ "${DEBUG:-false}" == "true" ]] && echo "[DEBUG] $1"; }
 fi
 
 # Version comparison fallback

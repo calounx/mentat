@@ -177,6 +177,18 @@ collect_observability_config() {
         CONFIGURE_SMTP=false
     fi
 
+    # IPv6 configuration
+    echo
+    read -p "Disable IPv6 for observability services? [Y/n]: " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        DISABLE_IPV6=true
+        log_info "IPv6 will be disabled for all services"
+    else
+        DISABLE_IPV6=false
+        log_info "IPv6 will remain enabled"
+    fi
+
     # Summary
     show_observability_summary
 
@@ -191,6 +203,7 @@ collect_observability_config() {
     export OBSERVABILITY_IP GRAFANA_DOMAIN USE_SSL LETSENCRYPT_EMAIL
     export GRAFANA_PASSWORD METRICS_RETENTION_DAYS LOGS_RETENTION_DAYS
     export CONFIGURE_SMTP SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS ALERT_FROM ALERT_TO
+    export DISABLE_IPV6
 }
 
 collect_vpsmanager_config() {

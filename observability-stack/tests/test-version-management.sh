@@ -10,10 +10,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$PROJECT_ROOT/scripts/lib"
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m' # No Color
 
 # Test counters
 TESTS_RUN=0
@@ -22,7 +22,7 @@ TESTS_FAILED=0
 
 # Source version management library
 if [[ ! -f "$LIB_DIR/versions.sh" ]]; then
-    echo -e "${RED}ERROR: Version management library not found${NC}"
+    echo "${RED}ERROR: Version management library not found${NC}"
     exit 1
 fi
 
@@ -39,13 +39,13 @@ test_start() {
 }
 
 test_pass() {
-    echo -e "${GREEN}PASS${NC}"
+    echo "${GREEN}PASS${NC}"
     ((TESTS_PASSED++))
 }
 
 test_fail() {
     local message="${1:-}"
-    echo -e "${RED}FAIL${NC}"
+    echo "${RED}FAIL${NC}"
     [[ -n "$message" ]] && echo "  Error: $message"
     ((TESTS_FAILED++))
 }
@@ -382,7 +382,7 @@ test_github_latest_release() {
 
     # Skip if offline mode
     if [[ "${VERSION_OFFLINE_MODE:-false}" == "true" ]]; then
-        echo -e "${YELLOW}SKIP (offline mode)${NC}"
+        echo "${YELLOW}SKIP (offline mode)${NC}"
         return
     fi
 
@@ -394,7 +394,7 @@ test_github_latest_release() {
             test_fail
         fi
     else
-        echo -e "${YELLOW}SKIP (GitHub API unavailable)${NC}"
+        echo "${YELLOW}SKIP (GitHub API unavailable)${NC}"
     fi
 }
 
@@ -418,7 +418,7 @@ test_get_latest_version() {
 
     # Skip if offline mode
     if [[ "${VERSION_OFFLINE_MODE:-false}" == "true" ]]; then
-        echo -e "${YELLOW}SKIP (offline mode)${NC}"
+        echo "${YELLOW}SKIP (offline mode)${NC}"
         return
     fi
 
@@ -430,7 +430,7 @@ test_get_latest_version() {
             test_fail "Got invalid version: $version"
         fi
     else
-        echo -e "${YELLOW}SKIP (GitHub API unavailable)${NC}"
+        echo "${YELLOW}SKIP (GitHub API unavailable)${NC}"
     fi
 }
 
@@ -520,19 +520,19 @@ run_all_tests() {
     echo "Test Summary"
     echo "==============================================================================="
     echo "Total tests run:    $TESTS_RUN"
-    echo -e "Tests passed:       ${GREEN}$TESTS_PASSED${NC}"
+    echo "Tests passed:       ${GREEN}$TESTS_PASSED${NC}"
     if [[ $TESTS_FAILED -gt 0 ]]; then
-        echo -e "Tests failed:       ${RED}$TESTS_FAILED${NC}"
+        echo "Tests failed:       ${RED}$TESTS_FAILED${NC}"
     else
         echo -e "Tests failed:       $TESTS_FAILED"
     fi
     echo ""
 
     if [[ $TESTS_FAILED -eq 0 ]]; then
-        echo -e "${GREEN}All tests passed!${NC}"
+        echo "${GREEN}All tests passed!${NC}"
         exit 0
     else
-        echo -e "${RED}Some tests failed!${NC}"
+        echo "${RED}Some tests failed!${NC}"
         exit 1
     fi
 }

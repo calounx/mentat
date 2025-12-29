@@ -12,13 +12,13 @@
 set -euo pipefail
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m'
+NC=$'\033[0m'
 
 # Check mode
 MODE=""
@@ -45,25 +45,25 @@ log_check() {
 }
 
 log_pass() {
-    echo -e "${GREEN}PASS${NC}"
+    echo "${GREEN}PASS${NC}"
     ((CHECKS_PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}FAIL${NC}"
+    echo "${RED}FAIL${NC}"
     if [[ -n "${1:-}" ]]; then
-        echo -e "        ${RED}Error:${NC} $1"
+        echo "        ${RED}Error:${NC} $1"
     fi
     if [[ -n "${2:-}" ]]; then
-        echo -e "        ${YELLOW}Fix:${NC} $2"
+        echo "        ${YELLOW}Fix:${NC} $2"
     fi
     ((CHECKS_FAILED++))
 }
 
 log_warn() {
-    echo -e "${YELLOW}WARN${NC}"
+    echo "${YELLOW}WARN${NC}"
     if [[ -n "${1:-}" ]]; then
-        echo -e "        ${YELLOW}Warning:${NC} $1"
+        echo "        ${YELLOW}Warning:${NC} $1"
     fi
     ((CHECKS_WARNING++))
 }
@@ -405,10 +405,10 @@ check_required_commands() {
 
     if [[ ${#missing[@]} -gt 0 ]] && [[ "$FIX_MODE" == "true" ]]; then
         echo ""
-        echo -e "${CYAN}Attempting to install missing commands...${NC}"
+        echo "${CYAN}Attempting to install missing commands...${NC}"
         apt-get update -qq
         apt-get install -y -qq "${missing[@]}"
-        echo -e "${GREEN}Installed: ${missing[*]}${NC}"
+        echo "${GREEN}Installed: ${missing[*]}${NC}"
     fi
 }
 
@@ -422,9 +422,9 @@ check_firewall() {
     else
         log_warn "UFW not installed (will be installed during setup)"
         if [[ "$FIX_MODE" == "true" ]]; then
-            echo -e "${CYAN}Installing ufw...${NC}"
+            echo "${CYAN}Installing ufw...${NC}"
             apt-get install -y -qq ufw
-            echo -e "${GREEN}Installed ufw${NC}"
+            echo "${GREEN}Installed ufw${NC}"
         fi
         return 0
     fi
@@ -488,7 +488,7 @@ check_config_placeholders() {
     else
         log_fail "Found placeholder values in config" "Edit config/global.yaml and replace all placeholder values"
         echo "$placeholders" | while read -r line; do
-            echo -e "        ${YELLOW}$line${NC}"
+            echo "        ${YELLOW}$line${NC}"
         done
         return 1
     fi
@@ -518,7 +518,7 @@ parse_args() {
                 exit 0
                 ;;
             *)
-                echo -e "${RED}Error: Unknown option: $1${NC}" >&2
+                echo "${RED}Error: Unknown option: $1${NC}" >&2
                 echo ""
                 show_help
                 exit 1
@@ -527,7 +527,7 @@ parse_args() {
     done
 
     if [[ -z "$MODE" ]]; then
-        echo -e "${RED}Error: Must specify --observability-vps or --monitored-host${NC}" >&2
+        echo "${RED}Error: Must specify --observability-vps or --monitored-host${NC}" >&2
         echo ""
         show_help
         exit 1
@@ -538,9 +538,9 @@ run_checks() {
     echo ""
     echo "=========================================="
     if [[ "$MODE" == "observability-vps" ]]; then
-        echo -e "${BOLD}Pre-flight Checks: Observability VPS${NC}"
+        echo "${BOLD}Pre-flight Checks: Observability VPS${NC}"
     else
-        echo -e "${BOLD}Pre-flight Checks: Monitored Host${NC}"
+        echo "${BOLD}Pre-flight Checks: Monitored Host${NC}"
     fi
     echo "=========================================="
     echo ""
@@ -571,21 +571,21 @@ run_checks() {
     # Summary
     echo ""
     echo "=========================================="
-    echo -e "${BOLD}Summary${NC}"
+    echo "${BOLD}Summary${NC}"
     echo "=========================================="
     echo ""
     echo -e "Total checks:    $CHECKS_TOTAL"
-    echo -e "${GREEN}Passed:${NC}          $CHECKS_PASSED"
+    echo "${GREEN}Passed:${NC}          $CHECKS_PASSED"
     if [[ $CHECKS_WARNING -gt 0 ]]; then
-        echo -e "${YELLOW}Warnings:${NC}        $CHECKS_WARNING"
+        echo "${YELLOW}Warnings:${NC}        $CHECKS_WARNING"
     fi
     if [[ $CHECKS_FAILED -gt 0 ]]; then
-        echo -e "${RED}Failed:${NC}          $CHECKS_FAILED"
+        echo "${RED}Failed:${NC}          $CHECKS_FAILED"
     fi
     echo ""
 
     if [[ $CHECKS_FAILED -eq 0 ]]; then
-        echo -e "${GREEN}${BOLD}All critical checks passed!${NC}"
+        echo "${GREEN}${BOLD}All critical checks passed!${NC}"
         echo ""
         if [[ "$MODE" == "observability-vps" ]]; then
             echo "Ready to run: ./scripts/setup-observability.sh"
@@ -595,7 +595,7 @@ run_checks() {
         echo ""
         return 0
     else
-        echo -e "${RED}${BOLD}Some checks failed!${NC}"
+        echo "${RED}${BOLD}Some checks failed!${NC}"
         echo ""
         echo "Please fix the issues above before proceeding."
         if [[ "$FIX_MODE" == "false" ]]; then

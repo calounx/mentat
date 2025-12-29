@@ -7,12 +7,12 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 
 # Counters
 TOTAL_CHECKS=0
@@ -38,13 +38,13 @@ cat > "$CERT_DATA_FILE" <<EOF
 EOF
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
     ((PASSED_CHECKS++))
     ((TOTAL_CHECKS++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
     ((FAILED_CHECKS++))
     ((TOTAL_CHECKS++))
     # Record failure in certification data
@@ -52,20 +52,20 @@ log_fail() {
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
     ((WARNING_CHECKS++))
     ((TOTAL_CHECKS++))
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_section() {
     echo ""
-    echo -e "${CYAN}========================================${NC}"
-    echo -e "${CYAN}  $1${NC}"
-    echo -e "${CYAN}========================================${NC}"
+    echo "${CYAN}========================================${NC}"
+    echo "${CYAN}  $1${NC}"
+    echo "${CYAN}========================================${NC}"
 }
 
 #===============================================================================
@@ -558,7 +558,7 @@ fi
 
 echo "╔════════════════════════════════════════════════════════════════════╗"
 echo "║                                                                    ║"
-echo -e "║  CERTIFICATION STATUS: ${cert_color}${cert_status}${NC}$(printf '%*s' $((48 - ${#cert_status})) '')║"
+echo "║  CERTIFICATION STATUS: ${cert_color}${cert_status}${NC}$(printf '%*s' $((48 - ${#cert_status})) '')║"
 echo "║                                                                    ║"
 echo "║  Success Rate: ${success_rate}%                                              ║"
 echo "║                                                                    ║"
@@ -573,7 +573,7 @@ echo ""
 
 # Recommendations
 if [[ "$FAILED_CHECKS" -gt 0 ]]; then
-    echo -e "${RED}CRITICAL ISSUES FOUND:${NC}"
+    echo "${RED}CRITICAL ISSUES FOUND:${NC}"
     echo "The following issues must be resolved before production deployment:"
     echo ""
     jq -r '.issues[]' "$CERT_DATA_FILE" | sed 's/^/  - /'
@@ -581,7 +581,7 @@ if [[ "$FAILED_CHECKS" -gt 0 ]]; then
 fi
 
 if [[ "$WARNING_CHECKS" -gt 0 ]]; then
-    echo -e "${YELLOW}RECOMMENDATIONS:${NC}"
+    echo "${YELLOW}RECOMMENDATIONS:${NC}"
     echo "The following items should be reviewed:"
     echo "  - Review all warnings and address as needed"
     echo "  - Verify backup retention policies"
@@ -592,15 +592,15 @@ fi
 
 # Exit code
 if [[ "$FAILED_CHECKS" -eq 0 ]]; then
-    echo -e "${GREEN}✓ Post-upgrade validation PASSED${NC}"
+    echo "${GREEN}✓ Post-upgrade validation PASSED${NC}"
     echo ""
     exit 0
 elif [[ "$FAILED_CHECKS" -le 2 ]]; then
-    echo -e "${YELLOW}⚠ Post-upgrade validation PASSED with minor issues${NC}"
+    echo "${YELLOW}⚠ Post-upgrade validation PASSED with minor issues${NC}"
     echo ""
     exit 0
 else
-    echo -e "${RED}✗ Post-upgrade validation FAILED${NC}"
+    echo "${RED}✗ Post-upgrade validation FAILED${NC}"
     echo ""
     exit 1
 fi

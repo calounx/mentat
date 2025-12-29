@@ -7,11 +7,11 @@
 set -euo pipefail
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,19 +34,19 @@ EXCLUDE_CHECKS="${SHELLCHECK_EXCLUDE:-SC2034,SC2086}"
 #===============================================================================
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
 }
 
 # Check if shellcheck is installed
@@ -94,11 +94,11 @@ check_script() {
         "$script" 2>&1) || exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
-        echo -e "${GREEN}✓${NC}"
+        echo "${GREEN}✓${NC}"
         ((CHECKED++))
         return 0
     else
-        echo -e "${RED}✗${NC}"
+        echo "${RED}✗${NC}"
         ((ERRORS++))
         ((CHECKED++))
 

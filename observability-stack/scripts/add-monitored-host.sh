@@ -20,15 +20,15 @@ if [[ -f "$SCRIPT_DIR/lib/common.sh" ]]; then
     source "$SCRIPT_DIR/lib/common.sh"
 else
     # Fallback colors if common.sh not available
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[1;33m'
+    BLUE=$'\033[0;34m'
+    NC=$'\033[0m'
 
-    log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-    log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-    log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+    log_info() { echo "${BLUE}[INFO]${NC} $1"; }
+    log_success() { echo "${GREEN}[SUCCESS]${NC} $1"; }
+    log_error() { echo "${RED}[ERROR]${NC} $1"; exit 1; }
 
     # Minimal validation fallbacks
     is_valid_ip() { [[ "$1" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; }
@@ -198,16 +198,16 @@ test_connectivity() {
         esac
 
         if curl -s --connect-timeout 3 "http://${HOST_IP}:${port}/metrics" > /dev/null 2>&1; then
-            echo -e "  ${GREEN}✓${NC} $exporter (port $port) - reachable"
+            echo "  ${GREEN}✓${NC} $exporter (port $port) - reachable"
         else
-            echo -e "  ${YELLOW}!${NC} $exporter (port $port) - unreachable"
+            echo "  ${YELLOW}!${NC} $exporter (port $port) - unreachable"
             failed=true
         fi
     done
 
     if [[ "$failed" == "true" ]]; then
         echo ""
-        echo -e "${YELLOW}Warning: Some exporters are unreachable.${NC}"
+        echo "${YELLOW}Warning: Some exporters are unreachable.${NC}"
         echo "Ensure the monitored host's firewall allows connections from this server."
         echo ""
         read -p "Continue anyway? [y/N] " -n 1 -r
@@ -281,7 +281,7 @@ verify_targets() {
         echo -e "  Targets for $HOST_IP found in Prometheus"
         log_success "Host $HOST_NAME ($HOST_IP) added successfully"
     else
-        echo -e "${YELLOW}Warning: Targets not yet visible in Prometheus. May take a few seconds.${NC}"
+        echo "${YELLOW}Warning: Targets not yet visible in Prometheus. May take a few seconds.${NC}"
     fi
 }
 
@@ -311,7 +311,7 @@ main() {
 
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Done!${NC}"
+    echo "${GREEN}Done!${NC}"
     echo "=========================================="
     echo ""
     echo "View targets: https://mentat.arewel.com/prometheus/targets"

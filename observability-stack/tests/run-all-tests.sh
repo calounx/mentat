@@ -7,23 +7,23 @@
 set -euo pipefail
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo -e "${BLUE}Observability Stack Test Runner${NC}"
+echo "${BLUE}Observability Stack Test Runner${NC}"
 echo "==============================="
 echo ""
 
 # Check if BATS is installed
 if ! command -v bats &>/dev/null; then
-    echo -e "${RED}ERROR: BATS is not installed${NC}"
+    echo "${RED}ERROR: BATS is not installed${NC}"
     echo "Please run: $SCRIPT_DIR/setup.sh"
     exit 1
 fi
@@ -94,7 +94,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            echo "${RED}Unknown option: $1${NC}"
             exit 1
             ;;
     esac
@@ -112,18 +112,18 @@ run_test_suite() {
     local test_dir="$2"
 
     if [[ ! -d "$test_dir" ]]; then
-        echo -e "${YELLOW}⚠${NC} $suite_name: directory not found"
+        echo "${YELLOW}⚠${NC} $suite_name: directory not found"
         return 0
     fi
 
     local test_count=$(find "$test_dir" -name "*.bats" 2>/dev/null | wc -l)
     if [[ $test_count -eq 0 ]]; then
-        echo -e "${YELLOW}⚠${NC} $suite_name: no tests found"
+        echo "${YELLOW}⚠${NC} $suite_name: no tests found"
         return 0
     fi
 
     echo ""
-    echo -e "${BLUE}Running $suite_name ($test_count test files)...${NC}"
+    echo "${BLUE}Running $suite_name ($test_count test files)...${NC}"
     echo "-----------------------------------"
 
     local suite_failed=false
@@ -139,9 +139,9 @@ run_test_suite() {
 
     # Run BATS tests
     if bats $bats_opts "$test_dir" 2>&1 | tee "$TEST_TMP_DIR/${suite_name// /_}.log"; then
-        echo -e "${GREEN}✓${NC} $suite_name: PASSED"
+        echo "${GREEN}✓${NC} $suite_name: PASSED"
     else
-        echo -e "${RED}✗${NC} $suite_name: FAILED"
+        echo "${RED}✗${NC} $suite_name: FAILED"
         suite_failed=true
     fi
 
@@ -177,7 +177,7 @@ if [[ "$RUN_UNIT" == "true" ]]; then
     run_test_suite "Unit Tests" "$SCRIPT_DIR/unit" || {
         if [[ "$FAIL_FAST" == "true" ]]; then
             echo ""
-            echo -e "${RED}Stopping due to test failure (--fail-fast)${NC}"
+            echo "${RED}Stopping due to test failure (--fail-fast)${NC}"
             exit 1
         fi
     }
@@ -188,7 +188,7 @@ if [[ "$RUN_INTEGRATION" == "true" ]]; then
     run_test_suite "Integration Tests" "$SCRIPT_DIR/integration" || {
         if [[ "$FAIL_FAST" == "true" ]]; then
             echo ""
-            echo -e "${RED}Stopping due to test failure (--fail-fast)${NC}"
+            echo "${RED}Stopping due to test failure (--fail-fast)${NC}"
             exit 1
         fi
     }
@@ -199,7 +199,7 @@ if [[ "$RUN_SECURITY" == "true" ]]; then
     run_test_suite "Security Tests" "$SCRIPT_DIR/security" || {
         if [[ "$FAIL_FAST" == "true" ]]; then
             echo ""
-            echo -e "${RED}Stopping due to test failure (--fail-fast)${NC}"
+            echo "${RED}Stopping due to test failure (--fail-fast)${NC}"
             exit 1
         fi
     }
@@ -210,7 +210,7 @@ if [[ "$RUN_ERRORS" == "true" ]]; then
     run_test_suite "Error Handling Tests" "$SCRIPT_DIR/errors" || {
         if [[ "$FAIL_FAST" == "true" ]]; then
             echo ""
-            echo -e "${RED}Stopping due to test failure (--fail-fast)${NC}"
+            echo "${RED}Stopping due to test failure (--fail-fast)${NC}"
             exit 1
         fi
     }
@@ -225,17 +225,17 @@ DURATION=$((END_TIME - START_TIME))
 
 echo ""
 echo ""
-echo -e "${BLUE}Test Summary${NC}"
+echo "${BLUE}Test Summary${NC}"
 echo "=================================="
 echo "Total Tests:   $TOTAL_TESTS"
-echo -e "${GREEN}Passed:${NC}        $PASSED_TESTS"
+echo "${GREEN}Passed:${NC}        $PASSED_TESTS"
 if [[ $FAILED_TESTS -gt 0 ]]; then
-    echo -e "${RED}Failed:${NC}        $FAILED_TESTS"
+    echo "${RED}Failed:${NC}        $FAILED_TESTS"
 else
     echo -e "Failed:        $FAILED_TESTS"
 fi
 if [[ $SKIPPED_TESTS -gt 0 ]]; then
-    echo -e "${YELLOW}Skipped:${NC}       $SKIPPED_TESTS"
+    echo "${YELLOW}Skipped:${NC}       $SKIPPED_TESTS"
 fi
 echo "Duration:      ${DURATION}s"
 echo ""
@@ -253,9 +253,9 @@ echo ""
 
 # Exit code
 if [[ $FAILED_TESTS -gt 0 ]]; then
-    echo -e "${RED}✗ TESTS FAILED${NC}"
+    echo "${RED}✗ TESTS FAILED${NC}"
     exit 1
 else
-    echo -e "${GREEN}✓ ALL TESTS PASSED${NC}"
+    echo "${GREEN}✓ ALL TESTS PASSED${NC}"
     exit 0
 fi

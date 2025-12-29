@@ -23,15 +23,15 @@ MIN_RAM_MB=1024
 #===============================================================================
 # Colors and Output
 #===============================================================================
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 
 print_banner() {
-    echo -e "${CYAN}"
+    echo "${CYAN}"
     cat << 'EOF'
   ___  _                              _     _ _ _ _
  / _ \| |__  ___  ___ _ ____   ____ _| |__ (_) (_) |_ _   _
@@ -41,13 +41,13 @@ print_banner() {
                                                       |___/
     Stack Deployment for Debian 13
 EOF
-    echo -e "${NC}"
+    echo "${NC}"
 }
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
+log_info() { echo "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo "${RED}[ERROR]${NC} $1"; }
+log_step() { echo "${BLUE}[STEP]${NC} $1"; }
 
 #===============================================================================
 # Validation Functions
@@ -189,7 +189,7 @@ run_installer() {
 main() {
     print_banner
 
-    echo -e "${CYAN}This script will install the Observability Stack on your Debian 13 VPS.${NC}"
+    echo "${CYAN}This script will install the Observability Stack on your Debian 13 VPS.${NC}"
     echo
 
     check_root

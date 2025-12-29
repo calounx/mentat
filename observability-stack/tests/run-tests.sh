@@ -7,11 +7,11 @@
 set -euo pipefail
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,19 +26,19 @@ SKIPPED=0
 #===============================================================================
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
 }
 
 log_skip() {
-    echo -e "${YELLOW}[SKIP]${NC} $1"
+    echo "${YELLOW}[SKIP]${NC} $1"
 }
 
 # Check prerequisites

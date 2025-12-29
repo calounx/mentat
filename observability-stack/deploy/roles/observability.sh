@@ -17,6 +17,32 @@ DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
 STACK_DIR="$(dirname "$DEPLOY_DIR")"
 
 #===============================================================================
+# IPv6 Management
+#===============================================================================
+
+disable_ipv6_if_requested() {
+    if [[ "${DISABLE_IPV6:-false}" != "true" ]]; then
+        log_info "IPv6 management skipped (not requested)"
+        return 0
+    fi
+
+    log_step "Disabling IPv6 for observability services..."
+
+    # Create sysctl config
+    cat > /etc/sysctl.d/99-observability-disable-ipv6.conf << 'EOF'
+# Disable IPv6 for observability stack
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+EOF
+
+    # Apply immediately
+    sysctl -p /etc/sysctl.d/99-observability-disable-ipv6.conf >/dev/null 2>&1
+
+    log_success "IPv6 disabled for observability services"
+}
+
+#===============================================================================
 # Version Resolution
 # Versions are sourced from config/versions.yaml with environment overrides
 #===============================================================================
@@ -40,16 +66,57 @@ resolve_versions() {
 }
 
 #===============================================================================
+# Pre-deployment Service Stop
+#===============================================================================
+
+stop_existing_services() {
+    log_step "Stopping existing services to prevent conflicts..."
+
+    local services=(
+        prometheus
+        loki
+        tempo
+        alertmanager
+        grafana-server
+        node_exporter
+        nginx
+    )
+
+    local stopped_count=0
+    for svc in "${services[@]}"; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+            log_info "Stopping $svc..."
+            systemctl stop "$svc" 2>/dev/null || true
+            stopped_count=$((stopped_count + 1))
+        fi
+    done
+
+    if [[ $stopped_count -gt 0 ]]; then
+        log_success "Stopped $stopped_count existing service(s)"
+        sleep 2  # Give ports time to release
+    else
+        log_info "No existing services to stop"
+    fi
+}
+
+#===============================================================================
 # Main Installation Function
 #===============================================================================
 
 install_observability_stack() {
     log_step "Installing Observability Stack..."
 
+    # Stop existing services FIRST to prevent conflicts
+    stop_existing_services
+
     # Resolve versions from config/versions.yaml
     resolve_versions
 
     install_system_packages
+
+    # Disable IPv6 if requested (before installing services)
+    disable_ipv6_if_requested
+
     install_prometheus
     install_loki
     install_tempo
@@ -663,6 +730,7 @@ LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
 METRICS_RETENTION_DAYS=${METRICS_RETENTION_DAYS:-15}
 LOGS_RETENTION_DAYS=${LOGS_RETENTION_DAYS:-7}
 CONFIGURE_SMTP=${CONFIGURE_SMTP:-false}
+DISABLE_IPV6=${DISABLE_IPV6:-false}
 
 # Versions
 PROMETHEUS_VERSION=${PROMETHEUS_VERSION}

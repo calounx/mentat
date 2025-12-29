@@ -81,11 +81,11 @@ parse_args() {
 parse_args "$@"
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m' # No Color
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -145,23 +145,23 @@ safe_extract() {
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_skip() {
-    echo -e "${GREEN}[SKIP]${NC} $1"
+    echo "${GREEN}[SKIP]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo "${RED}[ERROR]${NC} $1"
     exit 1
 }
 
@@ -224,8 +224,8 @@ check_config_diff() {
     # Files are different - show diff and prompt
     echo ""
     log_warn "$description has changes:"
-    echo -e "${YELLOW}--- Current (deployed)${NC}"
-    echo -e "${GREEN}+++ New (from script)${NC}"
+    echo "${YELLOW}--- Current (deployed)${NC}"
+    echo "${GREEN}+++ New (from script)${NC}"
     diff --color=always -u "$existing_file" "$temp_file" 2>/dev/null || diff -u "$existing_file" "$temp_file"
     echo ""
 
@@ -535,12 +535,12 @@ uninstall_ssl() {
 run_uninstall() {
     echo ""
     echo "=========================================="
-    echo -e "${RED}Uninstalling Observability Stack${NC}"
+    echo "${RED}Uninstalling Observability Stack${NC}"
     echo "=========================================="
     if [[ "$PURGE_DATA" == "true" ]]; then
-        echo -e "${RED}>>> PURGE MODE: All data will be deleted! <<<${NC}"
+        echo "${RED}>>> PURGE MODE: All data will be deleted! <<<${NC}"
     else
-        echo -e "${YELLOW}>>> Data will be preserved for potential recovery <<<${NC}"
+        echo "${YELLOW}>>> Data will be preserved for potential recovery <<<${NC}"
     fi
     echo ""
 
@@ -573,7 +573,7 @@ run_uninstall() {
 
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Uninstallation Complete${NC}"
+    echo "${GREEN}Uninstallation Complete${NC}"
     echo "=========================================="
     if [[ "$PURGE_DATA" != "true" ]]; then
         echo ""
@@ -2011,7 +2011,7 @@ final_setup() {
     # Print summary
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Observability Stack Setup Complete!${NC}"
+    echo "${GREEN}Observability Stack Setup Complete!${NC}"
     echo "=========================================="
     echo ""
     echo "Access Grafana at: https://${GRAFANA_DOMAIN}"
@@ -2064,7 +2064,7 @@ main() {
     echo "Observability Stack Setup for Debian 13"
     echo "=========================================="
     if [[ "$FORCE_MODE" == "true" ]]; then
-        echo -e "${YELLOW}>>> FORCE MODE: Reinstalling everything from scratch <<<${NC}"
+        echo "${YELLOW}>>> FORCE MODE: Reinstalling everything from scratch <<<${NC}"
     fi
     echo ""
 

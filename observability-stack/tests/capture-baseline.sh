@@ -7,24 +7,24 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+NC=$'\033[0m'
 
 BASELINE_DIR="/tmp/observability-baseline-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BASELINE_DIR"
 
 log_info() {
-    echo -e "${YELLOW}[INFO]${NC} $1"
+    echo "${YELLOW}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo "${RED}[ERROR]${NC} $1"
 }
 
 echo "=========================================="

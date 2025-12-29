@@ -6,17 +6,17 @@
 
 set -euo pipefail
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 PASSED=0
 FAILED=0
 
-log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; ((PASSED++)); }
-log_fail() { echo -e "${RED}[FAIL]${NC} $1"; ((FAILED++)); }
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_pass() { echo "${GREEN}[PASS]${NC} $1"; ((PASSED++)); }
+log_fail() { echo "${RED}[FAIL]${NC} $1"; ((FAILED++)); }
+log_info() { echo "${BLUE}[INFO]${NC} $1"; }
 
 echo ""
 echo "=========================================="
@@ -27,7 +27,7 @@ echo ""
 #===============================================================================
 # Test 1: Exporter Produces Metrics
 #===============================================================================
-echo -e "${BLUE}=== Step 1: Exporter Metrics Production ===${NC}"
+echo "${BLUE}=== Step 1: Exporter Metrics Production ===${NC}"
 
 # Test node_exporter
 NODE_METRICS=$(curl -s http://localhost:9100/metrics | grep "^node_cpu_seconds_total" | wc -l)
@@ -50,7 +50,7 @@ echo ""
 #===============================================================================
 # Test 2: Prometheus Scrapes Metrics
 #===============================================================================
-echo -e "${BLUE}=== Step 2: Prometheus Scraping ===${NC}"
+echo "${BLUE}=== Step 2: Prometheus Scraping ===${NC}"
 
 # Check if Prometheus has scraped node_exporter
 PROM_HAS_METRIC=$(curl -s 'http://localhost:9090/api/v1/query?query=node_cpu_seconds_total' | jq -r '.data.result | length')
@@ -76,7 +76,7 @@ echo ""
 #===============================================================================
 # Test 3: Prometheus Stores Time Series
 #===============================================================================
-echo -e "${BLUE}=== Step 3: Time Series Storage ===${NC}"
+echo "${BLUE}=== Step 3: Time Series Storage ===${NC}"
 
 # Query last 5 minutes of data
 RANGE_DATA=$(curl -s "http://localhost:9090/api/v1/query_range?query=up{job=\"node_exporter\"}&start=$(date -d '5 minutes ago' +%s)&end=$(date +%s)&step=15s" | jq -r '.data.result[0].values | length')
@@ -101,7 +101,7 @@ echo ""
 #===============================================================================
 # Test 4: Grafana Queries Prometheus
 #===============================================================================
-echo -e "${BLUE}=== Step 4: Grafana → Prometheus Query ===${NC}"
+echo "${BLUE}=== Step 4: Grafana → Prometheus Query ===${NC}"
 
 # Test Grafana can query through datasource proxy
 GRAFANA_QUERY=$(curl -s -u admin:admin 'http://localhost:3000/api/datasources/proxy/1/api/v1/query?query=up{job="node_exporter"}' | jq -r '.status')
@@ -126,7 +126,7 @@ echo ""
 #===============================================================================
 # Test 5: Dashboard Panels Render
 #===============================================================================
-echo -e "${BLUE}=== Step 5: Dashboard Rendering ===${NC}"
+echo "${BLUE}=== Step 5: Dashboard Rendering ===${NC}"
 
 # Check if dashboards exist
 DASHBOARD_COUNT=$(curl -s -u admin:admin 'http://localhost:3000/api/search?type=dash-db' | jq '. | length')
@@ -151,7 +151,7 @@ echo ""
 #===============================================================================
 # Test 6: Alert Rules Evaluate
 #===============================================================================
-echo -e "${BLUE}=== Step 6: Alert Rule Evaluation ===${NC}"
+echo "${BLUE}=== Step 6: Alert Rule Evaluation ===${NC}"
 
 # Check if alert rules are loaded
 RULES_LOADED=$(curl -s 'http://localhost:9090/api/v1/rules' | jq '[.data.groups[].rules[] | select(.type=="alerting")] | length')
@@ -176,7 +176,7 @@ echo ""
 #===============================================================================
 # Test 7: Multi-Exporter Integration
 #===============================================================================
-echo -e "${BLUE}=== Step 7: Multi-Exporter Validation ===${NC}"
+echo "${BLUE}=== Step 7: Multi-Exporter Validation ===${NC}"
 
 EXPORTERS=("node_exporter" "nginx_exporter" "mysqld_exporter" "phpfpm_exporter" "fail2ban_exporter")
 EXPORTERS_UP=0
@@ -199,7 +199,7 @@ echo ""
 #===============================================================================
 # Test 8: Metric Cardinality Check
 #===============================================================================
-echo -e "${BLUE}=== Step 8: Metric Cardinality ===${NC}"
+echo "${BLUE}=== Step 8: Metric Cardinality ===${NC}"
 
 # Count total time series
 TOTAL_SERIES=$(curl -s 'http://localhost:9090/api/v1/query?query=count({__name__=~".+"})' | jq -r '.data.result[0].value[1]' | cut -d. -f1)
@@ -222,7 +222,7 @@ echo ""
 #===============================================================================
 # Test 9: Query Performance
 #===============================================================================
-echo -e "${BLUE}=== Step 9: Query Performance ===${NC}"
+echo "${BLUE}=== Step 9: Query Performance ===${NC}"
 
 # Test simple query performance
 START_TIME=$(date +%s%N)
@@ -261,15 +261,15 @@ echo "=========================================="
 echo "  Integration Test Summary"
 echo "=========================================="
 echo ""
-echo -e "${GREEN}Passed: $PASSED${NC}"
-echo -e "${RED}Failed: $FAILED${NC}"
+echo "${GREEN}Passed: $PASSED${NC}"
+echo "${RED}Failed: $FAILED${NC}"
 echo -e "Total:  $((PASSED + FAILED))"
 echo ""
 
 if [[ "$FAILED" -eq 0 ]]; then
-    echo -e "${GREEN}METRICS E2E FLOW: FULLY OPERATIONAL${NC}"
+    echo "${GREEN}METRICS E2E FLOW: FULLY OPERATIONAL${NC}"
     exit 0
 else
-    echo -e "${RED}METRICS E2E FLOW: ISSUES DETECTED${NC}"
+    echo "${RED}METRICS E2E FLOW: ISSUES DETECTED${NC}"
     exit 1
 fi

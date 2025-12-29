@@ -34,12 +34,12 @@ readonly OBSERVABILITY_LOG_FILE="${OBSERVABILITY_LOG_FILE:-${LOG_BASE_DIR}/obser
 readonly OBSERVABILITY_LOG_MAX_SIZE="${OBSERVABILITY_LOG_MAX_SIZE:-10485760}"  # 10MB
 
 # Colors
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly CYAN='\033[0;36m'
-readonly NC='\033[0m'
+readonly RED=$'\033[0;31m'
+readonly GREEN=$'\033[0;32m'
+readonly YELLOW=$'\033[1;33m'
+readonly BLUE=$'\033[0;34m'
+readonly CYAN=$'\033[0;36m'
+readonly NC=$'\033[0m'
 
 #===============================================================================
 # LOGGING FUNCTIONS
@@ -89,7 +89,7 @@ _log_to_file() {
 # Returns: 0 (E_SUCCESS)
 log_info() {
     local message="$1"
-    echo -e "${BLUE}[INFO]${NC} ${message}"
+    echo "${BLUE}[INFO]${NC} ${message}"
     _log_to_file "INFO" "$message"
 }
 
@@ -100,7 +100,7 @@ log_info() {
 # Returns: 0 (E_SUCCESS)
 log_success() {
     local message="$1"
-    echo -e "${GREEN}[SUCCESS]${NC} ${message}"
+    echo "${GREEN}[SUCCESS]${NC} ${message}"
     _log_to_file "SUCCESS" "$message"
 }
 
@@ -111,7 +111,7 @@ log_success() {
 # Returns: 0 (E_SUCCESS)
 log_skip() {
     local message="$1"
-    echo -e "${GREEN}[SKIP]${NC} ${message}"
+    echo "${GREEN}[SKIP]${NC} ${message}"
     _log_to_file "SKIP" "$message"
 }
 
@@ -122,7 +122,7 @@ log_skip() {
 # Returns: 0 (E_SUCCESS)
 log_warn() {
     local message="$1"
-    echo -e "${YELLOW}[WARN]${NC} ${message}" >&2
+    echo "${YELLOW}[WARN]${NC} ${message}" >&2
     _log_to_file "WARN" "$message"
 }
 
@@ -133,7 +133,7 @@ log_warn() {
 # Returns: 0 (E_SUCCESS) - does not exit
 log_error() {
     local message="$1"
-    echo -e "${RED}[ERROR]${NC} ${message}" >&2
+    echo "${RED}[ERROR]${NC} ${message}" >&2
     _log_to_file "ERROR" "$message"
 }
 
@@ -146,7 +146,7 @@ log_error() {
 log_fatal() {
     local message="$1"
     local exit_code="${2:-$E_GENERAL}"
-    echo -e "${RED}[FATAL]${NC} ${message}" >&2
+    echo "${RED}[FATAL]${NC} ${message}" >&2
     _log_to_file "FATAL" "$message"
     exit "$exit_code"
 }
@@ -159,7 +159,7 @@ log_fatal() {
 log_debug() {
     local message="$1"
     if [[ "${DEBUG:-false}" == "true" ]]; then
-        echo -e "${CYAN}[DEBUG]${NC} ${message}"
+        echo "${CYAN}[DEBUG]${NC} ${message}"
         _log_to_file "DEBUG" "$message"
     fi
 }
@@ -520,8 +520,8 @@ check_config_diff() {
     # Files are different - show diff and prompt
     echo ""
     log_warn "$description has changes:"
-    echo -e "${YELLOW}--- Current (deployed)${NC}"
-    echo -e "${GREEN}+++ New (from script)${NC}"
+    echo "${YELLOW}--- Current (deployed)${NC}"
+    echo "${GREEN}+++ New (from script)${NC}"
     diff --color=always -u "$existing_file" "$temp_file" 2>/dev/null || diff -u "$existing_file" "$temp_file"
     echo ""
 

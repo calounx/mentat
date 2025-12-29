@@ -7,11 +7,11 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Counters
 CHECKS_PASSED=0
@@ -19,22 +19,22 @@ CHECKS_FAILED=0
 CHECKS_WARNING=0
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
     ((CHECKS_PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
     ((CHECKS_FAILED++))
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
     ((CHECKS_WARNING++))
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 echo ""
@@ -46,7 +46,7 @@ echo ""
 #===============================================================================
 # Service Status Checks
 #===============================================================================
-echo -e "${BLUE}=== Service Status ===${NC}"
+echo "${BLUE}=== Service Status ===${NC}"
 
 SERVICES=(
     "node_exporter"
@@ -78,7 +78,7 @@ echo ""
 #===============================================================================
 # Metrics Endpoint Checks
 #===============================================================================
-echo -e "${BLUE}=== Metrics Endpoints ===${NC}"
+echo "${BLUE}=== Metrics Endpoints ===${NC}"
 
 check_endpoint() {
     local name="$1"
@@ -117,7 +117,7 @@ echo ""
 #===============================================================================
 # Prometheus Target Checks
 #===============================================================================
-echo -e "${BLUE}=== Prometheus Targets ===${NC}"
+echo "${BLUE}=== Prometheus Targets ===${NC}"
 
 if curl -s http://localhost:9090/-/ready &>/dev/null; then
     TARGETS_JSON=$(curl -s http://localhost:9090/api/v1/targets 2>/dev/null)
@@ -147,7 +147,7 @@ echo ""
 #===============================================================================
 # Alert Rules Checks
 #===============================================================================
-echo -e "${BLUE}=== Alert Rules ===${NC}"
+echo "${BLUE}=== Alert Rules ===${NC}"
 
 if curl -s http://localhost:9090/-/ready &>/dev/null; then
     RULES_JSON=$(curl -s http://localhost:9090/api/v1/rules 2>/dev/null)
@@ -176,7 +176,7 @@ echo ""
 #===============================================================================
 # Prometheus Query Functionality
 #===============================================================================
-echo -e "${BLUE}=== Prometheus Queries ===${NC}"
+echo "${BLUE}=== Prometheus Queries ===${NC}"
 
 if curl -s http://localhost:9090/-/ready &>/dev/null; then
     # Test simple query
@@ -212,7 +212,7 @@ echo ""
 #===============================================================================
 # Loki Query Functionality
 #===============================================================================
-echo -e "${BLUE}=== Loki Queries ===${NC}"
+echo "${BLUE}=== Loki Queries ===${NC}"
 
 if curl -s http://localhost:3100/ready &>/dev/null; then
     # Test label query
@@ -249,7 +249,7 @@ echo ""
 #===============================================================================
 # Grafana Connectivity
 #===============================================================================
-echo -e "${BLUE}=== Grafana Connectivity ===${NC}"
+echo "${BLUE}=== Grafana Connectivity ===${NC}"
 
 if curl -s http://localhost:3000/api/health &>/dev/null; then
     # Check data sources
@@ -292,7 +292,7 @@ echo ""
 #===============================================================================
 # Storage Checks
 #===============================================================================
-echo -e "${BLUE}=== Storage ===${NC}"
+echo "${BLUE}=== Storage ===${NC}"
 
 # Check disk space
 ROOT_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
@@ -325,7 +325,7 @@ echo ""
 #===============================================================================
 # Error Log Checks
 #===============================================================================
-echo -e "${BLUE}=== Recent Errors ===${NC}"
+echo "${BLUE}=== Recent Errors ===${NC}"
 
 ERROR_COUNT=0
 
@@ -347,7 +347,7 @@ echo ""
 #===============================================================================
 # Performance Checks
 #===============================================================================
-echo -e "${BLUE}=== Performance ===${NC}"
+echo "${BLUE}=== Performance ===${NC}"
 
 # Prometheus query latency
 if curl -s http://localhost:9090/-/ready &>/dev/null; then
@@ -387,19 +387,19 @@ echo "=========================================="
 echo "  Health Check Summary"
 echo "=========================================="
 echo ""
-echo -e "${GREEN}Passed:  $CHECKS_PASSED${NC}"
-echo -e "${YELLOW}Warnings: $CHECKS_WARNING${NC}"
-echo -e "${RED}Failed:  $CHECKS_FAILED${NC}"
+echo "${GREEN}Passed:  $CHECKS_PASSED${NC}"
+echo "${YELLOW}Warnings: $CHECKS_WARNING${NC}"
+echo "${RED}Failed:  $CHECKS_FAILED${NC}"
 echo -e "Total:   $((CHECKS_PASSED + CHECKS_WARNING + CHECKS_FAILED))"
 echo ""
 
 if [[ "$CHECKS_FAILED" -eq 0 ]]; then
-    echo -e "${GREEN}Overall Status: HEALTHY${NC}"
+    echo "${GREEN}Overall Status: HEALTHY${NC}"
     exit 0
 elif [[ "$CHECKS_FAILED" -le 2 ]]; then
-    echo -e "${YELLOW}Overall Status: DEGRADED${NC}"
+    echo "${YELLOW}Overall Status: DEGRADED${NC}"
     exit 1
 else
-    echo -e "${RED}Overall Status: UNHEALTHY${NC}"
+    echo "${RED}Overall Status: UNHEALTHY${NC}"
     exit 2
 fi

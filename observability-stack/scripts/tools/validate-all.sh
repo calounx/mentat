@@ -7,18 +7,18 @@
 set -e
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC=$'\033[0m' # No Color
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-echo -e "${BOLD}Observability Stack - Comprehensive Validation${NC}"
+echo "${BOLD}Observability Stack - Comprehensive Validation${NC}"
 echo "================================================================"
 echo ""
 
@@ -31,21 +31,21 @@ run_validation() {
     local cmd="$2"
     local required="${3:-yes}"
 
-    echo -e "${BLUE}${BOLD}Running: ${name}${NC}"
+    echo "${BLUE}${BOLD}Running: ${name}${NC}"
     echo "Command: $cmd"
     echo ""
 
     if eval "$cmd"; then
-        echo -e "${GREEN}✓ ${name} - PASSED${NC}"
+        echo "${GREEN}✓ ${name} - PASSED${NC}"
         echo ""
         return 0
     else
         exit_code=$?
         if [ "$required" = "yes" ]; then
-            echo -e "${RED}✗ ${name} - FAILED (exit code: $exit_code)${NC}"
+            echo "${RED}✗ ${name} - FAILED (exit code: $exit_code)${NC}"
             VALIDATION_FAILED=1
         else
-            echo -e "${YELLOW}⚠ ${name} - FAILED (exit code: $exit_code) - Non-blocking${NC}"
+            echo "${YELLOW}⚠ ${name} - FAILED (exit code: $exit_code) - Non-blocking${NC}"
         fi
         echo ""
         return $exit_code
@@ -59,20 +59,20 @@ echo "Repository: $REPO_ROOT"
 echo ""
 
 # 1. Check Python dependencies
-echo -e "${BLUE}${BOLD}Checking Python dependencies...${NC}"
+echo "${BLUE}${BOLD}Checking Python dependencies...${NC}"
 if ! python3 -c "import yaml" 2>/dev/null; then
-    echo -e "${RED}Missing dependency: PyYAML${NC}"
+    echo "${RED}Missing dependency: PyYAML${NC}"
     echo "Install with: pip install PyYAML"
     exit 1
 fi
 
 if ! python3 -c "import jsonschema" 2>/dev/null; then
-    echo -e "${YELLOW}Optional dependency missing: jsonschema${NC}"
+    echo "${YELLOW}Optional dependency missing: jsonschema${NC}"
     echo "Some tools may not work. Install with: pip install jsonschema"
     echo ""
 fi
 
-echo -e "${GREEN}Python dependencies OK${NC}"
+echo "${GREEN}Python dependencies OK${NC}"
 echo ""
 echo "================================================================"
 echo ""
@@ -87,7 +87,7 @@ if python3 -c "import jsonschema" 2>/dev/null; then
         "YAML Schema Validation - All Modules" \
         "python3 scripts/tools/validate_schema.py modules/ --recursive"
 else
-    echo -e "${YELLOW}Skipping schema validation (jsonschema not installed)${NC}"
+    echo "${YELLOW}Skipping schema validation (jsonschema not installed)${NC}"
     echo ""
 fi
 
@@ -123,17 +123,17 @@ run_validation \
 
 # Summary
 echo "================================================================"
-echo -e "${BOLD}Validation Summary${NC}"
+echo "${BOLD}Validation Summary${NC}"
 echo "================================================================"
 echo ""
 
 if [ $VALIDATION_FAILED -eq 0 ]; then
-    echo -e "${GREEN}${BOLD}✓ All critical validations passed!${NC}"
+    echo "${GREEN}${BOLD}✓ All critical validations passed!${NC}"
     echo ""
     echo "Your observability stack configuration is valid and ready to use."
     exit 0
 else
-    echo -e "${RED}${BOLD}✗ Some validations failed!${NC}"
+    echo "${RED}${BOLD}✗ Some validations failed!${NC}"
     echo ""
     echo "Please review the errors above and fix the issues before deploying."
     exit 1

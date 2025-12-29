@@ -10,11 +10,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 show_help() {
     cat << EOF
@@ -59,87 +59,87 @@ run_command() {
 
     case "$cmd" in
         all)
-            echo -e "${BLUE}Running all tests...${NC}"
+            echo "${BLUE}Running all tests...${NC}"
             ./run-all-tests.sh
             ;;
 
         unit)
-            echo -e "${BLUE}Running unit tests...${NC}"
+            echo "${BLUE}Running unit tests...${NC}"
             ./run-all-tests.sh --unit-only
             ;;
 
         integration)
-            echo -e "${BLUE}Running integration tests...${NC}"
+            echo "${BLUE}Running integration tests...${NC}"
             ./run-all-tests.sh --integration-only
             ;;
 
         security)
-            echo -e "${BLUE}Running security tests...${NC}"
+            echo "${BLUE}Running security tests...${NC}"
             ./run-all-tests.sh --security-only
             ;;
 
         errors)
-            echo -e "${BLUE}Running error handling tests...${NC}"
+            echo "${BLUE}Running error handling tests...${NC}"
             ./run-all-tests.sh --errors-only
             ;;
 
         common)
-            echo -e "${BLUE}Running common.sh tests...${NC}"
+            echo "${BLUE}Running common.sh tests...${NC}"
             bats unit/test_common.bats
             ;;
 
         loader)
-            echo -e "${BLUE}Running module-loader.sh tests...${NC}"
+            echo "${BLUE}Running module-loader.sh tests...${NC}"
             bats unit/test_module_loader.bats
             ;;
 
         generator)
-            echo -e "${BLUE}Running config-generator.sh tests...${NC}"
+            echo "${BLUE}Running config-generator.sh tests...${NC}"
             bats unit/test_config_generator.bats
             ;;
 
         fast)
-            echo -e "${BLUE}Running fast tests (unit + security)...${NC}"
+            echo "${BLUE}Running fast tests (unit + security)...${NC}"
             bats unit/ security/
             ;;
 
         slow)
-            echo -e "${BLUE}Running slow tests (integration)...${NC}"
+            echo "${BLUE}Running slow tests (integration)...${NC}"
             bats integration/
             ;;
 
         check)
-            echo -e "${BLUE}Quick health check...${NC}"
+            echo "${BLUE}Quick health check...${NC}"
             echo "Running subset of critical tests..."
 
             # Run a few key tests from each category
             bats unit/test_common.bats::*yaml_get* 2>/dev/null || bats unit/test_common.bats
 
-            echo -e "${GREEN}✓ Health check passed${NC}"
+            echo "${GREEN}✓ Health check passed${NC}"
             ;;
 
         watch)
             if ! command -v entr &>/dev/null; then
-                echo -e "${RED}ERROR: 'entr' not installed${NC}"
+                echo "${RED}ERROR: 'entr' not installed${NC}"
                 echo "Install with: sudo apt-get install entr"
                 exit 1
             fi
 
-            echo -e "${BLUE}Watching for changes...${NC}"
+            echo "${BLUE}Watching for changes...${NC}"
             echo "Press Ctrl+C to stop"
 
             find ../scripts ../modules -name "*.sh" | entr -c ./run-all-tests.sh --unit-only
             ;;
 
         setup)
-            echo -e "${BLUE}Setting up test environment...${NC}"
+            echo "${BLUE}Setting up test environment...${NC}"
             ./setup.sh
             ;;
 
         clean)
-            echo -e "${BLUE}Cleaning test artifacts...${NC}"
+            echo "${BLUE}Cleaning test artifacts...${NC}"
             rm -rf /tmp/observability-stack-tests
-            echo -e "${GREEN}✓ Cleaned${NC}"
+            echo "${GREEN}✓ Cleaned${NC}"
             ;;
 
         help|--help|-h)
@@ -147,7 +147,7 @@ run_command() {
             ;;
 
         *)
-            echo -e "${RED}Unknown command: $cmd${NC}"
+            echo "${RED}Unknown command: $cmd${NC}"
             echo ""
             show_help
             exit 1

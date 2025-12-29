@@ -181,15 +181,15 @@ error_print() {
     local context
     context=$(error_get_context)
 
-    echo -e "${RED}[ERROR]${NC} $message (code: $code)" >&2
+    echo "${RED}[ERROR]${NC} $message (code: $code)" >&2
 
     if [[ -n "$context" ]] && [[ "$context" != "root" ]]; then
-        echo -e "${YELLOW}Context:${NC} $context" >&2
+        echo "${YELLOW}Context:${NC} $context" >&2
     fi
 
     if [[ "${DEBUG:-false}" == "true" ]]; then
-        echo -e "${YELLOW}Location:${NC} ${LAST_ERROR_FILE}:${LAST_ERROR_LINE} in ${LAST_ERROR_FUNCTION}()" >&2
-        echo -e "${YELLOW}Stack trace:${NC}" >&2
+        echo "${YELLOW}Location:${NC} ${LAST_ERROR_FILE}:${LAST_ERROR_LINE} in ${LAST_ERROR_FUNCTION}()" >&2
+        echo "${YELLOW}Stack trace:${NC}" >&2
         error_get_stack_trace >&2
     fi
 }

@@ -25,11 +25,11 @@ UNINSTALL_MODE=false
 PURGE_DATA=false
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Versions
 NODE_EXPORTER_VERSION="1.7.0"
@@ -93,23 +93,23 @@ done
 #===============================================================================
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_skip() {
-    echo -e "${GREEN}[SKIP]${NC} $1"
+    echo "${GREEN}[SKIP]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo "${RED}[ERROR]${NC} $1"
     exit 1
 }
 
@@ -171,8 +171,8 @@ check_config_diff() {
     # Files are different - show diff and prompt
     echo ""
     log_warn "$description has changes:"
-    echo -e "${YELLOW}--- Current (deployed)${NC}"
-    echo -e "${GREEN}+++ New (from script)${NC}"
+    echo "${YELLOW}--- Current (deployed)${NC}"
+    echo "${GREEN}+++ New (from script)${NC}"
     diff --color=always -u "$existing_file" "$temp_file" 2>/dev/null || diff -u "$existing_file" "$temp_file"
     echo ""
 
@@ -382,12 +382,12 @@ remove_firewall_rules() {
 run_uninstall() {
     echo ""
     echo "=========================================="
-    echo -e "${RED}Uninstalling Monitoring Agents${NC}"
+    echo "${RED}Uninstalling Monitoring Agents${NC}"
     echo "=========================================="
     if [[ "$PURGE_DATA" == "true" ]]; then
-        echo -e "${RED}>>> PURGE MODE: Configs will be deleted! <<<${NC}"
+        echo "${RED}>>> PURGE MODE: Configs will be deleted! <<<${NC}"
     else
-        echo -e "${YELLOW}>>> Configs will be preserved <<<${NC}"
+        echo "${YELLOW}>>> Configs will be preserved <<<${NC}"
     fi
     echo ""
 
@@ -405,7 +405,7 @@ run_uninstall() {
 
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Uninstallation Complete${NC}"
+    echo "${GREEN}Uninstallation Complete${NC}"
     echo "=========================================="
     if [[ "$PURGE_DATA" != "true" ]]; then
         echo ""
@@ -1232,7 +1232,7 @@ print_summary() {
 
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Monitored Host Setup Complete!${NC}"
+    echo "${GREEN}Monitored Host Setup Complete!${NC}"
     echo "=========================================="
     echo ""
     echo "Host: $HOSTNAME"
@@ -1244,12 +1244,12 @@ print_summary() {
     local MYSQL_NEEDS_SETUP=false
 
     if systemctl is-active --quiet node_exporter; then
-        echo -e "  ${GREEN}✓${NC} Node Exporter      (port 9100)"
+        echo "  ${GREEN}✓${NC} Node Exporter      (port 9100)"
         HAS_NODE=true
     fi
 
     if systemctl is-active --quiet nginx_exporter; then
-        echo -e "  ${GREEN}✓${NC} Nginx Exporter     (port 9113)"
+        echo "  ${GREEN}✓${NC} Nginx Exporter     (port 9113)"
         HAS_NGINX=true
     fi
 
@@ -1259,31 +1259,31 @@ print_summary() {
             local mysql_up
             mysql_up=$(curl -s http://localhost:9104/metrics 2>/dev/null | grep "^mysql_up " | awk '{print $2}')
             if [[ "$mysql_up" == "1" ]]; then
-                echo -e "  ${GREEN}✓${NC} MySQL Exporter     (port 9104)"
+                echo "  ${GREEN}✓${NC} MySQL Exporter     (port 9104)"
             else
-                echo -e "  ${YELLOW}!${NC} MySQL Exporter     (port 9104) - running but mysql_up=0"
+                echo "  ${YELLOW}!${NC} MySQL Exporter     (port 9104) - running but mysql_up=0"
                 MYSQL_NEEDS_SETUP=true
             fi
             HAS_MYSQL=true
         else
-            echo -e "  ${YELLOW}!${NC} MySQL Exporter     (port 9104) - needs configuration"
+            echo "  ${YELLOW}!${NC} MySQL Exporter     (port 9104) - needs configuration"
             MYSQL_NEEDS_SETUP=true
             HAS_MYSQL=true
         fi
     fi
 
     if systemctl is-active --quiet phpfpm_exporter; then
-        echo -e "  ${GREEN}✓${NC} PHP-FPM Exporter   (port 9253)"
+        echo "  ${GREEN}✓${NC} PHP-FPM Exporter   (port 9253)"
         HAS_PHPFPM=true
     fi
 
     if systemctl is-active --quiet fail2ban_exporter; then
-        echo -e "  ${GREEN}✓${NC} Fail2ban Exporter  (port 9191)"
+        echo "  ${GREEN}✓${NC} Fail2ban Exporter  (port 9191)"
         HAS_FAIL2BAN=true
     fi
 
     if systemctl is-active --quiet promtail; then
-        echo -e "  ${GREEN}✓${NC} Promtail           (log shipping)"
+        echo "  ${GREEN}✓${NC} Promtail           (log shipping)"
         HAS_PROMTAIL=true
     fi
 
@@ -1295,47 +1295,47 @@ print_summary() {
     if [[ "$MYSQL_NEEDS_SETUP" == "true" ]]; then
         echo ""
         echo "=========================================="
-        echo -e "${YELLOW}ACTION REQUIRED: MySQL Exporter Setup${NC}"
+        echo "${YELLOW}ACTION REQUIRED: MySQL Exporter Setup${NC}"
         echo "=========================================="
         echo ""
         echo "1. Create MySQL user (run as root on this host):"
         echo ""
-        echo -e "${BLUE}sudo mysql <<'EOF'"
+        echo "${BLUE}sudo mysql <<'EOF'"
         echo "CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY 'CHANGE_ME_SECURE_PASSWORD';"
         echo "CREATE USER IF NOT EXISTS 'exporter'@'127.0.0.1' IDENTIFIED BY 'CHANGE_ME_SECURE_PASSWORD';"
         echo "GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';"
         echo "GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'127.0.0.1';"
         echo "FLUSH PRIVILEGES;"
-        echo -e "EOF${NC}"
+        echo "EOF${NC}"
         echo ""
         echo "2. Update exporter config with the password:"
         echo ""
-        echo -e "${BLUE}sudo tee /etc/mysqld_exporter/.my.cnf > /dev/null <<'EOF'"
+        echo "${BLUE}sudo tee /etc/mysqld_exporter/.my.cnf > /dev/null <<'EOF'"
         echo "[client]"
         echo "user=exporter"
         echo "password=CHANGE_ME_SECURE_PASSWORD"
         echo "host=127.0.0.1"
-        echo -e "EOF${NC}"
+        echo "EOF${NC}"
         echo ""
         echo "3. Restart the exporter:"
         echo ""
-        echo -e "${BLUE}sudo systemctl restart mysqld_exporter${NC}"
+        echo "${BLUE}sudo systemctl restart mysqld_exporter${NC}"
         echo ""
         echo "4. Verify it works:"
         echo ""
-        echo -e "${BLUE}curl -s http://localhost:9104/metrics | grep mysql_up${NC}"
+        echo "${BLUE}curl -s http://localhost:9104/metrics | grep mysql_up${NC}"
         echo "# Should show: mysql_up 1"
     fi
 
     # Mentat commands
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}COMMANDS TO RUN ON MENTAT${NC}"
+    echo "${GREEN}COMMANDS TO RUN ON MENTAT${NC}"
     echo "=========================================="
     echo ""
     echo "Option 1: Use the helper script:"
     echo ""
-    echo -e "${BLUE}sudo ~/repo/mentat/observability-stack/scripts/add-monitored-host.sh \\"
+    echo "${BLUE}sudo ~/repo/mentat/observability-stack/scripts/add-monitored-host.sh \\"
     echo "  --name \"$(echo $HOSTNAME | cut -d. -f1)\" \\"
     echo "  --ip \"$HOST_IP\" \\"
     echo "  --description \"$(echo $HOSTNAME)\"${NC}"
@@ -1344,7 +1344,7 @@ print_summary() {
     echo ""
     echo "a) Add to global.yaml:"
     echo ""
-    echo -e "${BLUE}cat >> ~/repo/mentat/observability-stack/config/global.yaml <<'EOF'"
+    echo "${BLUE}cat >> ~/repo/mentat/observability-stack/config/global.yaml <<'EOF'"
     echo ""
     echo "  - name: \"$(echo $HOSTNAME | cut -d. -f1)\""
     echo "    ip: \"$HOST_IP\""
@@ -1355,12 +1355,12 @@ print_summary() {
     [[ "$HAS_MYSQL" == "true" ]] && echo "      - mysqld_exporter"
     [[ "$HAS_PHPFPM" == "true" ]] && echo "      - phpfpm_exporter"
     [[ "$HAS_FAIL2BAN" == "true" ]] && echo "      - fail2ban_exporter"
-    echo -e "EOF${NC}"
+    echo "EOF${NC}"
     echo ""
     echo "b) Regenerate Prometheus config and reload:"
     echo ""
-    echo -e "${BLUE}cd ~/repo/mentat/observability-stack/scripts"
-    echo -e "sudo ./setup-observability.sh${NC}"
+    echo "${BLUE}cd ~/repo/mentat/observability-stack/scripts"
+    echo "sudo ./setup-observability.sh${NC}"
     echo ""
 }
 
@@ -1380,7 +1380,7 @@ main() {
     echo "Monitored Host Agent Setup"
     echo "=========================================="
     if [[ "$FORCE_MODE" == "true" ]]; then
-        echo -e "${YELLOW}>>> FORCE MODE: Reinstalling everything from scratch <<<${NC}"
+        echo "${YELLOW}>>> FORCE MODE: Reinstalling everything from scratch <<<${NC}"
     fi
     echo ""
 

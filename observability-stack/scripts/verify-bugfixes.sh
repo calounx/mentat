@@ -10,27 +10,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m'
 
 PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0
 
 check_pass() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo "${GREEN}✓${NC} $1"
     PASS_COUNT=$((PASS_COUNT + 1))
 }
 
 check_fail() {
-    echo -e "${RED}✗${NC} $1"
+    echo "${RED}✗${NC} $1"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
 check_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo "${YELLOW}⚠${NC} $1"
     WARN_COUNT=$((WARN_COUNT + 1))
 }
 
@@ -340,9 +340,9 @@ echo "==============================================="
 echo "Verification Summary"
 echo "==============================================="
 echo ""
-echo -e "${GREEN}Passed:${NC}  $PASS_COUNT"
-echo -e "${YELLOW}Warnings:${NC} $WARN_COUNT"
-echo -e "${RED}Failed:${NC}  $FAIL_COUNT"
+echo "${GREEN}Passed:${NC}  $PASS_COUNT"
+echo "${YELLOW}Warnings:${NC} $WARN_COUNT"
+echo "${RED}Failed:${NC}  $FAIL_COUNT"
 echo ""
 
 # Overall status
@@ -353,12 +353,12 @@ echo "Pass Rate: ${pass_rate}%"
 echo ""
 
 if [[ $FAIL_COUNT -eq 0 ]]; then
-    echo -e "${GREEN}✓ All critical checks passed!${NC}"
+    echo "${GREEN}✓ All critical checks passed!${NC}"
     exit 0
 elif [[ $FAIL_COUNT -le 3 ]]; then
-    echo -e "${YELLOW}⚠ Minor issues found, review recommended${NC}"
+    echo "${YELLOW}⚠ Minor issues found, review recommended${NC}"
     exit 0
 else
-    echo -e "${RED}✗ Significant issues found, fixes needed${NC}"
+    echo "${RED}✗ Significant issues found, fixes needed${NC}"
     exit 1
 fi

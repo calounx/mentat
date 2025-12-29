@@ -14,13 +14,13 @@ BASE_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_FILE="${BASE_DIR}/config/global.yaml"
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m'
+NC=$'\033[0m'
 
 # Configuration values
 VPS_IP=""
@@ -41,26 +41,26 @@ LOKI_PASS=""
 
 print_header() {
     echo ""
-    echo -e "${BOLD}${BLUE}=========================================="
+    echo "${BOLD}${BLUE}=========================================="
     echo -e "$1"
-    echo -e "==========================================${NC}"
+    echo "==========================================${NC}"
     echo ""
 }
 
 print_step() {
-    echo -e "${CYAN}[$1]${NC} $2"
+    echo "${CYAN}[$1]${NC} $2"
 }
 
 print_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo "${GREEN}✓${NC} $1"
 }
 
 print_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo "${YELLOW}⚠${NC} $1"
 }
 
 print_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo "${RED}✗${NC} $1"
 }
 
 prompt() {
@@ -235,7 +235,7 @@ step_network_config() {
     # Get VPS IP
     local detected_ip
     detected_ip=$(hostname -I | awk '{print $1}')
-    echo -e "Detected IP: ${CYAN}$detected_ip${NC}"
+    echo "Detected IP: ${CYAN}$detected_ip${NC}"
     echo ""
 
     while true; do
@@ -368,11 +368,11 @@ step_passwords() {
         echo ""
         print_success "Generated strong passwords"
         echo ""
-        echo -e "${BOLD}Save these passwords securely:${NC}"
+        echo "${BOLD}Save these passwords securely:${NC}"
         echo ""
-        echo -e "Grafana admin password:  ${CYAN}$GRAFANA_PASS${NC}"
-        echo -e "Prometheus password:     ${CYAN}$PROM_PASS${NC}"
-        echo -e "Loki password:           ${CYAN}$LOKI_PASS${NC}"
+        echo "Grafana admin password:  ${CYAN}$GRAFANA_PASS${NC}"
+        echo "Prometheus password:     ${CYAN}$PROM_PASS${NC}"
+        echo "Loki password:           ${CYAN}$LOKI_PASS${NC}"
         echo ""
         echo "Press Enter after you've saved these passwords"
         read -r
@@ -439,7 +439,7 @@ step_monitored_hosts() {
 step_review() {
     print_header "Step 6/7: Review Configuration"
 
-    echo -e "${BOLD}Please review your configuration:${NC}"
+    echo "${BOLD}Please review your configuration:${NC}"
     echo ""
     echo "Network:"
     echo "  Server IP:    $VPS_IP"
@@ -600,19 +600,19 @@ EOF
 step_completion() {
     print_header "Setup Complete!"
 
-    echo -e "${GREEN}${BOLD}Your observability stack is ready!${NC}"
+    echo "${GREEN}${BOLD}Your observability stack is ready!${NC}"
     echo ""
-    echo -e "${BOLD}Access URLs:${NC}"
-    echo -e "  Grafana:        ${CYAN}https://$DOMAIN/${NC}"
-    echo -e "  Prometheus:     ${CYAN}https://$DOMAIN/prometheus/${NC}"
-    echo -e "  Loki:           ${CYAN}https://$DOMAIN/loki/${NC}"
-    echo -e "  Alertmanager:   ${CYAN}https://$DOMAIN/alertmanager/${NC}"
+    echo "${BOLD}Access URLs:${NC}"
+    echo "  Grafana:        ${CYAN}https://$DOMAIN/${NC}"
+    echo "  Prometheus:     ${CYAN}https://$DOMAIN/prometheus/${NC}"
+    echo "  Loki:           ${CYAN}https://$DOMAIN/loki/${NC}"
+    echo "  Alertmanager:   ${CYAN}https://$DOMAIN/alertmanager/${NC}"
     echo ""
-    echo -e "${BOLD}Grafana Login:${NC}"
+    echo "${BOLD}Grafana Login:${NC}"
     echo "  Username: admin"
-    echo -e "  Password: ${CYAN}$GRAFANA_PASS${NC}"
+    echo "  Password: ${CYAN}$GRAFANA_PASS${NC}"
     echo ""
-    echo -e "${BOLD}Next Steps:${NC}"
+    echo "${BOLD}Next Steps:${NC}"
     echo "  1. Login to Grafana and change the admin password"
     echo "  2. Install monitoring agents on your servers:"
     echo "     sudo ./scripts/setup-monitored-host.sh $VPS_IP"
@@ -621,10 +621,10 @@ step_completion() {
     echo "  4. Run health check:"
     echo "     ./scripts/health-check.sh"
     echo ""
-    echo -e "${BOLD}Quick Reference:${NC}"
+    echo "${BOLD}Quick Reference:${NC}"
     echo "  See QUICKREF.md for common commands and troubleshooting"
     echo ""
-    echo -e "${BOLD}Configuration:${NC}"
+    echo "${BOLD}Configuration:${NC}"
     echo "  $CONFIG_FILE"
     echo ""
 }

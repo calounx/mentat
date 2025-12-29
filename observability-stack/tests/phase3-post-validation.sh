@@ -7,27 +7,27 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 PASSED=0
 FAILED=0
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
     ((PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
     ((FAILED++))
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 echo ""
@@ -39,7 +39,7 @@ echo ""
 #===============================================================================
 # Version Checks
 #===============================================================================
-echo -e "${BLUE}=== Version Verification ===${NC}"
+echo "${BLUE}=== Version Verification ===${NC}"
 
 LOKI_VERSION=$(loki --version 2>&1 | grep -oP '(?<=version )\d+\.\d+\.\d+' | head -1 || echo "unknown")
 PROMTAIL_VERSION=$(promtail --version 2>&1 | grep -oP '(?<=version )\d+\.\d+\.\d+' | head -1 || echo "unknown")
@@ -62,7 +62,7 @@ echo ""
 #===============================================================================
 # Service Status
 #===============================================================================
-echo -e "${BLUE}=== Service Status ===${NC}"
+echo "${BLUE}=== Service Status ===${NC}"
 
 LOKI_STATUS=$(systemctl is-active loki 2>/dev/null || echo "inactive")
 if [[ "$LOKI_STATUS" == "active" ]]; then
@@ -83,7 +83,7 @@ echo ""
 #===============================================================================
 # Endpoint Health
 #===============================================================================
-echo -e "${BLUE}=== Endpoint Health ===${NC}"
+echo "${BLUE}=== Endpoint Health ===${NC}"
 
 # Loki ready endpoint
 if curl -f -s http://localhost:3100/ready &>/dev/null; then
@@ -113,7 +113,7 @@ echo ""
 #===============================================================================
 # Loki API Functionality
 #===============================================================================
-echo -e "${BLUE}=== Loki API Functionality ===${NC}"
+echo "${BLUE}=== Loki API Functionality ===${NC}"
 
 # Labels query
 LABELS_STATUS=$(curl -s 'http://localhost:3100/loki/api/v1/labels' 2>/dev/null | jq -r '.status')
@@ -146,7 +146,7 @@ echo ""
 #===============================================================================
 # Log Ingestion
 #===============================================================================
-echo -e "${BLUE}=== Log Ingestion ===${NC}"
+echo "${BLUE}=== Log Ingestion ===${NC}"
 
 # Check Loki ingester streams
 INGESTER_STREAMS=$(curl -s http://localhost:3100/metrics 2>/dev/null | grep "loki_ingester_streams{" | awk '{print $2}' | head -1)
@@ -185,7 +185,7 @@ echo ""
 #===============================================================================
 # End-to-End Log Flow Test
 #===============================================================================
-echo -e "${BLUE}=== End-to-End Log Flow ===${NC}"
+echo "${BLUE}=== End-to-End Log Flow ===${NC}"
 
 # Generate a test log entry
 TEST_MESSAGE="UPGRADE_TEST_$(date +%s)_PHASE3_VALIDATION"
@@ -209,7 +209,7 @@ echo ""
 #===============================================================================
 # Data Continuity
 #===============================================================================
-echo -e "${BLUE}=== Data Continuity ===${NC}"
+echo "${BLUE}=== Data Continuity ===${NC}"
 
 # Check for logs in the last hour (should span the upgrade)
 LOG_SAMPLES=$(curl -s "http://localhost:3100/loki/api/v1/query_range?query={job=\"varlogs\"}&start=$(date -d '1 hour ago' +%s)000000000&end=$(date +%s)000000000&limit=1000" 2>/dev/null | jq -r '.data.result[0].values | length' 2>/dev/null || echo "0")
@@ -225,7 +225,7 @@ echo ""
 #===============================================================================
 # Grafana Integration
 #===============================================================================
-echo -e "${BLUE}=== Grafana Integration ===${NC}"
+echo "${BLUE}=== Grafana Integration ===${NC}"
 
 # Check if Grafana can query Loki
 GRAFANA_LOKI=$(curl -s -u admin:admin 'http://localhost:3000/api/datasources/proxy/2/loki/api/v1/labels' 2>/dev/null | jq -r '.status')
@@ -248,7 +248,7 @@ echo ""
 #===============================================================================
 # Performance Checks
 #===============================================================================
-echo -e "${BLUE}=== Performance ===${NC}"
+echo "${BLUE}=== Performance ===${NC}"
 
 # Loki query latency
 LOKI_QUERY_TIME=$(curl -w "@-" -o /dev/null -s 'http://localhost:3100/loki/api/v1/query?query={job="varlogs"}&limit=10' <<'EOF'
@@ -283,7 +283,7 @@ echo ""
 #===============================================================================
 # Error Log Checks
 #===============================================================================
-echo -e "${BLUE}=== Recent Error Checks ===${NC}"
+echo "${BLUE}=== Recent Error Checks ===${NC}"
 
 LOKI_ERRORS=$(journalctl -u loki -n 50 --no-pager --since "10 minutes ago" 2>/dev/null | grep -i "level=error" | wc -l)
 if [[ "$LOKI_ERRORS" -eq 0 ]]; then
@@ -306,7 +306,7 @@ echo ""
 #===============================================================================
 # Loki 3.x Specific Checks
 #===============================================================================
-echo -e "${BLUE}=== Loki 3.x Specific Features ===${NC}"
+echo "${BLUE}=== Loki 3.x Specific Features ===${NC}"
 
 # Check Loki config API (new in v3)
 CONFIG_STATUS=$(curl -s http://localhost:3100/config 2>/dev/null | jq -r 'type')
@@ -340,13 +340,13 @@ echo "=========================================="
 echo "  Phase 3 Validation Summary"
 echo "=========================================="
 echo ""
-echo -e "${GREEN}Passed: $PASSED${NC}"
-echo -e "${RED}Failed: $FAILED${NC}"
+echo "${GREEN}Passed: $PASSED${NC}"
+echo "${RED}Failed: $FAILED${NC}"
 echo -e "Total:  $((PASSED + FAILED))"
 echo ""
 
 if [[ "$FAILED" -eq 0 ]]; then
-    echo -e "${GREEN}Phase 3: LOKI/PROMTAIL UPGRADE SUCCESSFUL${NC}"
+    echo "${GREEN}Phase 3: LOKI/PROMTAIL UPGRADE SUCCESSFUL${NC}"
     echo ""
     echo "All phases completed! Observability stack fully upgraded."
     echo ""
@@ -357,12 +357,12 @@ if [[ "$FAILED" -eq 0 ]]; then
     echo "  4. Document any issues encountered"
     exit 0
 elif [[ "$FAILED" -le 2 ]]; then
-    echo -e "${YELLOW}Phase 3: COMPLETED WITH MINOR ISSUES${NC}"
+    echo "${YELLOW}Phase 3: COMPLETED WITH MINOR ISSUES${NC}"
     echo ""
     echo "Review failures and monitor log ingestion"
     exit 0
 else
-    echo -e "${RED}Phase 3: VALIDATION FAILED${NC}"
+    echo "${RED}Phase 3: VALIDATION FAILED${NC}"
     echo ""
     echo "Multiple issues detected. Review logs and consider rollback."
     exit 1

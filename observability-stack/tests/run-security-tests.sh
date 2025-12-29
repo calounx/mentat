@@ -7,11 +7,11 @@
 set -euo pipefail
 
 # Color output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m' # No Color
 
 # Test directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,11 +39,11 @@ run_test_suite() {
     local suite_name="$1"
     local test_dir="$2"
 
-    echo -e "${BLUE}Running ${suite_name} Tests...${NC}"
+    echo "${BLUE}Running ${suite_name} Tests...${NC}"
     echo ""
 
     if [ ! -d "$test_dir" ]; then
-        echo -e "${YELLOW}Warning: Test directory not found: ${test_dir}${NC}"
+        echo "${YELLOW}Warning: Test directory not found: ${test_dir}${NC}"
         return 0
     fi
 
@@ -51,7 +51,7 @@ run_test_suite() {
     local test_files=$(find "$test_dir" -name "*.bats" -type f | sort)
 
     if [ -z "$test_files" ]; then
-        echo -e "${YELLOW}No tests found in ${test_dir}${NC}"
+        echo "${YELLOW}No tests found in ${test_dir}${NC}"
         return 0
     fi
 
@@ -59,7 +59,7 @@ run_test_suite() {
     for test_file in $test_files; do
         local test_name=$(basename "$test_file" .bats)
 
-        echo -e "${BLUE}→ ${test_name}${NC}"
+        echo "${BLUE}→ ${test_name}${NC}"
 
         # Run test and capture output
         local output_file="/tmp/bats_output_$$.txt"
@@ -77,12 +77,12 @@ run_test_suite() {
             SKIPPED_TESTS=$((SKIPPED_TESTS + skipped))
 
             if [ "$failed" -eq 0 ]; then
-                echo -e "  ${GREEN}✓ ${passed} tests passed${NC} ${YELLOW}(${skipped} skipped)${NC}"
+                echo "  ${GREEN}✓ ${passed} tests passed${NC} ${YELLOW}(${skipped} skipped)${NC}"
             else
-                echo -e "  ${RED}✗ ${failed} tests failed${NC}, ${GREEN}${passed} passed${NC}, ${YELLOW}${skipped} skipped${NC}"
+                echo "  ${RED}✗ ${failed} tests failed${NC}, ${GREEN}${passed} passed${NC}, ${YELLOW}${skipped} skipped${NC}"
             fi
         else
-            echo -e "  ${RED}✗ Test suite failed to run${NC}"
+            echo "  ${RED}✗ Test suite failed to run${NC}"
             FAILED_TESTS=$((FAILED_TESTS + 1))
         fi
 
@@ -111,13 +111,13 @@ run_test_suite "Integration" "$INTEGRATION_TESTS_DIR"
 
 # Generate summary
 echo "==============================================================================="
-echo -e "${BLUE}Test Summary${NC}"
+echo "${BLUE}Test Summary${NC}"
 echo "==============================================================================="
 echo ""
 echo "Total Tests:   $TOTAL_TESTS"
-echo -e "${GREEN}Passed:        $PASSED_TESTS${NC}"
-echo -e "${RED}Failed:        $FAILED_TESTS${NC}"
-echo -e "${YELLOW}Skipped:       $SKIPPED_TESTS${NC}"
+echo "${GREEN}Passed:        $PASSED_TESTS${NC}"
+echo "${RED}Failed:        $FAILED_TESTS${NC}"
+echo "${YELLOW}Skipped:       $SKIPPED_TESTS${NC}"
 echo ""
 
 # Calculate pass rate
@@ -152,9 +152,9 @@ echo ""
 
 # Exit with appropriate code
 if [ "$FAILED_TESTS" -gt 0 ]; then
-    echo -e "${RED}Some tests failed!${NC}"
+    echo "${RED}Some tests failed!${NC}"
     exit 1
 else
-    echo -e "${GREEN}All tests passed!${NC}"
+    echo "${GREEN}All tests passed!${NC}"
     exit 0
 fi

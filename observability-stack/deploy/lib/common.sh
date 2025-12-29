@@ -102,11 +102,11 @@ fi
 
 # Logging functions (fallbacks if not provided by shared.sh)
 if ! declare -f log_info >/dev/null 2>&1; then
-    log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-    log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-    log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-    log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
-    log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+    log_info() { echo "${GREEN}[INFO]${NC} $1"; }
+    log_warn() { echo "${YELLOW}[WARN]${NC} $1"; }
+    log_error() { echo "${RED}[ERROR]${NC} $1"; }
+    log_step() { echo "${BLUE}[STEP]${NC} $1"; }
+    log_success() { echo "${GREEN}[OK]${NC} $1"; }
 fi
 
 #===============================================================================
@@ -114,7 +114,7 @@ fi
 #===============================================================================
 
 print_banner() {
-    echo -e "${CYAN}"
+    echo "${CYAN}"
     cat << 'EOF'
   ___  _                              _     _ _ _ _
  / _ \| |__  ___  ___ _ ____   ____ _| |__ (_) (_) |_ _   _
@@ -123,7 +123,7 @@ print_banner() {
  \___/|_.__/|___/\___|_|    \_/ \__,_|_.__/|_|_|_|\__|\__, |
                                                       |___/
 EOF
-    echo -e "${NC}"
+    echo "${NC}"
 }
 
 #===============================================================================

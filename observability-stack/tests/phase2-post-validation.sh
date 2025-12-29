@@ -7,34 +7,34 @@
 set -euo pipefail
 
 # Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 PASSED=0
 FAILED=0
 CRITICAL_FAILED=0
 
 log_pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo "${GREEN}[PASS]${NC} $1"
     ((PASSED++))
 }
 
 log_fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo "${RED}[FAIL]${NC} $1"
     ((FAILED++))
 }
 
 log_critical() {
-    echo -e "${RED}[CRITICAL]${NC} $1"
+    echo "${RED}[CRITICAL]${NC} $1"
     ((CRITICAL_FAILED++))
     ((FAILED++))
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 echo ""
@@ -46,7 +46,7 @@ echo ""
 #===============================================================================
 # Version Check
 #===============================================================================
-echo -e "${BLUE}=== Version Verification ===${NC}"
+echo "${BLUE}=== Version Verification ===${NC}"
 
 PROM_VERSION=$(prometheus --version 2>&1 | grep -oP '(?<=version )\d+\.\d+\.\d+' | head -1 || echo "unknown")
 EXPECTED_VERSION="3.8.1"
@@ -62,7 +62,7 @@ echo ""
 #===============================================================================
 # Service Status
 #===============================================================================
-echo -e "${BLUE}=== Service Status ===${NC}"
+echo "${BLUE}=== Service Status ===${NC}"
 
 STATUS=$(systemctl is-active prometheus 2>/dev/null || echo "inactive")
 if [[ "$STATUS" == "active" ]]; then
@@ -84,7 +84,7 @@ echo ""
 #===============================================================================
 # Endpoint Health
 #===============================================================================
-echo -e "${BLUE}=== Endpoint Health ===${NC}"
+echo "${BLUE}=== Endpoint Health ===${NC}"
 
 # Ready endpoint
 if curl -f -s http://localhost:9090/-/ready &>/dev/null; then
@@ -113,7 +113,7 @@ echo ""
 #===============================================================================
 # API Functionality
 #===============================================================================
-echo -e "${BLUE}=== API Functionality ===${NC}"
+echo "${BLUE}=== API Functionality ===${NC}"
 
 # Simple query
 QUERY_STATUS=$(curl -s 'http://localhost:9090/api/v1/query?query=up' 2>/dev/null | jq -r '.status')
@@ -152,7 +152,7 @@ echo ""
 #===============================================================================
 # Target Health
 #===============================================================================
-echo -e "${BLUE}=== Target Health ===${NC}"
+echo "${BLUE}=== Target Health ===${NC}"
 
 TARGETS_JSON=$(curl -s http://localhost:9090/api/v1/targets 2>/dev/null)
 TARGETS_UP=$(echo "$TARGETS_JSON" | jq -r '.data.activeTargets[] | select(.health=="up") | .labels.job' | wc -l)
@@ -182,7 +182,7 @@ echo ""
 #===============================================================================
 # Alert Rules
 #===============================================================================
-echo -e "${BLUE}=== Alert Rules ===${NC}"
+echo "${BLUE}=== Alert Rules ===${NC}"
 
 RULES_JSON=$(curl -s http://localhost:9090/api/v1/rules 2>/dev/null)
 RULES_TOTAL=$(echo "$RULES_JSON" | jq '[.data.groups[].rules[]] | length')
@@ -211,7 +211,7 @@ echo ""
 #===============================================================================
 # TSDB Health
 #===============================================================================
-echo -e "${BLUE}=== TSDB Health ===${NC}"
+echo "${BLUE}=== TSDB Health ===${NC}"
 
 # Check TSDB blocks
 BLOCKS=$(curl -s 'http://localhost:9090/api/v1/query?query=prometheus_tsdb_blocks_loaded' 2>/dev/null | jq -r '.data.result[0].value[1]' 2>/dev/null || echo "0")
@@ -241,7 +241,7 @@ echo ""
 #===============================================================================
 # Data Continuity
 #===============================================================================
-echo -e "${BLUE}=== Data Continuity ===${NC}"
+echo "${BLUE}=== Data Continuity ===${NC}"
 
 # Check for data across upgrade window
 # Query data from 2 hours ago to now (should span the upgrade)
@@ -271,7 +271,7 @@ echo ""
 #===============================================================================
 # Performance Metrics
 #===============================================================================
-echo -e "${BLUE}=== Performance ===${NC}"
+echo "${BLUE}=== Performance ===${NC}"
 
 # Query latency
 QUERY_TIME=$(curl -w "@-" -o /dev/null -s 'http://localhost:9090/api/v1/query?query=up' <<'EOF'
@@ -314,7 +314,7 @@ echo ""
 #===============================================================================
 # Backward Compatibility
 #===============================================================================
-echo -e "${BLUE}=== Prometheus 3.x Specific Checks ===${NC}"
+echo "${BLUE}=== Prometheus 3.x Specific Checks ===${NC}"
 
 # Check that v2 queries still work (backward compatibility)
 V2_COMPAT=$(curl -s 'http://localhost:9090/api/v1/query?query=up{job="node_exporter"}' 2>/dev/null | jq -r '.status')
@@ -337,7 +337,7 @@ echo ""
 #===============================================================================
 # Error Log Checks
 #===============================================================================
-echo -e "${BLUE}=== Recent Error Checks ===${NC}"
+echo "${BLUE}=== Recent Error Checks ===${NC}"
 
 ERRORS=$(journalctl -u prometheus -n 100 --no-pager --since "10 minutes ago" 2>/dev/null | grep -i "level=error" | wc -l)
 if [[ "$ERRORS" -eq 0 ]]; then
@@ -360,7 +360,7 @@ echo ""
 #===============================================================================
 # Alertmanager Connectivity
 #===============================================================================
-echo -e "${BLUE}=== Alertmanager Connectivity ===${NC}"
+echo "${BLUE}=== Alertmanager Connectivity ===${NC}"
 
 AM_HEALTH=$(curl -s http://localhost:9090/api/v1/alertmanagers 2>/dev/null | jq -r '.data.activeAlertmanagers[0].url' 2>/dev/null)
 if [[ -n "$AM_HEALTH" ]]; then
@@ -378,31 +378,31 @@ echo "=========================================="
 echo "  Phase 2 Validation Summary"
 echo "=========================================="
 echo ""
-echo -e "${GREEN}Passed: $PASSED${NC}"
-echo -e "${RED}Failed: $FAILED${NC}"
-echo -e "${RED}Critical: $CRITICAL_FAILED${NC}"
+echo "${GREEN}Passed: $PASSED${NC}"
+echo "${RED}Failed: $FAILED${NC}"
+echo "${RED}Critical: $CRITICAL_FAILED${NC}"
 echo -e "Total:  $((PASSED + FAILED))"
 echo ""
 
 if [[ "$CRITICAL_FAILED" -gt 0 ]]; then
-    echo -e "${RED}Phase 2: CRITICAL FAILURES DETECTED${NC}"
+    echo "${RED}Phase 2: CRITICAL FAILURES DETECTED${NC}"
     echo ""
     echo "IMMEDIATE ACTION REQUIRED"
     echo "Consider rollback to Prometheus 2.48.1"
     exit 2
 elif [[ "$FAILED" -gt 3 ]]; then
-    echo -e "${RED}Phase 2: MULTIPLE FAILURES${NC}"
+    echo "${RED}Phase 2: MULTIPLE FAILURES${NC}"
     echo ""
     echo "Review failures before proceeding to Phase 3"
     exit 1
 elif [[ "$FAILED" -gt 0 ]]; then
-    echo -e "${YELLOW}Phase 2: COMPLETED WITH WARNINGS${NC}"
+    echo "${YELLOW}Phase 2: COMPLETED WITH WARNINGS${NC}"
     echo ""
     echo "Monitor Prometheus stability before Phase 3"
     echo "Recommend waiting 1 hour before proceeding"
     exit 0
 else
-    echo -e "${GREEN}Phase 2: PROMETHEUS 3.8.1 UPGRADE SUCCESSFUL${NC}"
+    echo "${GREEN}Phase 2: PROMETHEUS 3.8.1 UPGRADE SUCCESSFUL${NC}"
     echo ""
     echo "Ready to proceed to Phase 3 (Loki/Promtail)"
     exit 0

@@ -7,17 +7,17 @@
 set -euo pipefail
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m'
 
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo -e "${BLUE}Observability Stack Test Infrastructure Setup${NC}"
+echo "${BLUE}Observability Stack Test Infrastructure Setup${NC}"
 echo "=============================================="
 echo ""
 
@@ -30,11 +30,11 @@ check_command() {
     local package="$2"
 
     if command -v "$cmd" &>/dev/null; then
-        echo -e "${GREEN}✓${NC} $cmd found"
+        echo "${GREEN}✓${NC} $cmd found"
         return 0
     else
-        echo -e "${RED}✗${NC} $cmd not found"
-        echo -e "  ${YELLOW}Install with:${NC} $package"
+        echo "${RED}✗${NC} $cmd not found"
+        echo "  ${YELLOW}Install with:${NC} $package"
         return 1
     fi
 }
@@ -56,18 +56,18 @@ fi
 
 # Check for yq (YAML processor)
 if ! check_command yq "sudo snap install yq || brew install yq"; then
-    echo -e "${YELLOW}⚠${NC} yq not found (optional, tests will use awk-based parsing)"
+    echo "${YELLOW}⚠${NC} yq not found (optional, tests will use awk-based parsing)"
 fi
 
 # Check for promtool
 if ! check_command promtool "sudo apt-get install prometheus || brew install prometheus"; then
-    echo -e "${YELLOW}⚠${NC} promtool not found (optional, some integration tests will be skipped)"
+    echo "${YELLOW}⚠${NC} promtool not found (optional, some integration tests will be skipped)"
 fi
 
 echo ""
 
 if [[ $MISSING_DEPS -eq 1 ]]; then
-    echo -e "${RED}ERROR:${NC} Required dependencies are missing. Please install them first."
+    echo "${RED}ERROR:${NC} Required dependencies are missing. Please install them first."
     echo ""
     echo "Quick setup for BATS:"
     echo "  git clone https://github.com/bats-core/bats-core.git /tmp/bats-core"
@@ -101,8 +101,8 @@ if [[ -d "$TEST_TMP_DIR" ]]; then
 fi
 mkdir -p "$TEST_TMP_DIR"
 
-echo -e "${GREEN}✓${NC} Test directories created"
-echo -e "${GREEN}✓${NC} Test environment configured"
+echo "${GREEN}✓${NC} Test directories created"
+echo "${GREEN}✓${NC} Test environment configured"
 echo ""
 
 #===============================================================================
@@ -138,7 +138,7 @@ echo ""
 # SETUP COMPLETE
 #===============================================================================
 
-echo -e "${GREEN}✓ Test infrastructure setup complete!${NC}"
+echo "${GREEN}✓ Test infrastructure setup complete!${NC}"
 echo ""
 echo "To run tests:"
 echo "  All tests:         ./tests/run-all-tests.sh"

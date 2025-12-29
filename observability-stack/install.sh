@@ -11,11 +11,11 @@
 set -euo pipefail
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+BLUE=$'\033[0;34m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m'
 
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,19 +29,19 @@ COMPLETION_DEST="/etc/bash_completion.d/obs"
 #===============================================================================
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "${RED}[ERROR]${NC} $1" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "${YELLOW}[WARN]${NC} $1"
 }
 
 check_root() {
@@ -133,7 +133,7 @@ uninstall() {
 show_post_install() {
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}Installation Complete!${NC}"
+    echo "${GREEN}Installation Complete!${NC}"
     echo "=========================================="
     echo ""
     echo "The 'obs' command is now available."
