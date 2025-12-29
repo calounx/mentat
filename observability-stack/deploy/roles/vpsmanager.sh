@@ -220,24 +220,88 @@ install_php() {
 install_mariadb() {
     log_step "Installing MariaDB..."
 
-    apt-get install -y -qq mariadb-server mariadb-client
+    # Check if MariaDB is already installed
+    local mariadb_installed=false
+    if command -v mysql &>/dev/null && systemctl is-active --quiet mariadb 2>/dev/null; then
+        mariadb_installed=true
+        log_info "MariaDB is already installed and running"
+    fi
 
-    # Start MariaDB
-    systemctl enable mariadb
-    systemctl start mariadb
+    # Install if not present
+    if ! $mariadb_installed; then
+        apt-get install -y -qq mariadb-server mariadb-client
 
-    # Generate secure password
-    DB_ROOT_PASS=$(generate_password)
-    DB_APP_PASS=$(generate_password)
+        # Start MariaDB
+        systemctl enable mariadb
+        systemctl start mariadb
+    fi
 
-    # Secure installation
-    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_ROOT_PASS}';"
-    mysql -u root -p"${DB_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='';"
-    mysql -u root -p"${DB_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-    mysql -u root -p"${DB_ROOT_PASS}" -e "DROP DATABASE IF EXISTS test;"
-    mysql -u root -p"${DB_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
+    # Check if root password is already set
+    local root_password_set=false
+    if ! mysql -e "SELECT 1" &>/dev/null; then
+        root_password_set=true
+    fi
+
+    # Handle password configuration
+    if $mariadb_installed && $root_password_set; then
+        log_warn "MariaDB root password is already configured"
+
+        # Check if credentials file exists
+        if [[ -f /root/.credentials/mysql ]]; then
+            log_info "Loading existing credentials from /root/.credentials/mysql"
+            source /root/.credentials/mysql
+
+            # Test the credentials
+            if mysql -u root -p"${DB_ROOT_PASS}" -e "SELECT 1" &>/dev/null 2>&1; then
+                log_success "Existing credentials validated"
+            else
+                log_error "Credentials file exists but password is incorrect"
+                read -s -p "Enter MariaDB root password: " DB_ROOT_PASS
+                echo
+
+                if ! mysql -u root -p"${DB_ROOT_PASS}" -e "SELECT 1" &>/dev/null 2>&1; then
+                    log_error "Authentication failed"
+                    return 1
+                fi
+            fi
+        else
+            log_warn "No credentials file found"
+            read -s -p "Enter existing MariaDB root password: " DB_ROOT_PASS
+            echo
+
+            if ! mysql -u root -p"${DB_ROOT_PASS}" -e "SELECT 1" &>/dev/null 2>&1; then
+                log_error "Authentication failed"
+                return 1
+            fi
+
+            log_success "Root password validated"
+        fi
+    else
+        # Fresh installation - generate and set new password
+        DB_ROOT_PASS=$(generate_password)
+
+        log_info "Setting up MariaDB with new root password..."
+        mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_ROOT_PASS}';" || {
+            log_error "Failed to set root password"
+            return 1
+        }
+
+        # Secure installation
+        mysql -u root -p"${DB_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='';"
+        mysql -u root -p"${DB_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
+        mysql -u root -p"${DB_ROOT_PASS}" -e "DROP DATABASE IF EXISTS test;"
+        mysql -u root -p"${DB_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
+
+        log_success "MariaDB secured"
+    fi
+
+    # Generate application password if not already set
+    if [[ -z "${DB_APP_PASS:-}" ]]; then
+        DB_APP_PASS=$(generate_password)
+    fi
 
     # Create application database and user
+    log_step "Setting up application database..."
     mysql -u root -p"${DB_ROOT_PASS}" << EOF
 CREATE DATABASE IF NOT EXISTS vpsmanager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS 'vpsmanager'@'localhost' IDENTIFIED BY '${DB_APP_PASS}';
@@ -246,7 +310,11 @@ FLUSH PRIVILEGES;
 EOF
 
     # Create exporter user
-    MYSQL_EXPORTER_PASS=$(generate_password)
+    if [[ -z "${MYSQL_EXPORTER_PASS:-}" ]]; then
+        MYSQL_EXPORTER_PASS=$(generate_password)
+    fi
+
+    log_step "Setting up database exporter user..."
     mysql -u root -p"${DB_ROOT_PASS}" << EOF
 CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY '${MYSQL_EXPORTER_PASS}';
 GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';
@@ -265,7 +333,7 @@ MYSQL_EXPORTER_PASS=${MYSQL_EXPORTER_PASS}
 EOF
     chmod 600 /root/.credentials/mysql
 
-    log_success "MariaDB installed (credentials saved to /root/.credentials/mysql)"
+    log_success "MariaDB configured (credentials saved to /root/.credentials/mysql)"
 }
 
 #===============================================================================

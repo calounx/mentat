@@ -213,17 +213,36 @@ collect_vpsmanager_config() {
     echo "${CYAN}===============================================================${NC}"
     echo
 
-    # Observability VPS IP
-    read -p "Observability VPS IP address: " OBSERVABILITY_IP
-    if [[ -z "$OBSERVABILITY_IP" ]]; then
-        log_error "Observability VPS IP is required"
+    # Observability VPS IP or hostname
+    local obs_input
+    read -p "Observability VPS IP or hostname (e.g., mentat.arewel.com or 51.254.139.78): " obs_input
+    if [[ -z "$obs_input" ]]; then
+        log_error "Observability VPS IP/hostname is required"
         exit 1
+    fi
+
+    # Resolve hostname to IP if needed
+    OBSERVABILITY_HOSTNAME="$obs_input"
+    if [[ "$obs_input" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Input is already an IP
+        OBSERVABILITY_IP="$obs_input"
+        log_info "Using IP: ${GREEN}${OBSERVABILITY_IP}${NC}"
+    else
+        # Input is a hostname, resolve it
+        log_step "Resolving hostname: $obs_input"
+        OBSERVABILITY_IP=$(resolve_hostname "$obs_input")
+        if [[ $? -ne 0 ]] || [[ -z "$OBSERVABILITY_IP" ]]; then
+            log_error "Failed to resolve hostname: $obs_input"
+            exit 1
+        fi
+        log_success "Resolved to IP: ${GREEN}${OBSERVABILITY_IP}${NC}"
     fi
 
     # This host's IP
     local detected_ip
     detected_ip=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "")
 
+    echo
     echo "Detected this host's IP: ${GREEN}${detected_ip:-not detected}${NC}"
     read -p "This VPS IP [$detected_ip]: " HOST_IP
     HOST_IP="${HOST_IP:-$detected_ip}"
@@ -234,10 +253,21 @@ collect_vpsmanager_config() {
     read -p "Host name/label [$default_hostname]: " HOST_NAME
     HOST_NAME="${HOST_NAME:-$default_hostname}"
 
-    # VPSManager repository
+    # VPSManager repository - auto-detect CHOM
     echo
     echo "${CYAN}VPSManager Application:${NC}"
-    read -p "GitHub repository URL (e.g., https://github.com/user/vpsmanager.git): " VPSMANAGER_REPO
+
+    local detected_repo
+    detected_repo=$(detect_chom_repo)
+
+    if [[ -n "$detected_repo" ]]; then
+        log_success "Auto-detected CHOM repository: ${GREEN}${detected_repo}${NC}"
+        read -p "GitHub repository URL [$detected_repo]: " VPSMANAGER_REPO
+        VPSMANAGER_REPO="${VPSMANAGER_REPO:-$detected_repo}"
+    else
+        read -p "GitHub repository URL (e.g., https://github.com/user/vpsmanager.git): " VPSMANAGER_REPO
+    fi
+
     if [[ -z "$VPSMANAGER_REPO" ]]; then
         log_error "Repository URL is required"
         exit 1
@@ -273,7 +303,7 @@ collect_vpsmanager_config() {
     fi
 
     # Export configuration
-    export OBSERVABILITY_IP HOST_IP HOST_NAME
+    export OBSERVABILITY_IP OBSERVABILITY_HOSTNAME HOST_IP HOST_NAME
     export VPSMANAGER_REPO VPSMANAGER_BRANCH VPSMANAGER_DOMAIN
     export LETSENCRYPT_EMAIL PHP_VERSION
 }
@@ -285,17 +315,36 @@ collect_monitored_config() {
     echo "${CYAN}===============================================================${NC}"
     echo
 
-    # Observability VPS IP
-    read -p "Observability VPS IP address: " OBSERVABILITY_IP
-    if [[ -z "$OBSERVABILITY_IP" ]]; then
-        log_error "Observability VPS IP is required"
+    # Observability VPS IP or hostname
+    local obs_input
+    read -p "Observability VPS IP or hostname (e.g., mentat.arewel.com or 51.254.139.78): " obs_input
+    if [[ -z "$obs_input" ]]; then
+        log_error "Observability VPS IP/hostname is required"
         exit 1
+    fi
+
+    # Resolve hostname to IP if needed
+    OBSERVABILITY_HOSTNAME="$obs_input"
+    if [[ "$obs_input" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Input is already an IP
+        OBSERVABILITY_IP="$obs_input"
+        log_info "Using IP: ${GREEN}${OBSERVABILITY_IP}${NC}"
+    else
+        # Input is a hostname, resolve it
+        log_step "Resolving hostname: $obs_input"
+        OBSERVABILITY_IP=$(resolve_hostname "$obs_input")
+        if [[ $? -ne 0 ]] || [[ -z "$OBSERVABILITY_IP" ]]; then
+            log_error "Failed to resolve hostname: $obs_input"
+            exit 1
+        fi
+        log_success "Resolved to IP: ${GREEN}${OBSERVABILITY_IP}${NC}"
     fi
 
     # This host's IP
     local detected_ip
     detected_ip=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "")
 
+    echo
     echo "Detected this host's IP: ${GREEN}${detected_ip:-not detected}${NC}"
     read -p "This host's IP [$detected_ip]: " HOST_IP
     HOST_IP="${HOST_IP:-$detected_ip}"
@@ -322,7 +371,7 @@ collect_monitored_config() {
     fi
 
     # Export configuration
-    export OBSERVABILITY_IP HOST_IP HOST_NAME
+    export OBSERVABILITY_IP OBSERVABILITY_HOSTNAME HOST_IP HOST_NAME
     export DETECTED_SERVICES
 }
 
@@ -365,6 +414,72 @@ detect_services() {
 }
 
 #===============================================================================
+# Helper Functions
+#===============================================================================
+
+# Resolve hostname to IP address
+# Usage: resolve_hostname "hostname_or_ip"
+# Returns: IP address
+resolve_hostname() {
+    local input="$1"
+
+    # Check if input is already an IP address
+    if [[ "$input" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "$input"
+        return 0
+    fi
+
+    # Try to resolve hostname
+    local resolved_ip
+    resolved_ip=$(dig +short "$input" A | grep -E '^[0-9.]+$' | head -1)
+
+    if [[ -z "$resolved_ip" ]]; then
+        # Fallback to getent
+        resolved_ip=$(getent hosts "$input" | awk '{print $1}' | head -1)
+    fi
+
+    if [[ -z "$resolved_ip" ]]; then
+        log_error "Cannot resolve hostname: $input"
+        return 1
+    fi
+
+    echo "$resolved_ip"
+    return 0
+}
+
+# Auto-detect CHOM repository when running from mentat monorepo
+# Returns: CHOM git URL or empty string
+detect_chom_repo() {
+    local mentat_dir
+
+    # Check if we're in the mentat repository
+    if [[ -d "$STACK_DIR/../chom" ]]; then
+        # We're in the observability-stack subdirectory of mentat
+        local chom_dir="$STACK_DIR/../chom"
+
+        # Check if it's the calounx/mentat repo
+        if [[ -d "$chom_dir/.git" ]]; then
+            local remote_url
+            remote_url=$(cd "$chom_dir" && git config --get remote.origin.url 2>/dev/null || echo "")
+
+            if [[ "$remote_url" =~ calounx/mentat || "$remote_url" =~ chom ]]; then
+                echo "git@github.com:calounx/chom.git"
+                return 0
+            fi
+        fi
+
+        # Even if not a git repo, if chom directory exists in expected location
+        if [[ -f "$chom_dir/composer.json" ]]; then
+            log_info "Detected CHOM in monorepo (not a git clone)"
+            echo "git@github.com:calounx/chom.git"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+#===============================================================================
 # Summary Display
 #===============================================================================
 
@@ -400,7 +515,14 @@ show_vpsmanager_summary() {
     echo "  Role:              VPSManager (Laravel Application)"
     echo "  Host Name:         $HOST_NAME"
     echo "  Host IP:           $HOST_IP"
-    echo "  Observability VPS: $OBSERVABILITY_IP"
+
+    # Show hostname if different from IP
+    if [[ -n "${OBSERVABILITY_HOSTNAME:-}" ]] && [[ "$OBSERVABILITY_HOSTNAME" != "$OBSERVABILITY_IP" ]]; then
+        echo "  Observability VPS: $OBSERVABILITY_HOSTNAME ($OBSERVABILITY_IP)"
+    else
+        echo "  Observability VPS: $OBSERVABILITY_IP"
+    fi
+
     echo
     echo "  Application:"
     echo "    - Repository: $VPSMANAGER_REPO"
@@ -433,7 +555,14 @@ show_monitored_summary() {
     echo "  Role:              Monitored Host (Exporters Only)"
     echo "  Host Name:         $HOST_NAME"
     echo "  Host IP:           $HOST_IP"
-    echo "  Observability VPS: $OBSERVABILITY_IP"
+
+    # Show hostname if different from IP
+    if [[ -n "${OBSERVABILITY_HOSTNAME:-}" ]] && [[ "$OBSERVABILITY_HOSTNAME" != "$OBSERVABILITY_IP" ]]; then
+        echo "  Observability VPS: $OBSERVABILITY_HOSTNAME ($OBSERVABILITY_IP)"
+    else
+        echo "  Observability VPS: $OBSERVABILITY_IP"
+    fi
+
     echo "  Detected Services: ${DETECTED_SERVICES[*]}"
     echo
 }
