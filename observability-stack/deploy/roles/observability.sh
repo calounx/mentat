@@ -72,16 +72,36 @@ install_system_packages() {
     log_step "Installing system packages..."
 
     apt-get update -qq
-    apt-get install -y -qq \
-        nginx \
-        certbot \
-        python3-certbot-nginx \
-        apache2-utils \
-        jq \
-        curl \
-        wget \
-        unzip \
+
+    # Detect Debian version
+    local debian_version=""
+    if [[ -f /etc/os-release ]]; then
+        source /etc/os-release
+        debian_version="${VERSION_ID:-}"
+    fi
+
+    # Build package list
+    local packages=(
+        nginx
+        certbot
+        python3-certbot-nginx
+        apache2-utils
+        jq
+        curl
+        wget
+        unzip
         apt-transport-https
+    )
+
+    # Add software-properties-common only for Debian 11-12 (not needed on Debian 13+)
+    if [[ "$debian_version" =~ ^(11|12)$ ]]; then
+        packages+=(software-properties-common)
+        log_info "Adding software-properties-common (Debian $debian_version)"
+    else
+        log_info "Skipping software-properties-common (Debian $debian_version - not required)"
+    fi
+
+    apt-get install -y -qq "${packages[@]}"
 
     log_success "System packages installed"
 }
@@ -106,6 +126,12 @@ install_prometheus() {
 
     # Create user (idempotent)
     ensure_system_user prometheus prometheus
+
+    # Stop service if running (to avoid "Text file busy" error)
+    if systemctl is-active --quiet prometheus 2>/dev/null; then
+        log_info "Stopping prometheus service to update binary..."
+        systemctl stop prometheus
+    fi
 
     # Download and extract
     cd /tmp
@@ -173,6 +199,12 @@ install_loki() {
     # Create user (idempotent)
     ensure_system_user loki loki
 
+    # Stop service if running (to avoid "Text file busy" error)
+    if systemctl is-active --quiet loki 2>/dev/null; then
+        log_info "Stopping loki service to update binary..."
+        systemctl stop loki
+    fi
+
     # Download and extract
     cd /tmp
     download_file "$url" "loki.zip"
@@ -232,6 +264,12 @@ install_tempo() {
 
     # Create user (idempotent)
     ensure_system_user tempo tempo
+
+    # Stop service if running (to avoid "Text file busy" error)
+    if systemctl is-active --quiet tempo 2>/dev/null; then
+        log_info "Stopping tempo service to update binary..."
+        systemctl stop tempo
+    fi
 
     # Download and extract
     cd /tmp
@@ -332,6 +370,12 @@ install_alertmanager() {
     # Create user (idempotent)
     ensure_system_user alertmanager alertmanager
 
+    # Stop service if running (to avoid "Text file busy" error)
+    if systemctl is-active --quiet alertmanager 2>/dev/null; then
+        log_info "Stopping alertmanager service to update binary..."
+        systemctl stop alertmanager
+    fi
+
     # Download and extract
     cd /tmp
     download_file "$url" "$tarball"
@@ -417,6 +461,12 @@ install_node_exporter() {
 
     # Create user (idempotent)
     ensure_system_user node_exporter node_exporter
+
+    # Stop service if running (to avoid "Text file busy" error)
+    if systemctl is-active --quiet node_exporter 2>/dev/null; then
+        log_info "Stopping node_exporter service to update binary..."
+        systemctl stop node_exporter
+    fi
 
     # Download and extract
     cd /tmp
@@ -561,6 +611,10 @@ ROLE=observability
 OBSERVABILITY_IP=${OBSERVABILITY_IP}
 GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-}
 USE_SSL=${USE_SSL:-false}
+LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+METRICS_RETENTION_DAYS=${METRICS_RETENTION_DAYS:-15}
+LOGS_RETENTION_DAYS=${LOGS_RETENTION_DAYS:-7}
+CONFIGURE_SMTP=${CONFIGURE_SMTP:-false}
 
 # Versions
 PROMETHEUS_VERSION=${PROMETHEUS_VERSION}

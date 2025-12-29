@@ -18,14 +18,31 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 
 #===============================================================================
+# Load Previous Installation Values
+#===============================================================================
+
+load_previous_config() {
+    local install_file="${STACK_DIR}/.installation"
+
+    if [[ -f "$install_file" ]]; then
+        log_info "Found previous installation, loading values..."
+        # Source the file to load variables
+        source "$install_file"
+        return 0
+    fi
+
+    return 1
+}
+
+#===============================================================================
 # Role Selection
 #===============================================================================
 
 select_role() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  Select Installation Role${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  Select Installation Role${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
     echo "  1) ${GREEN}Observability VPS${NC}"
     echo "     - Prometheus, Loki, Tempo, Grafana, Alertmanager"
@@ -78,18 +95,22 @@ select_role() {
 
 collect_observability_config() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  Observability VPS Configuration${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  Observability VPS Configuration${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
 
-    # Get public IP
+    # Get public IP (use previous value as fallback)
     local detected_ip
     detected_ip=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "")
+    local default_ip="${OBSERVABILITY_IP:-$detected_ip}"
 
-    echo -e "Detected public IP: ${GREEN}${detected_ip:-not detected}${NC}"
-    read -p "Observability VPS IP [$detected_ip]: " OBSERVABILITY_IP
-    OBSERVABILITY_IP="${OBSERVABILITY_IP:-$detected_ip}"
+    echo "Detected public IP: ${GREEN}${detected_ip:-not detected}${NC}"
+    if [[ -n "${OBSERVABILITY_IP:-}" ]] && [[ "$OBSERVABILITY_IP" != "$detected_ip" ]]; then
+        echo "Previous value: ${YELLOW}${OBSERVABILITY_IP}${NC}"
+    fi
+    read -p "Observability VPS IP [$default_ip]: " input_ip
+    OBSERVABILITY_IP="${input_ip:-$default_ip}"
 
     if [[ -z "$OBSERVABILITY_IP" ]]; then
         log_error "IP address is required"
@@ -98,32 +119,45 @@ collect_observability_config() {
 
     # Domain for Grafana
     echo
-    read -p "Domain for Grafana (e.g., grafana.example.com): " GRAFANA_DOMAIN
+    local domain_prompt="Domain for Grafana"
+    if [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+        domain_prompt="$domain_prompt [${GRAFANA_DOMAIN}]"
+    else
+        domain_prompt="$domain_prompt (e.g., grafana.example.com)"
+    fi
+    read -p "$domain_prompt: " input_domain
+    GRAFANA_DOMAIN="${input_domain:-${GRAFANA_DOMAIN:-}}"
+
     if [[ -z "$GRAFANA_DOMAIN" ]]; then
         log_warn "No domain provided - will use IP access only (no SSL)"
         GRAFANA_DOMAIN=""
         USE_SSL=false
     else
         USE_SSL=true
-        read -p "Email for Let's Encrypt SSL: " LETSENCRYPT_EMAIL
+        local default_email="${LETSENCRYPT_EMAIL:-}"
+        read -p "Email for Let's Encrypt SSL${default_email:+ [$default_email]}: " input_email
+        LETSENCRYPT_EMAIL="${input_email:-$default_email}"
     fi
 
     # Grafana admin password
     echo
     local default_pass
     default_pass=$(generate_password)
-    echo -e "Generated admin password: ${YELLOW}$default_pass${NC}"
+    echo "Generated admin password: ${YELLOW}$default_pass${NC}"
     read -p "Grafana admin password [$default_pass]: " GRAFANA_PASSWORD
     GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-$default_pass}"
 
     # Retention settings
     echo
     echo "Data retention (based on disk space):"
-    read -p "Metrics retention days [15]: " METRICS_RETENTION_DAYS
-    METRICS_RETENTION_DAYS="${METRICS_RETENTION_DAYS:-15}"
+    local default_metrics_retention="${METRICS_RETENTION_DAYS:-15}"
+    local default_logs_retention="${LOGS_RETENTION_DAYS:-7}"
 
-    read -p "Logs retention days [7]: " LOGS_RETENTION_DAYS
-    LOGS_RETENTION_DAYS="${LOGS_RETENTION_DAYS:-7}"
+    read -p "Metrics retention days [$default_metrics_retention]: " input_metrics
+    METRICS_RETENTION_DAYS="${input_metrics:-$default_metrics_retention}"
+
+    read -p "Logs retention days [$default_logs_retention]: " input_logs
+    LOGS_RETENTION_DAYS="${input_logs:-$default_logs_retention}"
 
     # Alert configuration (optional)
     echo
@@ -161,9 +195,9 @@ collect_observability_config() {
 
 collect_vpsmanager_config() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  VPSManager Configuration${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  VPSManager Configuration${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
 
     # Observability VPS IP
@@ -177,7 +211,7 @@ collect_vpsmanager_config() {
     local detected_ip
     detected_ip=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "")
 
-    echo -e "Detected this host's IP: ${GREEN}${detected_ip:-not detected}${NC}"
+    echo "Detected this host's IP: ${GREEN}${detected_ip:-not detected}${NC}"
     read -p "This VPS IP [$detected_ip]: " HOST_IP
     HOST_IP="${HOST_IP:-$detected_ip}"
 
@@ -189,7 +223,7 @@ collect_vpsmanager_config() {
 
     # VPSManager repository
     echo
-    echo -e "${CYAN}VPSManager Application:${NC}"
+    echo "${CYAN}VPSManager Application:${NC}"
     read -p "GitHub repository URL (e.g., https://github.com/user/vpsmanager.git): " VPSMANAGER_REPO
     if [[ -z "$VPSMANAGER_REPO" ]]; then
         log_error "Repository URL is required"
@@ -233,9 +267,9 @@ collect_vpsmanager_config() {
 
 collect_monitored_config() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  Monitored Host Configuration${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  Monitored Host Configuration${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
 
     # Observability VPS IP
@@ -249,7 +283,7 @@ collect_monitored_config() {
     local detected_ip
     detected_ip=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "")
 
-    echo -e "Detected this host's IP: ${GREEN}${detected_ip:-not detected}${NC}"
+    echo "Detected this host's IP: ${GREEN}${detected_ip:-not detected}${NC}"
     read -p "This host's IP [$detected_ip]: " HOST_IP
     HOST_IP="${HOST_IP:-$detected_ip}"
 
@@ -323,9 +357,9 @@ detect_services() {
 
 show_observability_summary() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  Configuration Summary${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  Configuration Summary${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
     echo "  Role:              Observability VPS"
     echo "  IP Address:        $OBSERVABILITY_IP"
@@ -346,9 +380,9 @@ show_observability_summary() {
 
 show_vpsmanager_summary() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  Configuration Summary${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  Configuration Summary${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
     echo "  Role:              VPSManager (Laravel Application)"
     echo "  Host Name:         $HOST_NAME"
@@ -379,9 +413,9 @@ show_vpsmanager_summary() {
 
 show_monitored_summary() {
     echo
-    echo -e "${CYAN}===============================================================${NC}"
-    echo -e "${CYAN}  Configuration Summary${NC}"
-    echo -e "${CYAN}===============================================================${NC}"
+    echo "${CYAN}===============================================================${NC}"
+    echo "${CYAN}  Configuration Summary${NC}"
+    echo "${CYAN}===============================================================${NC}"
     echo
     echo "  Role:              Monitored Host (Exporters Only)"
     echo "  Host Name:         $HOST_NAME"
@@ -417,18 +451,18 @@ run_role_installer() {
 
 show_completion() {
     echo
-    echo -e "${GREEN}===============================================================${NC}"
-    echo -e "${GREEN}  Installation Complete!${NC}"
-    echo -e "${GREEN}===============================================================${NC}"
+    echo "${GREEN}===============================================================${NC}"
+    echo "${GREEN}  Installation Complete!${NC}"
+    echo "${GREEN}===============================================================${NC}"
     echo
 
     case "$ROLE" in
         observability)
             echo "  Grafana URL:"
             if [[ "${USE_SSL:-false}" == "true" ]]; then
-                echo -e "    ${CYAN}https://${GRAFANA_DOMAIN}${NC}"
+                echo "    ${CYAN}https://${GRAFANA_DOMAIN}${NC}"
             else
-                echo -e "    ${CYAN}http://${OBSERVABILITY_IP}:3000${NC}"
+                echo "    ${CYAN}http://${OBSERVABILITY_IP}:3000${NC}"
             fi
             echo
             echo "  Credentials:"
@@ -449,7 +483,7 @@ show_completion() {
 
         vpsmanager)
             echo "  VPSManager URL:"
-            echo -e "    ${CYAN}https://${VPSMANAGER_DOMAIN}${NC}"
+            echo "    ${CYAN}https://${VPSMANAGER_DOMAIN}${NC}"
             echo
             echo "  Database Credentials:"
             echo "    Saved to: /root/.credentials/mysql"
@@ -489,7 +523,7 @@ show_completion() {
     esac
 
     echo
-    echo -e "${CYAN}Documentation: $STACK_DIR/deploy/README.md${NC}"
+    echo "${CYAN}Documentation: $STACK_DIR/deploy/README.md${NC}"
     echo
 }
 
@@ -545,6 +579,9 @@ main() {
 
     # Run pre-flight checks before anything else
     run_preflight_checks
+
+    # Load previous installation values if available
+    load_previous_config || true
 
     select_role
 

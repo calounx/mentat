@@ -54,42 +54,42 @@ supports_colors() {
 # Only define colors if not already set (prevents readonly variable conflicts)
 if [[ -z "${RED:-}" ]]; then
     if supports_colors; then
-        RED='\033[0;31m'
+        RED=$'\033[0;31m'
     else
         RED=''
     fi
 fi
 if [[ -z "${GREEN:-}" ]]; then
     if supports_colors; then
-        GREEN='\033[0;32m'
+        GREEN=$'\033[0;32m'
     else
         GREEN=''
     fi
 fi
 if [[ -z "${YELLOW:-}" ]]; then
     if supports_colors; then
-        YELLOW='\033[1;33m'
+        YELLOW=$'\033[1;33m'
     else
         YELLOW=''
     fi
 fi
 if [[ -z "${BLUE:-}" ]]; then
     if supports_colors; then
-        BLUE='\033[0;34m'
+        BLUE=$'\033[0;34m'
     else
         BLUE=''
     fi
 fi
 if [[ -z "${CYAN:-}" ]]; then
     if supports_colors; then
-        CYAN='\033[0;36m'
+        CYAN=$'\033[0;36m'
     else
         CYAN=''
     fi
 fi
 if [[ -z "${NC:-}" ]]; then
     if supports_colors; then
-        NC='\033[0m'
+        NC=$'\033[0m'
     else
         NC=''
     fi
