@@ -43,8 +43,9 @@ ssh root@your-vps-ip
 # Create user named 'deploy' (or your preferred name)
 useradd -m -s /bin/bash deploy
 
-# Set a strong password (optional, since we'll use SSH keys)
+# Set a strong password (REQUIRED for ssh-copy-id)
 passwd deploy
+# This password is needed when you run ssh-copy-id from your control machine
 ```
 
 #### Step 2: Grant Sudo Privileges

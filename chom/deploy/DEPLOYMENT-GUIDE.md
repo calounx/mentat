@@ -141,15 +141,20 @@ chmod +x create-deploy-user.sh
 sudo ./create-deploy-user.sh deploy
 
 # The script will:
-# ✓ Create user 'deploy'
+# ✓ Create user 'deploy' (or whatever username you specify)
 # ✓ Configure passwordless sudo
 # ✓ Setup SSH directory
-# ✓ Prompt to add your SSH public key
+# ✓ Prompt you to set a PASSWORD (required for ssh-copy-id)
+# ✓ Show you the ssh-copy-id command to run from your control machine
 
 # Repeat for VPSManager VPS
 ssh root@203.0.113.20
 # ... same steps ...
 ```
+
+**IMPORTANT**: The username 'deploy' is just an example. You can use any username you want. Just make sure to:
+1. Use the same username in `inventory.yaml` under `ssh_user`
+2. Set a password for that user (needed for `ssh-copy-id`)
 
 #### Option B: Manual Setup
 
@@ -184,10 +189,10 @@ chown -R deploy:deploy /home/deploy/.ssh
 
 ### Step 4: Verify Sudo User Access
 
-Test the deployment user on both servers:
+Test the deployment user on both servers (replace 'deploy' with your actual username from inventory.yaml):
 
 ```bash
-# Test Observability VPS
+# Test Observability VPS (replace 'deploy' with your ssh_user)
 ssh deploy@203.0.113.10
 
 # Test passwordless sudo
@@ -202,6 +207,11 @@ ssh deploy@203.0.113.20
 sudo whoami
 exit
 ```
+
+**Important Notes**:
+- Replace `deploy` with the actual username from your `inventory.yaml`
+- You should be able to SSH without a password (using the SSH key you'll copy in the next step)
+- Sudo should work without a password (passwordless sudo)
 
 **If you can't SSH or sudo fails, see SUDO-USER-SETUP.md for troubleshooting.**
 
@@ -230,19 +240,23 @@ Edit `configs/inventory.yaml` with your actual VPS information:
 # Observability Stack VPS
 observability:
   ip: "203.0.113.10"                    # Replace with your Observability VPS IP
-  ssh_user: "deploy"                    # SSH user with passwordless sudo (NOT root!)
+  ssh_user: "deploy"                    # Replace with YOUR sudo username (NOT root!)
   ssh_port: 22                          # SSH port
   hostname: "monitoring.example.com"    # Your monitoring domain (optional)
 
 # VPSManager VPS
 vpsmanager:
   ip: "203.0.113.20"                    # Replace with your VPSManager VPS IP
-  ssh_user: "deploy"                    # SSH user with passwordless sudo (NOT root!)
+  ssh_user: "deploy"                    # Replace with YOUR sudo username (NOT root!)
   ssh_port: 22                          # SSH port
   hostname: "manager.example.com"       # Your manager domain (optional)
 ```
 
-**Important**: Replace the example IPs with your actual VPS IP addresses!
+**Important**:
+- Replace the example IPs with your actual VPS IP addresses
+- Replace "deploy" with your actual sudo username (can be different on each VPS if needed)
+- The username MUST match the user you created in Step 3
+- The user MUST have a password set (needed for ssh-copy-id later)
 
 ### Step 3: Validate Configuration
 

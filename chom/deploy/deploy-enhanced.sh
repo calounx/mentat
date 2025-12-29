@@ -457,7 +457,17 @@ ensure_ssh_key() {
         echo ""
         log_success "SSH key generated"
         echo ""
-        log_warn "Add this key to your VPS servers using ssh-copy-id:"
+        log_warn "REQUIRED: Copy SSH key to your VPS servers"
+        echo ""
+        echo "${YELLOW}What to expect:${NC}"
+        echo "  1. First connection: You'll be asked to verify the host fingerprint"
+        echo "     → Type 'yes' and press Enter (this is normal SSH security)"
+        echo "  2. Then: You'll be prompted for the user's PASSWORD"
+        echo "     → Enter the password you set for the user on the VPS"
+        echo "  3. The SSH key will be copied automatically"
+        echo ""
+        echo "${YELLOW}Note:${NC} The user MUST have a password set for this to work!"
+        echo "      See SUDO-USER-SETUP.md if you haven't set one yet."
         echo ""
 
         # Get VPS details from inventory
@@ -469,49 +479,89 @@ ensure_ssh_key() {
         local vps_user=$(get_config '.vpsmanager.ssh_user' 2>/dev/null || echo "")
         local vps_port=$(get_config '.vpsmanager.ssh_port' 2>/dev/null || echo "22")
 
+        echo "Run these commands (you'll be prompted for passwords):"
+        echo ""
+
         if [[ -n "$obs_ip" && "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
             echo "  ${CYAN}ssh-copy-id -i ${key_path}.pub -p ${obs_port} ${obs_user}@${obs_ip}${NC}"
+            echo "  ${BLUE}(User: ${obs_user}, you'll need ${obs_user}'s password)${NC}"
+            echo ""
         fi
 
         if [[ -n "$vps_ip" && "$vps_ip" != "0.0.0.0" && "$vps_ip" != "null" ]]; then
             echo "  ${CYAN}ssh-copy-id -i ${key_path}.pub -p ${vps_port} ${vps_user}@${vps_ip}${NC}"
+            echo "  ${BLUE}(User: ${vps_user}, you'll need ${vps_user}'s password)${NC}"
+            echo ""
         fi
 
-        echo ""
         echo "Or manually view the public key:"
         echo "  ${CYAN}cat ${key_path}.pub${NC}"
         echo ""
 
         if [[ "$DRY_RUN" != "true" && "$INTERACTIVE_MODE" != "true" ]]; then
             # Non-interactive mode: offer to run ssh-copy-id automatically
+            echo ""
             log_info "Attempting to copy SSH keys automatically..."
+            log_warn "You will be prompted for passwords..."
+            echo ""
 
             local copied_any=false
+            local copy_failed=false
 
             if [[ -n "$obs_ip" && "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
                 log_info "Copying key to Observability VPS (${obs_user}@${obs_ip})..."
-                if ssh-copy-id -i "${key_path}.pub" -p "${obs_port}" "${obs_user}@${obs_ip}" 2>/dev/null; then
+                echo "${YELLOW}You may be asked to:${NC}"
+                echo "  ${YELLOW}1) Accept fingerprint: type 'yes'${NC}"
+                echo "  ${YELLOW}2) Enter password for ${obs_user}${NC}"
+                echo ""
+                if ssh-copy-id -i "${key_path}.pub" -p "${obs_port}" "${obs_user}@${obs_ip}"; then
                     log_success "Key copied to Observability VPS"
                     copied_any=true
                 else
-                    log_warn "Failed to auto-copy key to Observability VPS"
-                    log_info "You may need to manually run: ssh-copy-id -i ${key_path}.pub -p ${obs_port} ${obs_user}@${obs_ip}"
+                    log_error "Failed to copy key to Observability VPS"
+                    copy_failed=true
                 fi
+                echo ""
             fi
 
             if [[ -n "$vps_ip" && "$vps_ip" != "0.0.0.0" && "$vps_ip" != "null" ]]; then
                 log_info "Copying key to VPSManager VPS (${vps_user}@${vps_ip})..."
-                if ssh-copy-id -i "${key_path}.pub" -p "${vps_port}" "${vps_user}@${vps_ip}" 2>/dev/null; then
+                echo "${YELLOW}You may be asked to:${NC}"
+                echo "  ${YELLOW}1) Accept fingerprint: type 'yes'${NC}"
+                echo "  ${YELLOW}2) Enter password for ${vps_user}${NC}"
+                echo ""
+                if ssh-copy-id -i "${key_path}.pub" -p "${vps_port}" "${vps_user}@${vps_ip}"; then
                     log_success "Key copied to VPSManager VPS"
                     copied_any=true
                 else
-                    log_warn "Failed to auto-copy key to VPSManager VPS"
-                    log_info "You may need to manually run: ssh-copy-id -i ${key_path}.pub -p ${vps_port} ${vps_user}@${vps_ip}"
+                    log_error "Failed to copy key to VPSManager VPS"
+                    copy_failed=true
                 fi
+                echo ""
+            fi
+
+            if [[ "$copy_failed" == "true" ]]; then
+                log_error "SSH key copy failed for one or more servers"
+                echo ""
+                echo "Common issues:"
+                echo "  1. User doesn't have a password set"
+                echo "  2. Wrong username in inventory.yaml"
+                echo "  3. VPS not accessible"
+                echo "  4. SSH port blocked by firewall"
+                echo ""
+                echo "Fix the issue and manually run:"
+                if [[ -n "$obs_ip" && "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
+                    echo "  ssh-copy-id -i ${key_path}.pub -p ${obs_port} ${obs_user}@${obs_ip}"
+                fi
+                if [[ -n "$vps_ip" && "$vps_ip" != "0.0.0.0" && "$vps_ip" != "null" ]]; then
+                    echo "  ssh-copy-id -i ${key_path}.pub -p ${vps_port} ${vps_user}@${vps_ip}"
+                fi
+                echo ""
+                exit 1
             fi
 
             if [[ "$copied_any" != "true" ]]; then
-                log_warn "Could not auto-copy keys. Please run ssh-copy-id manually (see commands above)"
+                log_warn "No VPS IPs configured in inventory.yaml"
                 echo ""
                 read -p "Press Enter once you've added the key to all VPS servers..."
             fi
