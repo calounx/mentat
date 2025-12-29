@@ -510,24 +510,16 @@ install_node_exporter() {
     # Create user (idempotent)
     ensure_system_user node_exporter node_exporter
 
-    # CRITICAL: Stop service AND kill processes BEFORE copying binary
-    if systemctl is-active --quiet node_exporter 2>/dev/null; then
-        log_info "Stopping node_exporter service to update binary..."
-        systemctl stop node_exporter
-        sleep 1
-    fi
-
-    # Force kill any lingering node_exporter processes
-    if pgrep -f "/usr/local/bin/node_exporter" >/dev/null 2>&1; then
-        log_info "Killing lingering node_exporter processes..."
-        pkill -9 -f "/usr/local/bin/node_exporter" 2>/dev/null || true
-        sleep 1
-    fi
-
     # Download and extract
     cd /tmp
     download_file "$url" "$tarball"
     tar xzf "$tarball"
+
+    # Stop service and verify before binary update
+    stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
+        log_error "Failed to stop node_exporter safely"
+        return 1
+    }
 
     # Install binary
     cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}/node_exporter" /usr/local/bin/

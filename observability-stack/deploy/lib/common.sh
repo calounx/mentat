@@ -385,6 +385,49 @@ setup_firewall_monitored() {
 # Service Functions
 #===============================================================================
 
+# Stop service and verify all processes terminated before binary operations
+# This prevents "Text file busy" errors when copying/moving running binaries
+# Usage: stop_and_verify_service "service_name" "/path/to/binary" [max_retries]
+# Returns: 0 on success, 1 if processes still running after retries
+stop_and_verify_service() {
+    local service_name="$1"
+    local binary_path="$2"
+    local max_retries="${3:-5}"
+
+    # Step 1: Graceful systemd stop with wait
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        log_info "Stopping $service_name service to update binary..."
+        systemctl stop "$service_name"
+        sleep 1
+    fi
+
+    # Step 2: Force kill any lingering processes
+    if pgrep -f "$binary_path" >/dev/null 2>&1; then
+        log_info "Killing lingering $service_name processes..."
+        pkill -9 -f "$binary_path" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # Step 3: Verify no processes with retry loop
+    local retry_count=0
+    while pgrep -f "$binary_path" >/dev/null 2>&1 && [[ $retry_count -lt $max_retries ]]; do
+        log_warn "$service_name process still running, waiting... (attempt $((retry_count + 1))/$max_retries)"
+        sleep 1
+        retry_count=$((retry_count + 1))
+    done
+
+    # Final verification
+    if pgrep -f "$binary_path" >/dev/null 2>&1; then
+        log_error "Failed to stop $service_name process after $max_retries retries"
+        log_error "Active processes:"
+        ps aux | grep -v grep | grep "$service_name" || true
+        return 1
+    fi
+
+    log_success "$service_name stopped and verified"
+    return 0
+}
+
 create_systemd_service() {
     local name="$1"
     local exec_start="$2"

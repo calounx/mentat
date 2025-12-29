@@ -607,6 +607,13 @@ install_node_exporter() {
     cd /tmp
     download_file "$url" "$tarball"
     tar xzf "$tarball"
+
+    # Stop service and verify before binary update
+    stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
+        log_error "Failed to stop node_exporter safely"
+        return 1
+    }
+
     cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}/node_exporter" /usr/local/bin/
     rm -rf "/tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
@@ -642,6 +649,13 @@ install_nginx_exporter() {
     cd /tmp
     download_file "$url" "$tarball"
     tar xzf "$tarball"
+
+    # Stop service and verify before binary update
+    stop_and_verify_service "nginx_exporter" "/usr/local/bin/nginx-prometheus-exporter" || {
+        log_error "Failed to stop nginx_exporter safely"
+        return 1
+    }
+
     cp nginx-prometheus-exporter /usr/local/bin/
     rm -f "/tmp/${tarball}" /tmp/nginx-prometheus-exporter
 
@@ -679,6 +693,13 @@ install_mysqld_exporter() {
     cd /tmp
     download_file "$url" "$tarball"
     tar xzf "$tarball"
+
+    # Stop service and verify before binary update
+    stop_and_verify_service "mysqld_exporter" "/usr/local/bin/mysqld_exporter" || {
+        log_error "Failed to stop mysqld_exporter safely"
+        return 1
+    }
+
     cp "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-${arch}/mysqld_exporter" /usr/local/bin/
     rm -rf "/tmp/mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
@@ -757,6 +778,13 @@ install_promtail() {
     download_file "$url" "promtail.zip"
     unzip -o promtail.zip
     chmod +x "${binary}"
+
+    # Stop service and verify before binary update
+    stop_and_verify_service "promtail" "/usr/local/bin/promtail" || {
+        log_error "Failed to stop promtail safely"
+        return 1
+    }
+
     mv "${binary}" /usr/local/bin/promtail
     rm -f /tmp/promtail.zip
 
