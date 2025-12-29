@@ -268,7 +268,33 @@ generate_grafana_config() {
     # Provisioning - datasources
     mkdir -p /etc/grafana/provisioning/datasources
 
-    cat > /etc/grafana/provisioning/datasources/observability.yaml << EOF
+    # Handle existing datasource configurations to prevent conflicts
+    local ds_dir="/etc/grafana/provisioning/datasources"
+    local our_config="$ds_dir/datasources.yaml"
+
+    # If our config doesn't exist yet (first install)
+    if [[ ! -f "$our_config" ]]; then
+        log_info "First-time datasource configuration..."
+
+        # Backup any existing files (may be from Grafana apt package or previous manual config)
+        local backup_count=0
+        for file in "$ds_dir"/*.yaml "$ds_dir"/*.yml; do
+            [[ -f "$file" ]] || continue
+            local backup="${file}.bak.$(date +%Y%m%d_%H%M%S)"
+            log_info "Backing up existing config: $(basename "$file") -> $(basename "$backup")"
+            mv "$file" "$backup"
+            backup_count=$((backup_count + 1))
+        done
+
+        if [[ $backup_count -gt 0 ]]; then
+            log_info "Backed up $backup_count existing datasource config(s)"
+        fi
+    else
+        log_info "Updating existing datasource configuration..."
+    fi
+
+    # Create/update our datasource configuration
+    cat > "$our_config" << EOF
 apiVersion: 1
 
 datasources:
@@ -323,6 +349,19 @@ EOF
     fi
 
     chown -R grafana:grafana /var/lib/grafana /etc/grafana/provisioning
+
+    # Validate datasource configuration
+    local default_count
+    default_count=$(grep -c "isDefault: true" /etc/grafana/provisioning/datasources/*.yaml 2>/dev/null || echo "0")
+    if [[ $default_count -gt 1 ]]; then
+        log_error "Multiple datasources marked as default (found $default_count)"
+        log_error "This will prevent Grafana from starting"
+        return 1
+    elif [[ $default_count -eq 0 ]]; then
+        log_warn "No default datasource configured"
+    else
+        log_info "Datasource configuration validated (1 default datasource)"
+    fi
 
     log_success "Grafana configured"
 }
