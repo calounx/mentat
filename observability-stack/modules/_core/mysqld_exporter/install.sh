@@ -98,12 +98,21 @@ create_user() {
 create_config() {
     if [[ ! -f "$CONFIG_DIR/.my.cnf" ]]; then
         log_info "Creating default config file..."
-        cat > "$CONFIG_DIR/.my.cnf" << 'EOF'
+
+        # Auto-generate password if not provided
+        if [[ -z "${MYSQL_EXPORTER_PASSWORD:-}" ]]; then
+            MYSQL_EXPORTER_PASSWORD=$(openssl rand -base64 16)
+            log_warn "Auto-generated MySQL exporter password: ${MYSQL_EXPORTER_PASSWORD}"
+            log_warn "Save this password securely - you'll need it to create the MySQL user"
+        fi
+
+        cat > "$CONFIG_DIR/.my.cnf" << EOF
 [client]
 user=exporter
-password=CHANGE_ME_EXPORTER_PASSWORD
+password=${MYSQL_EXPORTER_PASSWORD}
 host=127.0.0.1
 EOF
+
         # SECURITY: Set restrictive permissions on credential file
         if type safe_chmod &>/dev/null && type safe_chown &>/dev/null; then
             safe_chmod 600 "$CONFIG_DIR/.my.cnf" "MySQL credentials file" || chmod 600 "$CONFIG_DIR/.my.cnf"
@@ -112,7 +121,6 @@ EOF
             chmod 600 "$CONFIG_DIR/.my.cnf"
             chown "$USER_NAME:$USER_NAME" "$CONFIG_DIR/.my.cnf"
         fi
-        log_warn "SECURITY: Default password set in $CONFIG_DIR/.my.cnf - YOU MUST CHANGE IT"
     fi
 }
 
@@ -175,21 +183,24 @@ configure_firewall() {
 start_service() {
     systemctl enable "$SERVICE_NAME"
 
-    if grep -q "CHANGE_ME_EXPORTER_PASSWORD" "$CONFIG_DIR/.my.cnf" 2>/dev/null; then
-        log_warn "MySQL Exporter installed but NOT started"
-        log_warn "Please create the MySQL user and update $CONFIG_DIR/.my.cnf"
-        log_warn "Then run: systemctl start mysqld_exporter"
+    # Extract password from config file to display in instructions
+    local exporter_password
+    exporter_password=$(grep "^password=" "$CONFIG_DIR/.my.cnf" 2>/dev/null | cut -d= -f2)
+
+    # Try to start the service
+    systemctl start "$SERVICE_NAME" 2>/dev/null
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        log_success "$MODULE_NAME running (port $MODULE_PORT)"
+    else
+        log_warn "MySQL Exporter installed but NOT started (MySQL user not configured)"
+        log_warn "Create the MySQL user with these commands (run as MySQL root):"
         echo ""
-        echo "MySQL commands to run as root:"
-        echo "  CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';"
+        echo "  CREATE USER IF NOT EXISTS 'exporter'@'localhost' IDENTIFIED BY '${exporter_password}';"
         echo "  GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';"
         echo "  FLUSH PRIVILEGES;"
         echo ""
-    else
-        systemctl start "$SERVICE_NAME" || log_warn "MySQL Exporter failed to start - check credentials"
-        if systemctl is-active --quiet "$SERVICE_NAME"; then
-            log_success "$MODULE_NAME running (port $MODULE_PORT)"
-        fi
+        log_warn "Then run: systemctl start mysqld_exporter"
     fi
 }
 

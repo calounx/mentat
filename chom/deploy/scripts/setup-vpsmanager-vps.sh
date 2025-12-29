@@ -223,13 +223,25 @@ MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 
 # Secure installation
 mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
-mysql -u root -p"${MYSQL_ROOT_PASSWORD}" << EOF
+
+# Use .my.cnf to avoid password in process list
+cat > /tmp/.my.cnf << EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+EOF
+chmod 600 /tmp/.my.cnf
+
+mysql --defaults-extra-file=/tmp/.my.cnf << 'SQL'
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
-EOF
+SQL
+
+# Clean up temporary file
+rm -f /tmp/.my.cnf
 
 # MariaDB optimization
 cat > /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'

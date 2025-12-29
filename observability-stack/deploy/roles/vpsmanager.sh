@@ -273,15 +273,39 @@ install_redis() {
 
     apt-get install -y -qq redis-server
 
+    # Generate secure Redis password
+    REDIS_PASSWORD=$(openssl rand -base64 16)
+
     # Configure Redis
     sed -i 's/^supervised no/supervised systemd/' /etc/redis/redis.conf
     sed -i 's/^# maxmemory .*/maxmemory 256mb/' /etc/redis/redis.conf
     sed -i 's/^# maxmemory-policy .*/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
 
+    # Add password protection
+    sed -i "s/^# requirepass .*/requirepass ${REDIS_PASSWORD}/" /etc/redis/redis.conf
+
+    # Bind to localhost only (security)
+    sed -i 's/^bind .*/bind 127.0.0.1 ::1/' /etc/redis/redis.conf
+
+    # Save credentials
+    mkdir -p /root/.credentials
+    echo "REDIS_PASSWORD=${REDIS_PASSWORD}" > /root/.credentials/redis
+    chmod 600 /root/.credentials/redis
+
     systemctl enable redis-server
     systemctl restart redis-server
 
-    log_success "Redis installed"
+    # Test connection
+    if redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG; then
+        log_success "Redis installed and secured with password"
+        log_info "Redis password saved to /root/.credentials/redis"
+    else
+        log_error "Redis authentication test failed"
+        return 1
+    fi
+
+    # Export for use in Laravel .env
+    export REDIS_PASSWORD
 }
 
 #===============================================================================
@@ -379,7 +403,7 @@ QUEUE_CONNECTION=redis
 SESSION_DRIVER=redis
 
 REDIS_HOST=127.0.0.1
-REDIS_PASSWORD=null
+REDIS_PASSWORD=${REDIS_PASSWORD}
 REDIS_PORT=6379
 
 MAIL_MAILER=smtp
@@ -397,8 +421,20 @@ EOF
     sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_NAME}|" .env
     sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_APP_USER}|" .env
     sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_APP_PASS}|" .env
+    sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASSWORD}|" .env
     sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
     sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+
+    # Secure .env file permissions (contains sensitive credentials)
+    chmod 600 .env
+    chown ${VPSMANAGER_USER}:${VPSMANAGER_USER} .env
+    log_success ".env file secured with 600 permissions"
+
+    # Verify .env is in .gitignore
+    if [[ ! -f .gitignore ]] || ! grep -q "^\.env$" .gitignore; then
+        echo ".env" >> .gitignore
+        log_info "Added .env to .gitignore"
+    fi
 
     # Install dependencies
     log_info "Installing Composer dependencies..."
@@ -445,9 +481,16 @@ server {
     server_name ${VPSMANAGER_DOMAIN};
     root ${VPSMANAGER_PATH}/public;
 
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-XSS-Protection "1; mode=block";
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+
+    # Content Security Policy (adjust based on your assets)
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self';" always;
+
+    # HSTS will be added by SSL setup automatically
 
     index index.php;
 
@@ -511,6 +554,35 @@ EOF
 setup_ssl() {
     log_step "Setting up SSL certificate..."
 
+    # Get server's public IP
+    local server_ip
+    server_ip=$(curl -s4 https://ifconfig.me)
+
+    # Validate DNS before attempting SSL
+    log_info "Validating DNS for ${VPSMANAGER_DOMAIN}..."
+    local domain_ip
+    domain_ip=$(dig +short "${VPSMANAGER_DOMAIN}" A | grep -E '^[0-9.]+$' | head -1)
+
+    if [[ -z "$domain_ip" ]]; then
+        log_error "DNS not configured for ${VPSMANAGER_DOMAIN}"
+        log_error "Please add an A record pointing to ${server_ip}"
+        log_warn "Skipping SSL setup - domain is not yet accessible"
+        return 1
+    fi
+
+    if [[ "$domain_ip" != "$server_ip" ]]; then
+        log_warn "DNS mismatch: domain points to $domain_ip but server IP is $server_ip"
+        log_warn "SSL certificate acquisition may fail"
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_warn "Skipping SSL setup"
+            return 1
+        fi
+    else
+        log_success "DNS validated: ${VPSMANAGER_DOMAIN} → ${server_ip}"
+    fi
+
     # Start nginx for ACME challenge
     systemctl restart nginx
 
@@ -518,9 +590,29 @@ setup_ssl() {
     if certbot --nginx -d "${VPSMANAGER_DOMAIN}" \
         --email "${LETSENCRYPT_EMAIL:-admin@${VPSMANAGER_DOMAIN}}" \
         --agree-tos --non-interactive --redirect; then
-        log_success "SSL certificate installed"
+
+        # Verify certificate was actually installed
+        if openssl s_client -connect "${VPSMANAGER_DOMAIN}:443" -servername "${VPSMANAGER_DOMAIN}" </dev/null 2>&1 | grep -q "Verify return code: 0"; then
+            log_success "SSL certificate installed and validated"
+
+            # Enable auto-renewal
+            systemctl enable certbot.timer 2>/dev/null || true
+            systemctl start certbot.timer 2>/dev/null || true
+
+            log_info "Auto-renewal enabled via certbot.timer"
+        else
+            log_error "SSL certificate installed but validation failed"
+            log_error "Certificate may not be properly configured"
+            return 1
+        fi
     else
-        log_warn "SSL certificate failed - check DNS and try again with: certbot --nginx -d ${VPSMANAGER_DOMAIN}"
+        log_error "SSL certificate acquisition failed"
+        log_error "Troubleshooting steps:"
+        log_error "  1. Verify DNS: dig ${VPSMANAGER_DOMAIN}"
+        log_error "  2. Check firewall: ufw status | grep -E '80|443'"
+        log_error "  3. Manual retry: certbot --nginx -d ${VPSMANAGER_DOMAIN}"
+        log_warn "Application will continue with HTTP-only access"
+        return 1
     fi
 }
 

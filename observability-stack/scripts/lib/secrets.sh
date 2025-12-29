@@ -129,8 +129,11 @@ secret_generate() {
 secret_encrypt_file() {
     local file="$1"
     local password="$2"
-    
-    openssl enc -aes-256-cbc -salt -in "$file" -out "${file}.enc" -k "$password"
+
+    # Use PBKDF2 with 310,000 iterations (OWASP recommendation for 2023+)
+    # This is more secure than the deprecated -k flag
+    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 310000 \
+        -in "$file" -out "${file}.enc" -pass "pass:$password"
 }
 
 # Decrypt a file with a password
@@ -139,7 +142,9 @@ secret_decrypt_file() {
     local encrypted_file="$1"
     local password="$2"
     local output_file="$3"
-    
-    openssl enc -aes-256-cbc -d -in "$encrypted_file" -out "$output_file" -k "$password"
+
+    # Use PBKDF2 with 310,000 iterations (must match encryption)
+    openssl enc -aes-256-cbc -d -pbkdf2 -iter 310000 \
+        -in "$encrypted_file" -out "$output_file" -pass "pass:$password"
 }
 
