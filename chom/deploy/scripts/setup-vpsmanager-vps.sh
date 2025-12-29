@@ -390,7 +390,7 @@ DASHBOARD_PASSWORD_HASH=$(php -r "echo password_hash('${DASHBOARD_PASSWORD}', PA
 
 cat > /var/www/dashboard/index.php << 'DASHBOARD_EOF'
 <?php
-// Simple VPSManager Dashboard
+// VPSManager Dashboard with Security Hardening
 session_start();
 
 $auth_file = '/etc/vpsmanager/dashboard-auth.php';
@@ -398,27 +398,114 @@ if (file_exists($auth_file)) {
     require $auth_file;
 }
 
+// Rate limiting configuration
+$attempts_file = '/tmp/dashboard_login_attempts_' . md5($_SERVER['REMOTE_ADDR']);
+$max_attempts = 5;
+$lockout_duration = 300; // 5 minutes
+
+function check_rate_limit($attempts_file, $max_attempts, $lockout_duration) {
+    if (file_exists($attempts_file)) {
+        $attempts = json_decode(file_get_contents($attempts_file), true);
+        if (!is_array($attempts)) $attempts = [];
+
+        // Clean old attempts
+        $recent_attempts = array_filter($attempts, function($time) use ($lockout_duration) {
+            return (time() - $time) < $lockout_duration;
+        });
+
+        if (count($recent_attempts) >= $max_attempts) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function record_failed_attempt($attempts_file) {
+    $attempts = file_exists($attempts_file)
+        ? json_decode(file_get_contents($attempts_file), true)
+        : [];
+    if (!is_array($attempts)) $attempts = [];
+
+    $attempts[] = time();
+    file_put_contents($attempts_file, json_encode($attempts));
+    chmod($attempts_file, 0600);
+}
+
+function clear_attempts($attempts_file) {
+    @unlink($attempts_file);
+}
+
+function get_uptime() {
+    // SECURITY: Use native PHP instead of shell_exec
+    if (file_exists('/proc/uptime')) {
+        $uptime_seconds = (int) explode(' ', file_get_contents('/proc/uptime'))[0];
+        $days = floor($uptime_seconds / 86400);
+        $hours = floor(($uptime_seconds % 86400) / 3600);
+        return "{$days}d {$hours}h";
+    }
+    return 'N/A';
+}
+
 if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
+    $error_message = '';
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
-        if (password_verify($_POST['password'], $password_hash ?? '')) {
+        if (!check_rate_limit($attempts_file, $max_attempts, $lockout_duration)) {
+            http_response_code(429);
+            $error_message = 'Too many failed attempts. Try again in 5 minutes.';
+            error_log("Dashboard: Rate limit exceeded from {$_SERVER['REMOTE_ADDR']}");
+            sleep(2); // Slow down attacker
+        } elseif (password_verify($_POST['password'], $password_hash ?? '')) {
+            // Success - clear attempts
+            clear_attempts($attempts_file);
+
+            // Regenerate session ID to prevent fixation
+            session_regenerate_id(true);
             $_SESSION['authenticated'] = true;
+            $_SESSION['login_time'] = time();
+            $_SESSION['ip'] = $_SERVER['REMOTE_ADDR'];
+
+            // Log successful login
+            error_log("Dashboard: Successful login from {$_SERVER['REMOTE_ADDR']}");
+
             header('Location: /');
             exit;
+        } else {
+            // Failed attempt
+            record_failed_attempt($attempts_file);
+            error_log("Dashboard: Failed login attempt from {$_SERVER['REMOTE_ADDR']}");
+            $error_message = 'Invalid password';
+            sleep(2); // Slow down brute force
         }
     }
     ?>
     <!DOCTYPE html>
     <html>
-    <head><title>VPSManager Login</title></head>
-    <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
-        <form method="post" style="padding: 2rem; border: 1px solid #ccc; border-radius: 8px;">
-            <h2>VPSManager Dashboard</h2>
-            <input type="password" name="password" placeholder="Password" style="padding: 0.5rem; width: 200px;"><br><br>
-            <button type="submit" style="padding: 0.5rem 1rem;">Login</button>
+    <head>
+        <title>VPSManager Login</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
+        <form method="post" style="padding: 2rem; border: 1px solid #ccc; border-radius: 8px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="margin-top: 0;">VPSManager Dashboard</h2>
+            <?php if ($error_message): ?>
+            <div style="color: #dc2626; background: #fee2e2; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+                <?= htmlspecialchars($error_message) ?>
+            </div>
+            <?php endif; ?>
+            <input type="password" name="password" placeholder="Password" required style="padding: 0.5rem; width: 200px; border: 1px solid #ccc; border-radius: 4px;"><br><br>
+            <button type="submit" style="padding: 0.5rem 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer;">Login</button>
         </form>
     </body>
     </html>
     <?php
+    exit;
+}
+
+// Session validation
+if (isset($_SESSION['ip']) && $_SESSION['ip'] !== $_SERVER['REMOTE_ADDR']) {
+    session_destroy();
+    header('Location: /');
     exit;
 }
 
@@ -434,7 +521,7 @@ foreach (glob("$www_dir/*/public") as $path) {
 
 $system_info = [
     'hostname' => gethostname(),
-    'uptime' => trim(shell_exec('uptime -p')),
+    'uptime' => get_uptime(), // SECURITY: Native PHP instead of shell_exec
     'load' => sys_getloadavg()[0],
     'memory_used' => round(memory_get_usage(true) / 1024 / 1024, 2) . ' MB',
     'disk_free' => round(disk_free_space('/') / 1024 / 1024 / 1024, 2) . ' GB',

@@ -64,6 +64,10 @@ install_vpsmanager() {
 
     setup_firewall_vpsmanager
     start_all_services
+
+    # Run comprehensive health checks
+    run_health_checks || log_warn "Some health checks failed - review above"
+
     save_installation_info
 
     run_post_deploy
@@ -315,13 +319,31 @@ install_redis() {
 install_nodejs() {
     log_step "Installing Node.js..."
 
+    # Pin to specific LTS version for stability
+    local NODE_VERSION="20.11.1"
+    local NPM_VERSION="10.2.5"
+
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y -qq nodejs
 
-    # Install global packages
-    npm install -g npm@latest
+    # Install specific version
+    apt-get install -y -qq "nodejs=${NODE_VERSION}*" || {
+        log_warn "Specific version ${NODE_VERSION} not available, installing latest 20.x"
+        apt-get install -y -qq nodejs
+    }
 
-    log_success "Node.js $(node --version) installed"
+    # Hold version to prevent auto-upgrades
+    apt-mark hold nodejs
+
+    # Verify installed version
+    local installed_version
+    installed_version=$(node --version | tr -d 'v')
+    log_info "Node.js version: $installed_version"
+
+    # Pin npm version for consistency
+    npm install -g "npm@${NPM_VERSION}"
+
+    log_success "Node.js $(node --version) installed and version pinned"
+    log_info "To upgrade: apt-mark unhold nodejs && apt-get install nodejs"
 }
 
 #===============================================================================
@@ -635,6 +657,8 @@ user=${VPSMANAGER_USER}
 numprocs=2
 redirect_stderr=true
 stdout_logfile=${VPSMANAGER_PATH}/storage/logs/worker.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=5
 stopwaitsecs=3600
 EOF
 
@@ -649,10 +673,30 @@ autorestart=true
 user=${VPSMANAGER_USER}
 redirect_stderr=true
 stdout_logfile=${VPSMANAGER_PATH}/storage/logs/horizon.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=5
 stopwaitsecs=3600
 EOF
         log_info "Laravel Horizon configured"
     fi
+
+    # Configure logrotate for Laravel logs
+    cat > /etc/logrotate.d/vpsmanager << EOF
+${VPSMANAGER_PATH}/storage/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 ${VPSMANAGER_USER} ${VPSMANAGER_USER}
+    sharedscripts
+    postrotate
+        supervisorctl signal HUP vpsmanager-worker:*
+    endscript
+}
+EOF
+    log_info "Log rotation configured (14-day retention)"
 
     # Add scheduler cron
     (crontab -l 2>/dev/null | grep -v "artisan schedule:run"; echo "* * * * * cd ${VPSMANAGER_PATH} && php artisan schedule:run >> /dev/null 2>&1") | crontab -
@@ -660,7 +704,7 @@ EOF
     supervisorctl reread
     supervisorctl update
 
-    log_success "Supervisor configured"
+    log_success "Supervisor configured with log rotation"
 }
 
 #===============================================================================
@@ -1011,6 +1055,149 @@ start_all_services() {
     done
 
     log_success "All services started"
+}
+
+#===============================================================================
+# Health Checks
+#===============================================================================
+
+run_health_checks() {
+    log_step "Running comprehensive health checks..."
+
+    local failed_checks=0
+
+    # Check Nginx
+    if systemctl is-active --quiet nginx; then
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost | grep -qE "200|301|302"; then
+            log_success "✓ Nginx is responding"
+        else
+            log_error "✗ Nginx not responding to HTTP requests"
+            ((failed_checks++))
+        fi
+    else
+        log_error "✗ Nginx service not running"
+        ((failed_checks++))
+    fi
+
+    # Check PHP-FPM
+    if systemctl is-active --quiet "php${PHP_VERSION}-fpm"; then
+        if php-fpm${PHP_VERSION} -t 2>&1 | grep -q "test is successful"; then
+            log_success "✓ PHP-FPM configuration valid"
+        else
+            log_warn "⚠ PHP-FPM configuration may have issues"
+        fi
+    else
+        log_error "✗ PHP-FPM not running"
+        ((failed_checks++))
+    fi
+
+    # Check MariaDB
+    if systemctl is-active --quiet mariadb; then
+        source /root/.credentials/mysql 2>/dev/null || true
+        if mysql -u root -p"${DB_ROOT_PASS}" -e "SELECT 1" &>/dev/null; then
+            log_success "✓ MariaDB connection OK"
+        else
+            log_error "✗ MariaDB connection failed"
+            ((failed_checks++))
+        fi
+    else
+        log_error "✗ MariaDB not running"
+        ((failed_checks++))
+    fi
+
+    # Check Redis
+    if systemctl is-active --quiet redis-server; then
+        if [[ -f /root/.credentials/redis ]]; then
+            local redis_pass
+            redis_pass=$(grep "REDIS_PASSWORD=" /root/.credentials/redis | cut -d= -f2)
+            if redis-cli -a "$redis_pass" ping 2>/dev/null | grep -q PONG; then
+                log_success "✓ Redis responding (authenticated)"
+            else
+                log_error "✗ Redis authentication failed"
+                ((failed_checks++))
+            fi
+        else
+            if redis-cli ping 2>/dev/null | grep -q PONG; then
+                log_success "✓ Redis responding"
+            else
+                log_error "✗ Redis not responding"
+                ((failed_checks++))
+            fi
+        fi
+    else
+        log_error "✗ Redis not running"
+        ((failed_checks++))
+    fi
+
+    # Check Supervisor
+    if systemctl is-active --quiet supervisor; then
+        local worker_status
+        worker_status=$(supervisorctl status 2>/dev/null | grep "vpsmanager-worker" | grep -c "RUNNING" || echo "0")
+        if [[ $worker_status -gt 0 ]]; then
+            log_success "✓ Supervisor workers running ($worker_status workers)"
+        else
+            log_warn "⚠ Supervisor workers not running yet (normal on first install)"
+        fi
+    else
+        log_error "✗ Supervisor not running"
+        ((failed_checks++))
+    fi
+
+    # Check Exporters (only if OBSERVABILITY_IP is set)
+    if [[ -n "${OBSERVABILITY_IP:-}" ]]; then
+        local exporters=(
+            "9100:Node Exporter"
+            "9113:Nginx Exporter"
+            "9104:MySQL Exporter"
+            "9253:PHP-FPM Exporter"
+        )
+
+        for exporter in "${exporters[@]}"; do
+            IFS=':' read -r port name <<< "$exporter"
+            if curl -s http://localhost:$port/metrics | grep -q "^# "; then
+                log_success "✓ $name responding (port $port)"
+            else
+                log_warn "⚠ $name not responding on port $port"
+            fi
+        done
+    fi
+
+    # Check Laravel application
+    if [[ -f "${VPSMANAGER_PATH}/artisan" ]]; then
+        if php "${VPSMANAGER_PATH}/artisan" --version &>/dev/null; then
+            log_success "✓ Laravel application accessible"
+
+            # Check if .env is secure
+            if [[ -f "${VPSMANAGER_PATH}/.env" ]]; then
+                local env_perms
+                env_perms=$(stat -c "%a" "${VPSMANAGER_PATH}/.env")
+                if [[ "$env_perms" == "600" ]]; then
+                    log_success "✓ .env file properly secured (600)"
+                else
+                    log_warn "⚠ .env file permissions: $env_perms (should be 600)"
+                fi
+            fi
+        else
+            log_error "✗ Laravel application error"
+            ((failed_checks++))
+        fi
+    fi
+
+    # Summary
+    echo ""
+    if [[ $failed_checks -eq 0 ]]; then
+        log_success "=========================================="
+        log_success "  All health checks passed! ✓"
+        log_success "=========================================="
+    else
+        log_warn "=========================================="
+        log_warn "  $failed_checks health check(s) failed"
+        log_warn "  Review errors above"
+        log_warn "=========================================="
+    fi
+    echo ""
+
+    return $failed_checks
 }
 
 #===============================================================================

@@ -190,10 +190,35 @@ main() {
             }
         else
             # Fallback if stop_and_verify_service not available
-            log_warn "stop_and_verify_service not available, using basic stop"
+            log_warn "stop_and_verify_service not available, using enhanced basic stop"
             systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+
+            # Wait for process to exit
+            local wait_count=0
+            while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt 30 ]]; do
+                sleep 1
+                ((wait_count++))
+            done
+
+            # Force kill if needed
             pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
-            sleep 2
+
+            # CRITICAL: Wait for file lock release
+            wait_count=0
+            while [[ $wait_count -lt 30 ]]; do
+                if ! lsof "$INSTALL_PATH" &>/dev/null 2>&1; then
+                    log_success "Binary file lock released"
+                    break
+                fi
+                sleep 1
+                ((wait_count++))
+            done
+
+            # Final verification
+            if lsof "$INSTALL_PATH" &>/dev/null 2>&1; then
+                log_error "File lock still held on $INSTALL_PATH - cannot replace binary"
+                return 1
+            fi
         fi
     fi
 
