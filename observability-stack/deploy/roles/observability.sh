@@ -642,18 +642,29 @@ setup_ssl() {
 
     log_step "Setting up SSL certificate..."
 
-    # First, create a temporary nginx config for ACME challenge
+    # Create temporary HTTP-only nginx config for ACME challenge
+    # NOTE: Do NOT redirect to HTTPS yet - certificates don't exist!
     cat > /etc/nginx/sites-available/observability << EOF
+# Temporary configuration for SSL certificate acquisition
 server {
     listen 80;
     server_name ${GRAFANA_DOMAIN};
 
+    # ACME challenge for Let's Encrypt
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
 
+    # Temporary HTTP access (will be replaced with HTTPS redirect if cert succeeds)
     location / {
-        return 301 https://\$server_name\$request_uri;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }
 EOF
@@ -669,7 +680,8 @@ EOF
         --agree-tos --non-interactive; then
         log_success "SSL certificate obtained"
     else
-        log_warn "SSL certificate failed - continuing without SSL"
+        log_error "SSL certificate acquisition failed"
+        log_warn "Continuing with HTTP-only access"
         USE_SSL=false
     fi
 }

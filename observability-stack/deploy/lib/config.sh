@@ -412,9 +412,22 @@ EOF
 generate_nginx_config() {
     log_step "Generating Nginx configuration..."
 
-    if [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+    # Check if SSL is actually configured and certificates exist
+    local ssl_configured=false
+    if [[ "${USE_SSL:-false}" == "true" ]] && [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+        if [[ -f "/etc/letsencrypt/live/${GRAFANA_DOMAIN}/fullchain.pem" ]] && \
+           [[ -f "/etc/letsencrypt/live/${GRAFANA_DOMAIN}/privkey.pem" ]]; then
+            ssl_configured=true
+            log_info "SSL certificates found - configuring HTTPS"
+        else
+            log_warn "SSL enabled but certificates not found - falling back to HTTP"
+        fi
+    fi
+
+    if [[ "$ssl_configured" == "true" ]]; then
+        # HTTPS configuration with valid certificates
         cat > /etc/nginx/sites-available/observability << EOF
-# Observability Stack Nginx Configuration
+# Observability Stack Nginx Configuration (HTTPS)
 
 server {
     listen 80;
@@ -469,8 +482,44 @@ server {
     }
 }
 EOF
+    elif [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+        # Domain configured but no SSL - HTTP only with domain
+        cat > /etc/nginx/sites-available/observability << EOF
+# Observability Stack Nginx Configuration (HTTP with domain)
+
+server {
+    listen 80;
+    server_name ${GRAFANA_DOMAIN};
+
+    # Grafana
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Prometheus (protected)
+    location /prometheus/ {
+        auth_basic "Prometheus";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:9090/;
+    }
+
+    # Alertmanager (protected)
+    location /alertmanager/ {
+        auth_basic "Alertmanager";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:9093/;
+    }
+}
+EOF
     else
-        # No domain - simple port-based access
+        # No domain - simple IP-based access
         cat > /etc/nginx/sites-available/observability << EOF
 # Observability Stack Nginx Configuration (IP access only)
 

@@ -472,10 +472,18 @@ show_completion() {
     case "$ROLE" in
         observability)
             echo "  Grafana URL:"
-            if [[ "${USE_SSL:-false}" == "true" ]]; then
-                echo "    ${CYAN}https://${GRAFANA_DOMAIN}${NC}"
+            # Check if SSL is actually configured with valid certificates
+            if [[ "${USE_SSL:-false}" == "true" ]] && [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+                if [[ -f "/etc/letsencrypt/live/${GRAFANA_DOMAIN}/fullchain.pem" ]]; then
+                    echo "    ${CYAN}https://${GRAFANA_DOMAIN}${NC}"
+                else
+                    echo "    ${CYAN}http://${GRAFANA_DOMAIN}${NC} ${YELLOW}(SSL setup failed)${NC}"
+                fi
+            elif [[ -n "${GRAFANA_DOMAIN:-}" ]]; then
+                echo "    ${CYAN}http://${GRAFANA_DOMAIN}${NC}"
             else
-                echo "    ${CYAN}http://${OBSERVABILITY_IP}:3000${NC}"
+                echo "    ${CYAN}http://${OBSERVABILITY_IP}${NC} (nginx proxy on port 80)"
+                echo "    ${CYAN}http://${OBSERVABILITY_IP}:3000${NC} (direct Grafana access)"
             fi
             echo
             echo "  Credentials:"
