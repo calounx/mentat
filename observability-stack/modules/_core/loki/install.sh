@@ -778,33 +778,51 @@ start_service() {
 }
 
 stop_service() {
-    log_info "Stopping $SERVICE_NAME service..."
+    # H-7: Use robust 3-layer verification if available, fallback to enhanced basic stop
+    if type stop_and_verify_service &>/dev/null; then
+        stop_and_verify_service "$SERVICE_NAME" "$INSTALL_PATH" || {
+            log_error "Failed to stop $SERVICE_NAME safely"
+            return 1
+        }
+    else
+        # Fallback: Enhanced basic stop with proper verification
+        log_info "Stopping $SERVICE_NAME service..."
 
-    # H-7: Add service stop verification before binary replacement
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        systemctl stop "$SERVICE_NAME"
+        if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            systemctl stop "$SERVICE_NAME"
 
-        # Wait for process to actually stop with timeout
-        local wait_count=0
-        local max_wait=30
-        while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt $max_wait ]]; do
-            log_info "Waiting for $SERVICE_NAME to stop... ($wait_count/$max_wait)"
-            sleep 1
-            ((wait_count++))
-        done
+            # Wait for graceful stop
+            local wait_count=0
+            local max_wait=30
+            while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt $max_wait ]]; do
+                log_info "Waiting for $SERVICE_NAME to stop... ($wait_count/$max_wait)"
+                sleep 1
+                ((wait_count++))
+            done
 
-        if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
-            log_warn "Service did not stop gracefully, sending SIGKILL"
-            pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
-            sleep 2
+            # SIGTERM if still running
+            if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
+                log_warn "Service did not stop gracefully, sending SIGTERM"
+                pkill -TERM -f "$INSTALL_PATH" 2>/dev/null || true
+                sleep 5
+            fi
+
+            # SIGKILL as last resort
+            if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
+                log_error "Service did not respond to SIGTERM, sending SIGKILL"
+                pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
+                sleep 2
+            fi
+
+            # Final check
+            if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
+                log_error "CRITICAL: Failed to stop $SERVICE_NAME"
+                return 1
+            fi
         fi
+
+        log_success "$SERVICE_NAME stopped"
     fi
-
-    # Kill any remaining processes
-    pkill -f "$INSTALL_PATH" 2>/dev/null || true
-    sleep 1
-
-    log_info "$SERVICE_NAME stopped"
 }
 
 #===============================================================================

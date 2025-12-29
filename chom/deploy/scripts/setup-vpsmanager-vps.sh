@@ -36,6 +36,42 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Stop service and verify binary is not in use before replacement
+stop_and_verify_service() {
+    local service_name="$1"
+    local binary_path="$2"
+    local max_wait=30
+    local waited=0
+
+    # Check if service exists
+    if ! systemctl list-unit-files | grep -q "^${service_name}.service"; then
+        log_info "Service ${service_name} does not exist yet, skipping stop"
+        return 0
+    fi
+
+    # Stop service if running
+    if systemctl is-active --quiet "$service_name"; then
+        log_info "Stopping ${service_name}..."
+        systemctl stop "$service_name" || {
+            log_error "Failed to stop ${service_name}"
+            return 1
+        }
+    fi
+
+    # Wait for binary to be released
+    while [[ $waited -lt $max_wait ]]; do
+        if ! lsof "$binary_path" &>/dev/null; then
+            log_success "${service_name} stopped and binary released"
+            return 0
+        fi
+        sleep 1
+        ((waited++))
+    done
+
+    log_error "Timeout waiting for ${binary_path} to be released"
+    return 1
+}
+
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
     log_error "This script must be run as root"
@@ -294,6 +330,13 @@ log_info "Installing Node Exporter..."
 cd /tmp
 wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+
+# Stop node_exporter service before replacing binary
+stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
+    log_error "Failed to stop node_exporter safely"
+    exit 1
+}
+
 cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
 rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64"*
 

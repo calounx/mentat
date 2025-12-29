@@ -129,16 +129,25 @@ download_tempo() {
 install_binary() {
     log_info "Installing Tempo binary..."
 
-    # Stop service if running
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        systemctl stop "$SERVICE_NAME"
-
-        # Wait for process to stop
-        local max_wait=30
-        while pgrep -f "$INSTALL_PATH" >/dev/null && [[ $max_wait -gt 0 ]]; do
-            sleep 1
-            ((max_wait--))
-        done
+    # H-7: Stop service with robust 3-layer verification before binary replacement
+    if systemctl list-units --type=service --all | grep -q "^[[:space:]]*$SERVICE_NAME.service" 2>/dev/null; then
+        if type stop_and_verify_service &>/dev/null; then
+            stop_and_verify_service "$SERVICE_NAME" "$INSTALL_PATH" || {
+                log_error "Failed to stop $SERVICE_NAME safely"
+                return 1
+            }
+        else
+            # Fallback if stop_and_verify_service not available
+            log_warn "stop_and_verify_service not available, using enhanced basic stop"
+            systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+            local max_wait=30
+            while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $max_wait -gt 0 ]]; do
+                sleep 1
+                ((max_wait--))
+            done
+            pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
+            sleep 2
+        fi
     fi
 
     # Install binary

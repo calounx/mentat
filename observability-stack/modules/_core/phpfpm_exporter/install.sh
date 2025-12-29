@@ -181,9 +181,21 @@ main() {
         return 0
     fi
 
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    pkill -f "$INSTALL_PATH" 2>/dev/null || true
-    sleep 1
+    # H-7: Stop service with robust 3-layer verification before binary replacement
+    if systemctl list-units --type=service --all | grep -q "^[[:space:]]*$SERVICE_NAME.service" 2>/dev/null; then
+        if type stop_and_verify_service &>/dev/null; then
+            stop_and_verify_service "$SERVICE_NAME" "$INSTALL_PATH" || {
+                log_error "Failed to stop $SERVICE_NAME safely"
+                return 1
+            }
+        else
+            # Fallback if stop_and_verify_service not available
+            log_warn "stop_and_verify_service not available, using basic stop"
+            systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+            pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
+            sleep 2
+        fi
+    fi
 
     create_user
     enable_status_page

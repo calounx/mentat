@@ -677,6 +677,97 @@ safe_stop_service() {
     sleep 1
 }
 
+# H-7: Stop service with robust 3-layer verification before binary replacement
+# SECURITY: Ensures service is fully stopped before replacing binaries
+#
+# Three-layer protection:
+#   Layer 1: Graceful systemd stop with timeout
+#   Layer 2: SIGTERM for stubborn processes
+#   Layer 3: SIGKILL for hung processes (last resort)
+#
+# Arguments:
+#   $1 - Service name (for systemd)
+#   $2 - Binary path (for process verification)
+#   $3 - Optional: Max wait time in seconds (default: 30)
+#
+# Returns:
+#   0 on success (service fully stopped)
+#   1 on failure (service could not be stopped)
+#
+# Usage:
+#   stop_and_verify_service "prometheus" "/usr/local/bin/prometheus"
+#   stop_and_verify_service "loki" "/usr/local/bin/loki" 60
+stop_and_verify_service() {
+    local service_name="$1"
+    local binary_path="$2"
+    local max_wait="${3:-30}"
+
+    log_info "Stopping $service_name service..."
+
+    # LAYER 1: Graceful systemd stop
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        log_debug "Sending systemd stop signal to $service_name..."
+        systemctl stop "$service_name"
+
+        # Wait for graceful shutdown with timeout
+        local wait_count=0
+        while pgrep -f "$binary_path" >/dev/null 2>&1 && [[ $wait_count -lt $max_wait ]]; do
+            if [[ $((wait_count % 5)) -eq 0 ]]; then
+                log_info "Waiting for $service_name to stop gracefully... ($wait_count/$max_wait)"
+            fi
+            sleep 1
+            ((wait_count++))
+        done
+
+        # Check if graceful stop succeeded
+        if ! pgrep -f "$binary_path" >/dev/null 2>&1; then
+            log_success "$service_name stopped gracefully"
+            return 0
+        fi
+    fi
+
+    # LAYER 2: SIGTERM for processes that didn't respond to systemd
+    if pgrep -f "$binary_path" >/dev/null 2>&1; then
+        log_warn "$service_name did not stop gracefully, sending SIGTERM..."
+        pkill -TERM -f "$binary_path" 2>/dev/null || true
+
+        # Wait for SIGTERM to take effect
+        local term_wait=10
+        local term_count=0
+        while pgrep -f "$binary_path" >/dev/null 2>&1 && [[ $term_count -lt $term_wait ]]; do
+            sleep 1
+            ((term_count++))
+        done
+
+        # Check if SIGTERM succeeded
+        if ! pgrep -f "$binary_path" >/dev/null 2>&1; then
+            log_success "$service_name stopped after SIGTERM"
+            return 0
+        fi
+    fi
+
+    # LAYER 3: SIGKILL for hung processes (last resort)
+    if pgrep -f "$binary_path" >/dev/null 2>&1; then
+        log_error "$service_name did not respond to SIGTERM, sending SIGKILL (last resort)..."
+        pkill -9 -f "$binary_path" 2>/dev/null || true
+        sleep 2
+
+        # Final verification
+        if pgrep -f "$binary_path" >/dev/null 2>&1; then
+            log_error "CRITICAL: Failed to stop $service_name even with SIGKILL!"
+            log_error "Manual intervention required. Do NOT proceed with binary replacement."
+            log_error "Process IDs still running:"
+            pgrep -a -f "$binary_path" || true
+            return 1
+        fi
+
+        log_warn "$service_name forcefully killed with SIGKILL"
+    fi
+
+    log_success "$service_name stopped and verified (no processes remaining)"
+    return 0
+}
+
 # Check if running as root
 # Usage: check_root
 # Returns: Does not return if not root (calls log_fatal)

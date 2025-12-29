@@ -332,12 +332,26 @@ start_service() {
 upgrade_alloy() {
     log_info "Upgrading Grafana Alloy to ${ALLOY_VERSION}..."
 
-    # Stop service
-    systemctl stop alloy || true
+    # H-7: Stop service with robust 3-layer verification before binary replacement
+    local alloy_binary="/usr/local/bin/alloy"
+    if systemctl list-units --type=service --all | grep -q "^[[:space:]]*alloy.service" 2>/dev/null; then
+        if type stop_and_verify_service &>/dev/null; then
+            stop_and_verify_service "alloy" "$alloy_binary" || {
+                log_error "Failed to stop alloy safely"
+                return 1
+            }
+        else
+            # Fallback if stop_and_verify_service not available
+            log_warn "stop_and_verify_service not available, using basic stop"
+            systemctl stop alloy 2>/dev/null || true
+            pkill -9 -f "$alloy_binary" 2>/dev/null || true
+            sleep 2
+        fi
+    fi
 
     # Backup current binary
-    if [[ -f /usr/local/bin/alloy ]]; then
-        cp /usr/local/bin/alloy /usr/local/bin/alloy.backup
+    if [[ -f "$alloy_binary" ]]; then
+        cp "$alloy_binary" "${alloy_binary}.backup"
     fi
 
     # Install new version

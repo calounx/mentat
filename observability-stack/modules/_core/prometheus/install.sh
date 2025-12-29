@@ -608,22 +608,23 @@ install_binary() {
 
     local extract_dir="prometheus-${version}.linux-amd64"
 
-    # H-7: Stop service before replacing binary with verification
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        log_info "Stopping Prometheus service..."
-        systemctl stop "$SERVICE_NAME"
-
-        # Wait for process to actually stop with timeout
-        local wait_count=0
-        local max_wait=30
-        while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt $max_wait ]]; do
-            log_info "Waiting for $SERVICE_NAME to stop... ($wait_count/$max_wait)"
-            sleep 1
-            ((wait_count++))
-        done
-
-        if pgrep -f "$INSTALL_PATH" >/dev/null 2>&1; then
-            log_warn "Service did not stop gracefully, sending SIGKILL"
+    # H-7: Stop service before replacing binary with robust 3-layer verification
+    if systemctl list-units --type=service --all | grep -q "^[[:space:]]*$SERVICE_NAME.service" 2>/dev/null; then
+        if type stop_and_verify_service &>/dev/null; then
+            stop_and_verify_service "$SERVICE_NAME" "$INSTALL_PATH" || {
+                log_error "Failed to stop $SERVICE_NAME safely"
+                rm -rf "$extract_dir" "$archive_name"
+                return 1
+            }
+        else
+            # Fallback if stop_and_verify_service not available
+            log_warn "stop_and_verify_service not available, using enhanced basic stop"
+            systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+            local wait_count=0
+            while pgrep -f "$INSTALL_PATH" >/dev/null 2>&1 && [[ $wait_count -lt 30 ]]; do
+                sleep 1
+                ((wait_count++))
+            done
             pkill -9 -f "$INSTALL_PATH" 2>/dev/null || true
             sleep 2
         fi

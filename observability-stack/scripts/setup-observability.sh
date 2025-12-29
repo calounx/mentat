@@ -20,6 +20,13 @@
 
 set -euo pipefail
 
+# Source common library for stop_and_verify_service function
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_LIB_DIR="$(dirname "$SCRIPT_DIR")/deploy/lib"
+if [[ -f "$DEPLOY_LIB_DIR/common.sh" ]]; then
+    source "$DEPLOY_LIB_DIR/common.sh"
+fi
+
 # Mode flags
 FORCE_MODE=false
 UNINSTALL_MODE=false
@@ -849,10 +856,18 @@ install_prometheus() {
         safe_extract "$archive" "Prometheus archive" || return 1
 
         # Install binaries
+        stop_and_verify_service "prometheus" "/usr/local/bin/prometheus" || {
+            log_error "Failed to stop prometheus safely"
+            return 1
+        }
         if ! cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /usr/local/bin/; then
             log_error "Failed to copy prometheus binary"
             return 1
         fi
+        stop_and_verify_service "prometheus" "/usr/local/bin/promtool" || {
+            log_error "Failed to stop prometheus safely"
+            return 1
+        }
         if ! cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/; then
             log_error "Failed to copy promtool binary"
             return 1
@@ -999,6 +1014,10 @@ install_node_exporter() {
         safe_download "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/${archive}" "-O ${archive}" "Node Exporter ${NODE_EXPORTER_VERSION}" || return 1
         safe_extract "$archive" "Node Exporter archive" || return 1
 
+        stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
+            log_error "Failed to stop node_exporter safely"
+            return 1
+        }
         if ! cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/; then
             log_error "Failed to copy node_exporter binary"
             return 1
@@ -1078,6 +1097,10 @@ install_nginx_exporter() {
         safe_download "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/${archive}" "-O ${archive}" "Nginx Exporter ${NGINX_EXPORTER_VERSION}" || return 1
         safe_extract "$archive" "Nginx Exporter archive" || return 1
 
+        stop_and_verify_service "nginx_exporter" "/usr/local/bin/nginx-prometheus-exporter" || {
+            log_error "Failed to stop nginx_exporter safely"
+            return 1
+        }
         if ! cp nginx-prometheus-exporter /usr/local/bin/; then
             log_error "Failed to copy nginx-prometheus-exporter binary"
             return 1
@@ -1177,6 +1200,10 @@ install_phpfpm_exporter() {
         cd /tmp
         local binary="php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
         safe_download "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/${binary}" "-O ${binary}" "PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}" || return 1
+        stop_and_verify_service "phpfpm_exporter" "/usr/local/bin/php-fpm_exporter" || {
+            log_error "Failed to stop phpfpm_exporter safely"
+            return 1
+        }
         if ! mv "$binary" /usr/local/bin/php-fpm_exporter; then
             log_error "Failed to move php-fpm_exporter binary"
             return 1
@@ -1287,6 +1314,10 @@ install_promtail() {
         safe_download "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/${archive}" "-O ${archive}" "Promtail ${PROMTAIL_VERSION}" || return 1
         safe_extract "$archive" "Promtail archive" || return 1
         chmod +x promtail-linux-amd64
+        stop_and_verify_service "promtail" "/usr/local/bin/promtail" || {
+            log_error "Failed to stop promtail safely"
+            return 1
+        }
         if ! mv promtail-linux-amd64 /usr/local/bin/promtail; then
             log_error "Failed to move promtail binary"
             return 1
@@ -1435,10 +1466,18 @@ install_alertmanager() {
         safe_download "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/${archive}" "-O ${archive}" "Alertmanager ${ALERTMANAGER_VERSION}" || return 1
         safe_extract "$archive" "Alertmanager archive" || return 1
 
+        stop_and_verify_service "alertmanager" "/usr/local/bin/alertmanager" || {
+            log_error "Failed to stop alertmanager safely"
+            return 1
+        }
         if ! cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /usr/local/bin/; then
             log_error "Failed to copy alertmanager binary"
             return 1
         fi
+        stop_and_verify_service "alertmanager" "/usr/local/bin/amtool" || {
+            log_error "Failed to stop alertmanager safely"
+            return 1
+        }
         if ! cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" /usr/local/bin/; then
             log_error "Failed to copy amtool binary"
             return 1
@@ -1604,6 +1643,10 @@ install_loki() {
         safe_download "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/${archive}" "-O ${archive}" "Loki ${LOKI_VERSION}" || return 1
         safe_extract "$archive" "Loki archive" || return 1
         chmod +x loki-linux-amd64
+        stop_and_verify_service "loki" "/usr/local/bin/loki" || {
+            log_error "Failed to stop loki safely"
+            return 1
+        }
         if ! mv loki-linux-amd64 /usr/local/bin/loki; then
             log_error "Failed to move loki binary"
             return 1

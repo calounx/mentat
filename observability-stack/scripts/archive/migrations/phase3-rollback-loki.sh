@@ -1,7 +1,10 @@
 #!/bin/bash
 ################################################################################
-# Phase 3: Loki Rollback Script
+# ARCHIVED/LEGACY: Phase 3: Loki Rollback Script
 # Rolls back Loki from 3.6.3 to 2.9.3
+#
+# WARNING: This is an archived/legacy migration script. Use with caution and
+#          only if you need to rollback from this specific migration phase.
 #
 # Usage:
 #   ./phase3-rollback-loki.sh [BACKUP_TIMESTAMP]
@@ -45,6 +48,36 @@ check_root() {
         error "This script must be run as root (use sudo)"
         exit 2
     fi
+}
+
+# Stop service and verify binary is not in use before replacement
+# Usage: stop_and_verify_service "service_name" "binary_path"
+stop_and_verify_service() {
+    local service_name="$1"
+    local binary_path="$2"
+    local max_attempts=10
+    local attempt=0
+
+    log "Stopping $service_name and verifying binary can be replaced..."
+
+    # Stop the service
+    systemctl stop "$service_name" 2>/dev/null || true
+    sleep 2
+
+    # Wait for binary to be released
+    while [[ $attempt -lt $max_attempts ]]; do
+        if ! lsof "$binary_path" >/dev/null 2>&1; then
+            log "Binary $binary_path is not in use, safe to replace"
+            return 0
+        fi
+
+        warn "Binary still in use, waiting... (attempt $((attempt + 1))/$max_attempts)"
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+
+    error "Failed to release $binary_path after $max_attempts attempts. Please check running processes."
+    return 1
 }
 
 find_latest_backup() {
@@ -117,6 +150,9 @@ restore_binary() {
     local backup_dir=$1
 
     log "Restoring Loki binary from backup..."
+
+    # Stop service and verify binary can be replaced
+    stop_and_verify_service "loki" "/usr/local/bin/loki"
 
     # Backup current binary (3.6.3) just in case
     if [[ -f /usr/local/bin/loki ]]; then

@@ -1,10 +1,13 @@
 #!/bin/bash
 #===============================================================================
-# Monitored Host Agent Setup Script
+# ARCHIVED/LEGACY: Monitored Host Agent Setup Script
 # Installs: node_exporter, nginx-prometheus-exporter, mysqld_exporter,
 #           php-fpm_exporter, fail2ban-prometheus-exporter, promtail
 #
 # This script is IDEMPOTENT - safe to run multiple times.
+#
+# WARNING: This is an archived/legacy version. Please use the latest version
+#          from the main scripts directory if available.
 #
 # Usage:
 #   ./setup-monitored-host.sh <OBSERVABILITY_VPS_IP> <LOKI_URL> <LOKI_USER> <LOKI_PASS>
@@ -108,6 +111,36 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
     exit 1
+}
+
+# Stop service and verify binary is not in use before replacement
+# Usage: stop_and_verify_service "service_name" "binary_path"
+stop_and_verify_service() {
+    local service_name="$1"
+    local binary_path="$2"
+    local max_attempts=10
+    local attempt=0
+
+    log_info "Stopping $service_name and verifying binary can be replaced..."
+
+    # Stop the service
+    systemctl stop "$service_name" 2>/dev/null || true
+    sleep 2
+
+    # Wait for binary to be released
+    while [[ $attempt -lt $max_attempts ]]; do
+        if ! lsof "$binary_path" >/dev/null 2>&1; then
+            log_info "Binary $binary_path is not in use, safe to replace"
+            return 0
+        fi
+
+        log_warn "Binary still in use, waiting... (attempt $((attempt + 1))/$max_attempts)"
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+
+    log_error "Failed to release $binary_path after $max_attempts attempts. Please check running processes."
+    return 1
 }
 
 # Check config file differences and prompt for overwrite
@@ -490,6 +523,9 @@ install_node_exporter() {
         wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
         tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 
+        # Stop service and verify binary can be replaced
+        stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter"
+
         cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
         chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
@@ -606,6 +642,9 @@ install_nginx_exporter() {
         wget -q "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${NGINX_EXPORTER_VERSION}/nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
         tar xzf "nginx-prometheus-exporter_${NGINX_EXPORTER_VERSION}_linux_amd64.tar.gz"
 
+        # Stop service and verify binary can be replaced
+        stop_and_verify_service "nginx_exporter" "/usr/local/bin/nginx-prometheus-exporter"
+
         cp nginx-prometheus-exporter /usr/local/bin/
         chown nginx_exporter:nginx_exporter /usr/local/bin/nginx-prometheus-exporter
 
@@ -719,6 +758,9 @@ install_mysqld_exporter() {
         cd /tmp
         wget -q "https://github.com/prometheus/mysqld_exporter/releases/download/v${MYSQLD_EXPORTER_VERSION}/mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
         tar xzf "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64.tar.gz"
+
+        # Stop service and verify binary can be replaced
+        stop_and_verify_service "mysqld_exporter" "/usr/local/bin/mysqld_exporter"
 
         cp "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-amd64/mysqld_exporter" /usr/local/bin/
         chown mysqld_exporter:mysqld_exporter /usr/local/bin/mysqld_exporter
@@ -834,6 +876,10 @@ install_phpfpm_exporter() {
 
         cd /tmp
         wget -q "https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64"
+
+        # Stop service and verify binary can be replaced
+        stop_and_verify_service "phpfpm_exporter" "/usr/local/bin/php-fpm_exporter"
+
         mv "php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_amd64" /usr/local/bin/php-fpm_exporter
         chmod +x /usr/local/bin/php-fpm_exporter
         chown phpfpm_exporter:phpfpm_exporter /usr/local/bin/php-fpm_exporter
@@ -940,6 +986,9 @@ install_fail2ban_exporter() {
         wget -q "https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases/v${FAIL2BAN_EXPORTER_VERSION}/downloads/fail2ban_exporter_${FAIL2BAN_EXPORTER_VERSION}_linux_amd64.tar.gz"
         tar xzf "fail2ban_exporter_${FAIL2BAN_EXPORTER_VERSION}_linux_amd64.tar.gz"
 
+        # Stop service and verify binary can be replaced
+        stop_and_verify_service "fail2ban_exporter" "/usr/local/bin/fail2ban-prometheus-exporter"
+
         cp fail2ban_exporter /usr/local/bin/fail2ban-prometheus-exporter
         chmod +x /usr/local/bin/fail2ban-prometheus-exporter
         chown fail2ban_exporter:fail2ban_exporter /usr/local/bin/fail2ban-prometheus-exporter
@@ -1034,6 +1083,10 @@ install_promtail() {
         wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
         unzip -o promtail-linux-amd64.zip
         chmod +x promtail-linux-amd64
+
+        # Stop service and verify binary can be replaced
+        stop_and_verify_service "promtail" "/usr/local/bin/promtail"
+
         mv promtail-linux-amd64 /usr/local/bin/promtail
 
         rm -f promtail-linux-amd64.zip
