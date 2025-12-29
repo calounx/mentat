@@ -460,7 +460,7 @@ ensure_ssh_key() {
         echo "${CYAN}$(cat "${key_path}.pub")${NC}"
         echo ""
 
-        if [[ $CURRENT_MODE != $MODE_PLAN ]]; then
+        if [[ "$DRY_RUN" != "true" && "$INTERACTIVE_MODE" == "true" ]]; then
             read -p "Press Enter once you've added the key to all VPS servers..."
         fi
     else
