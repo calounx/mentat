@@ -39,24 +39,60 @@ fi
 # COLORS AND LOGGING (fallbacks if shared.sh not loaded)
 #===============================================================================
 
+# Detect if terminal supports colors
+supports_colors() {
+    # Check if stdout is a terminal and supports colors
+    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        local colors
+        colors=$(tput colors 2>/dev/null || echo 0)
+        [[ $colors -ge 8 ]]
+    else
+        return 1
+    fi
+}
+
 # Only define colors if not already set (prevents readonly variable conflicts)
 if [[ -z "${RED:-}" ]]; then
-    RED='\033[0;31m'
+    if supports_colors; then
+        RED='\033[0;31m'
+    else
+        RED=''
+    fi
 fi
 if [[ -z "${GREEN:-}" ]]; then
-    GREEN='\033[0;32m'
+    if supports_colors; then
+        GREEN='\033[0;32m'
+    else
+        GREEN=''
+    fi
 fi
 if [[ -z "${YELLOW:-}" ]]; then
-    YELLOW='\033[1;33m'
+    if supports_colors; then
+        YELLOW='\033[1;33m'
+    else
+        YELLOW=''
+    fi
 fi
 if [[ -z "${BLUE:-}" ]]; then
-    BLUE='\033[0;34m'
+    if supports_colors; then
+        BLUE='\033[0;34m'
+    else
+        BLUE=''
+    fi
 fi
 if [[ -z "${CYAN:-}" ]]; then
-    CYAN='\033[0;36m'
+    if supports_colors; then
+        CYAN='\033[0;36m'
+    else
+        CYAN=''
+    fi
 fi
 if [[ -z "${NC:-}" ]]; then
-    NC='\033[0m'
+    if supports_colors; then
+        NC='\033[0m'
+    else
+        NC=''
+    fi
 fi
 
 # Logging functions (fallbacks if not provided by shared.sh)

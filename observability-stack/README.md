@@ -11,15 +11,21 @@ This is a production-ready observability platform that installs directly on Debi
 
 ## Quick Deploy (Fresh VPS)
 
+**Important:** The installer requires interactive input. Download and run the script directly:
+
 ```bash
-# On a fresh Debian 13 VPS, run:
-curl -sSL https://raw.githubusercontent.com/calounx/mentat/master/observability-stack/deploy/bootstrap.sh | sudo bash
+# On a fresh Debian 13 VPS:
+wget https://raw.githubusercontent.com/calounx/mentat/master/observability-stack/deploy/bootstrap.sh
+chmod +x bootstrap.sh
+sudo ./bootstrap.sh
 ```
 
 This interactive installer will guide you through setting up either:
 - **Observability VPS** — The central monitoring server
 - **VPSManager** — A Laravel app with full LEMP stack + monitoring
 - **Monitored Host** — Just the exporters for existing servers
+
+**Note:** Do NOT use `curl ... | sudo bash` as this prevents interactive prompts from working correctly.
 
 See [deploy/README.md](deploy/README.md) for the full deployment guide.
 

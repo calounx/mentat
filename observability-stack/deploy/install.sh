@@ -23,9 +23,9 @@ source "$SCRIPT_DIR/lib/config.sh"
 
 select_role() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  Select Installation Role${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
     echo "  1) ${GREEN}Observability VPS${NC}"
     echo "     - Prometheus, Loki, Tempo, Grafana, Alertmanager"
@@ -78,9 +78,9 @@ select_role() {
 
 collect_observability_config() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  Observability VPS Configuration${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
 
     # Get public IP
@@ -161,9 +161,9 @@ collect_observability_config() {
 
 collect_vpsmanager_config() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  VPSManager Configuration${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
 
     # Observability VPS IP
@@ -233,9 +233,9 @@ collect_vpsmanager_config() {
 
 collect_monitored_config() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  Monitored Host Configuration${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
 
     # Observability VPS IP
@@ -323,9 +323,9 @@ detect_services() {
 
 show_observability_summary() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  Configuration Summary${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
     echo "  Role:              Observability VPS"
     echo "  IP Address:        $OBSERVABILITY_IP"
@@ -346,9 +346,9 @@ show_observability_summary() {
 
 show_vpsmanager_summary() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  Configuration Summary${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
     echo "  Role:              VPSManager (Laravel Application)"
     echo "  Host Name:         $HOST_NAME"
@@ -379,9 +379,9 @@ show_vpsmanager_summary() {
 
 show_monitored_summary() {
     echo
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo -e "${CYAN}  Configuration Summary${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}===============================================================${NC}"
     echo
     echo "  Role:              Monitored Host (Exporters Only)"
     echo "  Host Name:         $HOST_NAME"
@@ -417,9 +417,9 @@ run_role_installer() {
 
 show_completion() {
     echo
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}===============================================================${NC}"
     echo -e "${GREEN}  Installation Complete!${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}===============================================================${NC}"
     echo
 
     case "$ROLE" in

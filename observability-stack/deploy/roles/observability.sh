@@ -81,8 +81,7 @@ install_system_packages() {
         curl \
         wget \
         unzip \
-        apt-transport-https \
-        software-properties-common
+        apt-transport-https
 
     log_success "System packages installed"
 }

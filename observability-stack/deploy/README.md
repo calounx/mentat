@@ -6,10 +6,16 @@ Single-command deployment for fresh Debian 13 VPS instances.
 
 ### Option 1: Bootstrap Script (Recommended)
 
+**Important:** The installer requires interactive input and must be run as root directly, not piped to bash.
+
 ```bash
-# On a fresh Debian 13 VPS
-curl -sSL https://raw.githubusercontent.com/calounx/mentat/master/observability-stack/deploy/bootstrap.sh | sudo bash
+# On a fresh Debian 13 VPS, download and run the bootstrap script
+wget https://raw.githubusercontent.com/calounx/mentat/master/observability-stack/deploy/bootstrap.sh
+chmod +x bootstrap.sh
+sudo ./bootstrap.sh
 ```
+
+**Note:** Do NOT use `curl ... | sudo bash` as this prevents interactive prompts from working correctly.
 
 ### Option 2: Manual Clone
 
