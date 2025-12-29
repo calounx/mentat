@@ -127,10 +127,18 @@ install_prometheus() {
     # Create user (idempotent)
     ensure_system_user prometheus prometheus
 
-    # Stop service if running (to avoid "Text file busy" error)
+    # CRITICAL: Stop service AND kill processes BEFORE copying binary
     if systemctl is-active --quiet prometheus 2>/dev/null; then
         log_info "Stopping prometheus service to update binary..."
         systemctl stop prometheus
+        sleep 1
+    fi
+
+    # Force kill any lingering prometheus processes
+    if pgrep -f "/usr/local/bin/prometheus" >/dev/null 2>&1; then
+        log_info "Killing lingering prometheus processes..."
+        pkill -9 -f "/usr/local/bin/prometheus" 2>/dev/null || true
+        sleep 1
     fi
 
     # Download and extract
@@ -199,10 +207,18 @@ install_loki() {
     # Create user (idempotent)
     ensure_system_user loki loki
 
-    # Stop service if running (to avoid "Text file busy" error)
+    # CRITICAL: Stop service AND kill processes BEFORE copying binary
     if systemctl is-active --quiet loki 2>/dev/null; then
         log_info "Stopping loki service to update binary..."
         systemctl stop loki
+        sleep 1
+    fi
+
+    # Force kill any lingering loki processes
+    if pgrep -f "/usr/local/bin/loki" >/dev/null 2>&1; then
+        log_info "Killing lingering loki processes..."
+        pkill -9 -f "/usr/local/bin/loki" 2>/dev/null || true
+        sleep 1
     fi
 
     # Download and extract
@@ -265,10 +281,18 @@ install_tempo() {
     # Create user (idempotent)
     ensure_system_user tempo tempo
 
-    # Stop service if running (to avoid "Text file busy" error)
+    # CRITICAL: Stop service AND kill processes BEFORE copying binary
     if systemctl is-active --quiet tempo 2>/dev/null; then
         log_info "Stopping tempo service to update binary..."
         systemctl stop tempo
+        sleep 1
+    fi
+
+    # Force kill any lingering tempo processes
+    if pgrep -f "/usr/local/bin/tempo" >/dev/null 2>&1; then
+        log_info "Killing lingering tempo processes..."
+        pkill -9 -f "/usr/local/bin/tempo" 2>/dev/null || true
+        sleep 1
     fi
 
     # Download and extract
@@ -370,10 +394,34 @@ install_alertmanager() {
     # Create user (idempotent)
     ensure_system_user alertmanager alertmanager
 
-    # Stop service if running (to avoid "Text file busy" error)
+    # CRITICAL: Stop service AND kill processes BEFORE copying binary
+    # This prevents "Text file busy" errors when overwriting running executable
     if systemctl is-active --quiet alertmanager 2>/dev/null; then
         log_info "Stopping alertmanager service to update binary..."
         systemctl stop alertmanager
+        sleep 1
+    fi
+
+    # Force kill any lingering alertmanager processes
+    if pgrep -f "/usr/local/bin/alertmanager" >/dev/null 2>&1; then
+        log_info "Killing lingering alertmanager processes..."
+        pkill -9 -f "/usr/local/bin/alertmanager" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # Verify no alertmanager processes are running
+    local retry_count=0
+    while pgrep -f "/usr/local/bin/alertmanager" >/dev/null 2>&1 && [[ $retry_count -lt 5 ]]; do
+        log_warn "Alertmanager process still running, waiting... (attempt $((retry_count + 1))/5)"
+        sleep 1
+        retry_count=$((retry_count + 1))
+    done
+
+    if pgrep -f "/usr/local/bin/alertmanager" >/dev/null 2>&1; then
+        log_error "Failed to stop alertmanager process after 5 retries"
+        log_error "Active processes:"
+        ps aux | grep -v grep | grep alertmanager || true
+        return 1
     fi
 
     # Download and extract
@@ -462,10 +510,18 @@ install_node_exporter() {
     # Create user (idempotent)
     ensure_system_user node_exporter node_exporter
 
-    # Stop service if running (to avoid "Text file busy" error)
+    # CRITICAL: Stop service AND kill processes BEFORE copying binary
     if systemctl is-active --quiet node_exporter 2>/dev/null; then
         log_info "Stopping node_exporter service to update binary..."
         systemctl stop node_exporter
+        sleep 1
+    fi
+
+    # Force kill any lingering node_exporter processes
+    if pgrep -f "/usr/local/bin/node_exporter" >/dev/null 2>&1; then
+        log_info "Killing lingering node_exporter processes..."
+        pkill -9 -f "/usr/local/bin/node_exporter" 2>/dev/null || true
+        sleep 1
     fi
 
     # Download and extract
