@@ -118,26 +118,92 @@ After provisioning, note down:
 |-----|--------|---------|
 | **Observability** | IP Address | 203.0.113.10 |
 | | SSH Port | 22 |
-| | SSH User | root |
+| | SSH User | deploy (sudo user) |
 | | Hostname | monitoring.example.com |
 | **VPSManager** | IP Address | 203.0.113.20 |
 | | SSH Port | 22 |
-| | SSH User | root |
+| | SSH User | deploy (sudo user) |
 | | Hostname | manager.example.com |
 
-### Step 3: Verify VPS Accessibility
+### Step 3: Create Deployment User (IMPORTANT - Security Best Practice)
 
-Test SSH access to both servers:
+**Do NOT use root for deployment!** Create a dedicated sudo user on each VPS:
+
+#### Option A: Automated Setup (Recommended)
+
+```bash
+# SSH into each VPS as root
+ssh root@203.0.113.10
+
+# Download and run the setup script
+wget https://raw.githubusercontent.com/calounx/mentat/master/chom/deploy/scripts/create-deploy-user.sh
+chmod +x create-deploy-user.sh
+sudo ./create-deploy-user.sh deploy
+
+# The script will:
+# ✓ Create user 'deploy'
+# ✓ Configure passwordless sudo
+# ✓ Setup SSH directory
+# ✓ Prompt to add your SSH public key
+
+# Repeat for VPSManager VPS
+ssh root@203.0.113.20
+# ... same steps ...
+```
+
+#### Option B: Manual Setup
+
+```bash
+# SSH into VPS as root
+ssh root@203.0.113.10
+
+# Create deployment user
+useradd -m -s /bin/bash deploy
+usermod -aG sudo deploy
+
+# Configure passwordless sudo
+echo "deploy ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/deploy
+chmod 0440 /etc/sudoers.d/deploy
+
+# Setup SSH keys
+mkdir -p /home/deploy/.ssh
+chmod 700 /home/deploy/.ssh
+touch /home/deploy/.ssh/authorized_keys
+chmod 600 /home/deploy/.ssh/authorized_keys
+
+# Add your public key (from your control machine)
+# On control machine: cat ~/.ssh/id_rsa.pub
+# Copy the output and add to authorized_keys on VPS
+nano /home/deploy/.ssh/authorized_keys
+
+# Set ownership
+chown -R deploy:deploy /home/deploy/.ssh
+
+# Repeat for VPSManager VPS
+```
+
+### Step 4: Verify Sudo User Access
+
+Test the deployment user on both servers:
 
 ```bash
 # Test Observability VPS
-ssh root@203.0.113.10
+ssh deploy@203.0.113.10
+
+# Test passwordless sudo
+sudo whoami
+# Should output: root (without asking for password)
+
+# Exit
+exit
 
 # Test VPSManager VPS
-ssh root@203.0.113.20
+ssh deploy@203.0.113.20
+sudo whoami
+exit
 ```
 
-If successful, you should see the Debian login prompt. Type `exit` to disconnect.
+**If you can't SSH or sudo fails, see SUDO-USER-SETUP.md for troubleshooting.**
 
 ---
 
@@ -164,14 +230,14 @@ Edit `configs/inventory.yaml` with your actual VPS information:
 # Observability Stack VPS
 observability:
   ip: "203.0.113.10"                    # Replace with your Observability VPS IP
-  ssh_user: "root"                      # SSH user (usually root)
+  ssh_user: "deploy"                    # SSH user with passwordless sudo (NOT root!)
   ssh_port: 22                          # SSH port
   hostname: "monitoring.example.com"    # Your monitoring domain (optional)
 
 # VPSManager VPS
 vpsmanager:
   ip: "203.0.113.20"                    # Replace with your VPSManager VPS IP
-  ssh_user: "root"                      # SSH user (usually root)
+  ssh_user: "deploy"                    # SSH user with passwordless sudo (NOT root!)
   ssh_port: 22                          # SSH port
   hostname: "manager.example.com"       # Your manager domain (optional)
 ```
@@ -1048,13 +1114,13 @@ cat .deploy-state/deployment.state | jq
 ```yaml
 observability:
   ip: "203.0.113.10"
-  ssh_user: "root"
+  ssh_user: "deploy"  # Use sudo user with passwordless sudo
   ssh_port: 22
   hostname: "monitoring.example.com"
 
 vpsmanager:
   ip: "203.0.113.20"
-  ssh_user: "root"
+  ssh_user: "deploy"  # Use sudo user with passwordless sudo
   ssh_port: 22
   hostname: "manager.example.com"
 ```

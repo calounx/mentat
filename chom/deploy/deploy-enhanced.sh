@@ -348,9 +348,33 @@ check_dependencies() {
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
+        log_warn "Missing dependencies: ${missing[*]}"
+
+        if [[ "$AUTO_FIX" == "true" ]]; then
+            log_info "Auto-installing missing dependencies..."
+
+            if autofix_missing_dependencies; then
+                # Verify all dependencies are now installed
+                local still_missing=()
+                for dep in "${deps[@]}"; do
+                    if ! command -v "$dep" &> /dev/null; then
+                        still_missing+=("$dep")
+                    fi
+                done
+
+                if [[ ${#still_missing[@]} -eq 0 ]]; then
+                    log_success "All dependencies installed successfully"
+                    return 0
+                else
+                    log_error "Failed to auto-install: ${still_missing[*]}"
+                fi
+            fi
+        fi
+
+        # If auto-fix failed or disabled, show manual instructions
         log_error "Missing dependencies: ${missing[*]}"
         echo ""
-        echo "Installation commands:"
+        echo "Auto-installation failed. Please install manually:"
         for dep in "${missing[@]}"; do
             case "$dep" in
                 yq)

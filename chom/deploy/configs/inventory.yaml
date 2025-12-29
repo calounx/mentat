@@ -1,11 +1,14 @@
 # CHOM Infrastructure Inventory
 # Configure your VPS servers here
+#
+# IMPORTANT: Use a sudo user (not root) for better security
+# The user must have passwordless sudo configured
 
 observability:
   # OVH VPS 1 - Small instance for monitoring stack
   hostname: obs.example.com
   ip: 0.0.0.0  # Replace with actual IP
-  ssh_user: root
+  ssh_user: deploy  # Use sudo user with passwordless sudo (NOT root)
   ssh_port: 22
   specs:
     cpu: 1
@@ -31,7 +34,7 @@ vpsmanager:
   # OVH VPS 2 - Main instance for WordPress hosting
   hostname: wp.example.com
   ip: 0.0.0.0  # Replace with actual IP
-  ssh_user: root
+  ssh_user: deploy  # Use sudo user with passwordless sudo (NOT root)
   ssh_port: 22
   specs:
     cpu: 2
