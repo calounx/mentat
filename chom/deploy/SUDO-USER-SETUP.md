@@ -63,23 +63,23 @@ chmod 0440 /etc/sudoers.d/deploy
 On your **control machine** (where you run the deployment script):
 
 ```bash
-# The deployment script will generate keys automatically
-# But you can also use your existing key:
+# The deployment script will generate keys automatically at:
+# chom/deploy/keys/chom_deploy_key
 
-# Copy your public key to the VPS
+# Copy the public key to your VPS using ssh-copy-id (recommended):
+ssh-copy-id -i keys/chom_deploy_key.pub deploy@your-vps-ip
+
+# Or use your existing SSH key:
 ssh-copy-id deploy@your-vps-ip
 
-# Or manually:
-cat ~/.ssh/id_rsa.pub | ssh deploy@your-vps-ip "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+# You'll be prompted for the deploy user's password
+# The script automatically sets proper permissions
 ```
 
-On the **VPS**, set correct permissions:
-
-```bash
-# As the deploy user
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/authorized_keys
-```
+**Note**: `ssh-copy-id` automatically handles:
+- Creating the `.ssh` directory
+- Setting correct permissions (700 for directory, 600 for authorized_keys)
+- Appending the key (won't overwrite existing keys)
 
 #### Step 4: Test Sudo Access
 
@@ -221,6 +221,7 @@ Create this script on your VPS to automate user creation:
 set -euo pipefail
 
 USERNAME="${1:-deploy}"
+SERVER_IP=$(hostname -I | awk '{print $1}')
 
 echo "Creating deployment user: $USERNAME"
 
@@ -232,6 +233,10 @@ else
     echo "User $USERNAME created"
 fi
 
+# Set a password for initial SSH connection
+echo "Set password for $USERNAME (needed for first ssh-copy-id):"
+passwd "$USERNAME"
+
 # Add to sudo group
 usermod -aG sudo "$USERNAME"
 
@@ -239,28 +244,24 @@ usermod -aG sudo "$USERNAME"
 echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/"$USERNAME"
 chmod 0440 /etc/sudoers.d/"$USERNAME"
 
-# Create .ssh directory
+# Create .ssh directory (ssh-copy-id will handle the rest)
 mkdir -p /home/"$USERNAME"/.ssh
 chmod 700 /home/"$USERNAME"/.ssh
-touch /home/"$USERNAME"/.ssh/authorized_keys
-chmod 600 /home/"$USERNAME"/.ssh/authorized_keys
-chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
+chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh
 
 echo ""
 echo "✓ User $USERNAME configured successfully!"
 echo ""
-echo "Next steps:"
-echo "1. Add your SSH public key to /home/$USERNAME/.ssh/authorized_keys"
-echo "2. Test: ssh $USERNAME@<this-server-ip>"
-echo "3. Test sudo: ssh $USERNAME@<this-server-ip> 'sudo whoami'"
+echo "Next steps (from your control machine):"
+echo "1. Copy your SSH key using:"
+echo "   ssh-copy-id $USERNAME@$SERVER_IP"
 echo ""
-echo "Add your public key now? (paste it below, then press Ctrl+D)"
-cat >> /home/"$USERNAME"/.ssh/authorized_keys
-chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh/authorized_keys
-
+echo "2. Test SSH connection:"
+echo "   ssh $USERNAME@$SERVER_IP"
 echo ""
-echo "✓ SSH key added! Test the connection:"
-echo "  ssh $USERNAME@<this-server-ip>"
+echo "3. Test sudo access:"
+echo "   ssh $USERNAME@$SERVER_IP 'sudo whoami'"
+echo ""
 ```
 
 Save as `create-deploy-user.sh`, then run:
@@ -284,19 +285,16 @@ sudo ./create-deploy-user.sh deploy
 ## Quick Reference
 
 ```bash
-# Create user
+# On VPS (as root):
 sudo useradd -m -s /bin/bash deploy
-
-# Add to sudo with passwordless
 sudo usermod -aG sudo deploy
 echo "deploy ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/deploy
 sudo chmod 0440 /etc/sudoers.d/deploy
+sudo passwd deploy  # Set password for ssh-copy-id
 
-# Setup SSH
-ssh-copy-id deploy@vps-ip
-
-# Test
-ssh deploy@vps-ip "sudo whoami"
+# On control machine:
+ssh-copy-id deploy@vps-ip  # Will ask for password
+ssh deploy@vps-ip "sudo whoami"  # Test (should output: root)
 ```
 
 ## Related Documentation

@@ -75,41 +75,31 @@ else
     exit 1
 fi
 
+# Set a password for initial ssh-copy-id
+log_info "Setting password for $USERNAME (needed for initial ssh-copy-id)"
+passwd "$USERNAME"
+
 echo ""
 echo "${GREEN}✓ User $USERNAME configured successfully!${NC}"
 echo ""
-echo "${YELLOW}Next steps:${NC}"
-echo "  1. Add your SSH public key to: /home/$USERNAME/.ssh/authorized_keys"
-echo "  2. Update inventory.yaml: ssh_user: $USERNAME"
-echo "  3. Test SSH: ssh $USERNAME@<this-server-ip>"
-echo "  4. Test sudo: ssh $USERNAME@<this-server-ip> 'sudo whoami'"
+echo "${YELLOW}Next steps (from your control machine):${NC}"
 echo ""
 
-# Offer to add SSH key interactively
-read -p "Do you want to add an SSH public key now? [y/N] " -n 1 -r
+# Get server IP
+SERVER_IP=$(hostname -I | awk '{print $1}' || echo "<this-server-ip>")
+
+echo "  ${CYAN}1. Copy your SSH key using ssh-copy-id:${NC}"
+echo "     ssh-copy-id $USERNAME@$SERVER_IP"
 echo ""
-
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo ""
-    echo "Paste your SSH public key (from ~/.ssh/id_rsa.pub on your control machine):"
-    echo "Then press Enter twice when done."
-    echo ""
-
-    # Read multi-line input
-    SSH_KEY=""
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && break
-        SSH_KEY+="$line"$'\n'
-    done
-
-    if [[ -n "$SSH_KEY" ]]; then
-        echo "$SSH_KEY" >> /home/"$USERNAME"/.ssh/authorized_keys
-        chown "$USERNAME":"$USERNAME" /home/"$USERNAME"/.ssh/authorized_keys
-        log_success "SSH key added!"
-    else
-        log_warn "No key entered"
-    fi
-fi
+echo "  ${CYAN}2. Update inventory.yaml:${NC}"
+echo "     ssh_user: $USERNAME"
+echo ""
+echo "  ${CYAN}3. Test SSH connection:${NC}"
+echo "     ssh $USERNAME@$SERVER_IP"
+echo ""
+echo "  ${CYAN}4. Test sudo access:${NC}"
+echo "     ssh $USERNAME@$SERVER_IP 'sudo whoami'"
+echo ""
 
 echo ""
 echo "${GREEN}═══════════════════════════════════════════════════════════════${NC}"

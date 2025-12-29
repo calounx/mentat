@@ -165,19 +165,19 @@ usermod -aG sudo deploy
 echo "deploy ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/deploy
 chmod 0440 /etc/sudoers.d/deploy
 
-# Setup SSH keys
+# Setup SSH keys (much easier with ssh-copy-id)
+# From your control machine, run:
+# ssh-copy-id -i ~/.ssh/id_rsa.pub deploy@203.0.113.10
+
+# Or if you prefer to set it up manually on the VPS:
 mkdir -p /home/deploy/.ssh
 chmod 700 /home/deploy/.ssh
 touch /home/deploy/.ssh/authorized_keys
 chmod 600 /home/deploy/.ssh/authorized_keys
-
-# Add your public key (from your control machine)
-# On control machine: cat ~/.ssh/id_rsa.pub
-# Copy the output and add to authorized_keys on VPS
-nano /home/deploy/.ssh/authorized_keys
-
-# Set ownership
 chown -R deploy:deploy /home/deploy/.ssh
+
+# Then from control machine, copy your key:
+# ssh-copy-id deploy@203.0.113.10
 
 # Repeat for VPSManager VPS
 ```

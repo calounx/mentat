@@ -455,12 +455,67 @@ ensure_ssh_key() {
         log_success "SSH key generated at $key_path"
 
         echo ""
-        log_warn "Add this public key to your VPS servers' ~/.ssh/authorized_keys:"
+        log_success "SSH key generated"
         echo ""
-        echo "${CYAN}$(cat "${key_path}.pub")${NC}"
+        log_warn "Add this key to your VPS servers using ssh-copy-id:"
         echo ""
 
-        if [[ "$DRY_RUN" != "true" && "$INTERACTIVE_MODE" == "true" ]]; then
+        # Get VPS details from inventory
+        local obs_ip=$(get_config '.observability.ip' 2>/dev/null || echo "")
+        local obs_user=$(get_config '.observability.ssh_user' 2>/dev/null || echo "")
+        local obs_port=$(get_config '.observability.ssh_port' 2>/dev/null || echo "22")
+
+        local vps_ip=$(get_config '.vpsmanager.ip' 2>/dev/null || echo "")
+        local vps_user=$(get_config '.vpsmanager.ssh_user' 2>/dev/null || echo "")
+        local vps_port=$(get_config '.vpsmanager.ssh_port' 2>/dev/null || echo "22")
+
+        if [[ -n "$obs_ip" && "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
+            echo "  ${CYAN}ssh-copy-id -i ${key_path}.pub -p ${obs_port} ${obs_user}@${obs_ip}${NC}"
+        fi
+
+        if [[ -n "$vps_ip" && "$vps_ip" != "0.0.0.0" && "$vps_ip" != "null" ]]; then
+            echo "  ${CYAN}ssh-copy-id -i ${key_path}.pub -p ${vps_port} ${vps_user}@${vps_ip}${NC}"
+        fi
+
+        echo ""
+        echo "Or manually view the public key:"
+        echo "  ${CYAN}cat ${key_path}.pub${NC}"
+        echo ""
+
+        if [[ "$DRY_RUN" != "true" && "$INTERACTIVE_MODE" != "true" ]]; then
+            # Non-interactive mode: offer to run ssh-copy-id automatically
+            log_info "Attempting to copy SSH keys automatically..."
+
+            local copied_any=false
+
+            if [[ -n "$obs_ip" && "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
+                log_info "Copying key to Observability VPS (${obs_user}@${obs_ip})..."
+                if ssh-copy-id -i "${key_path}.pub" -p "${obs_port}" "${obs_user}@${obs_ip}" 2>/dev/null; then
+                    log_success "Key copied to Observability VPS"
+                    copied_any=true
+                else
+                    log_warn "Failed to auto-copy key to Observability VPS"
+                    log_info "You may need to manually run: ssh-copy-id -i ${key_path}.pub -p ${obs_port} ${obs_user}@${obs_ip}"
+                fi
+            fi
+
+            if [[ -n "$vps_ip" && "$vps_ip" != "0.0.0.0" && "$vps_ip" != "null" ]]; then
+                log_info "Copying key to VPSManager VPS (${vps_user}@${vps_ip})..."
+                if ssh-copy-id -i "${key_path}.pub" -p "${vps_port}" "${vps_user}@${vps_ip}" 2>/dev/null; then
+                    log_success "Key copied to VPSManager VPS"
+                    copied_any=true
+                else
+                    log_warn "Failed to auto-copy key to VPSManager VPS"
+                    log_info "You may need to manually run: ssh-copy-id -i ${key_path}.pub -p ${vps_port} ${vps_user}@${vps_ip}"
+                fi
+            fi
+
+            if [[ "$copied_any" != "true" ]]; then
+                log_warn "Could not auto-copy keys. Please run ssh-copy-id manually (see commands above)"
+                echo ""
+                read -p "Press Enter once you've added the key to all VPS servers..."
+            fi
+        elif [[ "$INTERACTIVE_MODE" == "true" ]]; then
             read -p "Press Enter once you've added the key to all VPS servers..."
         fi
     else
