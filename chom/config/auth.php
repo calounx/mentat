@@ -112,4 +112,40 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Two-Factor Authentication
+    |--------------------------------------------------------------------------
+    |
+    | Configure two-factor authentication (2FA) requirements for user roles.
+    | This provides an additional security layer for privileged accounts.
+    |
+    | enabled: Global 2FA feature toggle
+    | required_for_roles: Array of roles that MUST have 2FA enabled
+    | grace_period_days: Days to allow setup before enforcing 2FA requirement
+    | session_timeout_hours: Hours before 2FA verification expires in session
+    | backup_codes_count: Number of backup codes to generate during 2FA setup
+    |
+    | SECURITY NOTE: Disabling 2FA reduces security for privileged accounts.
+    | Only disable in development environments.
+    |
+    */
+
+    'two_factor_authentication' => [
+        // Enable or disable 2FA globally
+        'enabled' => env('AUTH_2FA_ENABLED', true),
+
+        // Roles that require 2FA (owner and admin by default)
+        'required_for_roles' => explode(',', env('AUTH_2FA_REQUIRED_ROLES', 'owner,admin')),
+
+        // Grace period in days for users to set up 2FA
+        'grace_period_days' => env('AUTH_2FA_GRACE_PERIOD_DAYS', 7),
+
+        // Hours before 2FA verification expires in current session
+        'session_timeout_hours' => env('AUTH_2FA_SESSION_TIMEOUT_HOURS', 24),
+
+        // Number of backup recovery codes to generate
+        'backup_codes_count' => env('AUTH_2FA_BACKUP_CODES_COUNT', 8),
+    ],
+
 ];
