@@ -1,0 +1,124 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-01-01T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2023.5.0",
+  "resources": [
+    {
+      "_id": "wrk_chom",
+      "_type": "workspace",
+      "name": "CHOM API",
+      "description": "CHOM API Development Workspace",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:8000/api/v1",
+        "api_token": "",
+        "user_email": "admin@chom.test",
+        "user_password": "password"
+      },
+      "parentId": "wrk_chom"
+    },
+    {
+      "_id": "env_local",
+      "_type": "environment",
+      "name": "Local",
+      "data": {
+        "base_url": "http://localhost:8000/api/v1"
+      },
+      "parentId": "env_base"
+    },
+    {
+      "_id": "env_staging",
+      "_type": "environment",
+      "name": "Staging",
+      "data": {
+        "base_url": "https://staging.chom.example.com/api/v1"
+      },
+      "parentId": "env_base"
+    },
+    {
+      "_id": "env_production",
+      "_type": "environment",
+      "name": "Production",
+      "data": {
+        "base_url": "https://api.chom.example.com/api/v1"
+      },
+      "parentId": "env_base"
+    },
+    {
+      "_id": "fld_auth",
+      "_type": "request_group",
+      "name": "Authentication",
+      "parentId": "wrk_chom"
+    },
+    {
+      "_id": "req_login",
+      "_type": "request",
+      "name": "Login",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/login",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"{{ _.user_email }}\",\n  \"password\": \"{{ _.user_password }}\"\n}"
+      },
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parentId": "fld_auth"
+    },
+    {
+      "_id": "req_user",
+      "_type": "request",
+      "name": "Get Current User",
+      "method": "GET",
+      "url": "{{ _.base_url }}/user",
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ _.api_token }}"
+      },
+      "parentId": "fld_auth"
+    },
+    {
+      "_id": "fld_sites",
+      "_type": "request_group",
+      "name": "Sites",
+      "parentId": "wrk_chom"
+    },
+    {
+      "_id": "req_sites_list",
+      "_type": "request",
+      "name": "List Sites",
+      "method": "GET",
+      "url": "{{ _.base_url }}/sites",
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ _.api_token }}"
+      },
+      "parentId": "fld_sites"
+    },
+    {
+      "_id": "req_sites_create",
+      "_type": "request",
+      "name": "Create Site",
+      "method": "POST",
+      "url": "{{ _.base_url }}/sites",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"domain\": \"example.test\",\n  \"type\": \"wordpress\",\n  \"php_version\": \"8.2\"\n}"
+      },
+      "authentication": {
+        "type": "bearer",
+        "token": "{{ _.api_token }}"
+      },
+      "parentId": "fld_sites"
+    }
+  ]
+}
