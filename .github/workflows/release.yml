@@ -98,8 +98,15 @@ jobs:
       - name: Prepare environment
         working-directory: chom
         run: |
-          cp .env.example .env 2>/dev/null || echo "APP_KEY=" > .env
-          php artisan key:generate --no-interaction
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            echo "APP_NAME=Chom" > .env
+            echo "APP_ENV=production" >> .env
+            echo "APP_KEY=base64:$(openssl rand -base64 32)" >> .env
+            echo "APP_DEBUG=false" >> .env
+            echo "APP_URL=http://localhost" >> .env
+          fi
 
       - name: Install Composer dependencies
         working-directory: chom
