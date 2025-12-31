@@ -444,9 +444,58 @@ if ! sudo mysql -u root -e "SELECT 1" &>/dev/null; then
             exit 1
         fi
     else
-        log_error "MariaDB secured but credentials file missing at /root/.vpsmanager-credentials"
-        log_error "Manual intervention required. Reset MariaDB root password first."
-        exit 1
+        # Credentials file missing - this can happen if previous installation was incomplete
+        # We need to reset MariaDB root password
+        log_warn "MariaDB secured but credentials file missing at /root/.vpsmanager-credentials"
+        log_warn "This usually means a previous installation was incomplete"
+        log_info "Resetting MariaDB root password..."
+
+        # Stop MariaDB
+        sudo systemctl stop mariadb || true
+
+        # Start MariaDB in skip-grant-tables mode to reset password
+        sudo systemctl set-environment MYSQLD_OPTS="--skip-grant-tables --skip-networking"
+        sudo systemctl start mariadb
+        sleep 3
+
+        # Generate new password
+        MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+
+        # Reset password
+        sudo mysql -u root << EOF
+FLUSH PRIVILEGES;
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+FLUSH PRIVILEGES;
+EOF
+
+        # Stop and restart MariaDB normally
+        sudo systemctl stop mariadb
+        sudo systemctl unset-environment MYSQLD_OPTS
+        sudo systemctl start mariadb
+        sleep 2
+
+        log_success "MariaDB root password reset successfully"
+
+        # Now run secure installation queries with the new password
+        MYSQL_CNF_FILE=$(mktemp)
+        sudo chmod 600 "$MYSQL_CNF_FILE"
+
+        cat > "$MYSQL_CNF_FILE" << EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+EOF
+
+        sudo mysql --defaults-extra-file="$MYSQL_CNF_FILE" << 'SQL'
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+SQL
+
+        shred -u "$MYSQL_CNF_FILE" 2>/dev/null || rm -f "$MYSQL_CNF_FILE"
+        log_success "MariaDB secure installation completed"
     fi
 else
     # First run - MariaDB not secured yet

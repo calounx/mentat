@@ -565,7 +565,7 @@ sudo chown -R observability:observability "$DATA_DIR/alertmanager" "$CONFIG_DIR/
 # GRAFANA
 # =============================================================================
 
-log_info "Installing Grafana ${GRAFANA_VERSION}..."
+log_info "Installing Grafana (latest from APT repository)..."
 
 # Add Grafana repo
 wget -q -O - https://apt.grafana.com/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
