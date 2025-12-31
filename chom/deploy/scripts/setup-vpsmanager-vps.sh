@@ -191,8 +191,8 @@ sudo mkdir -p "$WWW_DIR"
 
 log_info "Setting up PHP repository..."
 
-# Add PHP repository
-sudo wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+# Add PHP repository (with timeout protection)
+sudo wget --timeout=30 --tries=3 -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
 echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list > /dev/null
 
 # SINGLE apt-get update after repository setup (instead of TWO updates)
@@ -387,12 +387,22 @@ if ! sudo mysql -u root -e "SELECT 1" &>/dev/null; then
         # Generate new password using shared library function
         MYSQL_ROOT_PASSWORD=$(generate_password 24)
 
-        # Reset password
-        sudo mysql -u root << EOF
+        # Reset password using temporary SQL file (avoid password in process list)
+        TEMP_SQL_FILE=$(mktemp)
+        chmod 600 "$TEMP_SQL_FILE"  # Secure immediately
+
+        # Write SQL to temp file with actual password
+        cat > "$TEMP_SQL_FILE" << EOF
 FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
 FLUSH PRIVILEGES;
 EOF
+
+        # Execute SQL from file (password not visible in process list)
+        sudo mysql -u root < "$TEMP_SQL_FILE"
+
+        # Securely delete temp file
+        shred -u "$TEMP_SQL_FILE" 2>/dev/null || rm -f "$TEMP_SQL_FILE"
 
         # Stop and restart MariaDB normally
         sudo systemctl stop mariadb
@@ -430,8 +440,20 @@ else
     # Generate root password using shared library function
     MYSQL_ROOT_PASSWORD=$(generate_password 24)
 
-    # Secure installation - Set root password
-    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
+    # Secure installation - Set root password using temporary SQL file (avoid password in process list)
+    TEMP_SQL_FILE=$(mktemp)
+    chmod 600 "$TEMP_SQL_FILE"  # Secure immediately
+
+    # Write SQL to temp file
+    cat > "$TEMP_SQL_FILE" << EOF
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+EOF
+
+    # Execute SQL from file (password not visible in process list)
+    sudo mysql < "$TEMP_SQL_FILE"
+
+    # Securely delete temp file
+    shred -u "$TEMP_SQL_FILE" 2>/dev/null || rm -f "$TEMP_SQL_FILE"
 
     # Use .my.cnf to avoid password in process list
     # Create secure temporary file with proper permissions BEFORE writing
@@ -483,7 +505,15 @@ log_success "Redis installed and configured"
 
 log_info "Installing Composer..."
 
-curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# Download Composer installer with timeout protection
+COMPOSER_INSTALLER="/tmp/composer-installer.php"
+if curl --connect-timeout 10 --max-time 60 -sS https://getcomposer.org/installer -o "$COMPOSER_INSTALLER"; then
+    php "$COMPOSER_INSTALLER" -- --install-dir=/usr/local/bin --filename=composer
+    rm -f "$COMPOSER_INSTALLER"
+else
+    log_error "Failed to download Composer installer"
+    exit 1
+fi
 
 # =============================================================================
 # VPSMANAGER
@@ -545,9 +575,13 @@ EOF
 
 log_info "Installing Node Exporter..."
 
-cd /tmp
-wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
-tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+# Download and extract using shared library function (has timeout protection)
+if ! download_and_extract \
+    "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" \
+    "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"; then
+    log_error "Failed to download/extract Node Exporter"
+    exit 1
+fi
 
 # Stop node_exporter service before replacing binary (using shared library function)
 stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter"

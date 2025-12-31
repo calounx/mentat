@@ -156,9 +156,9 @@ get_github_version() {
         fi
     fi
 
-    # Fetch from GitHub API
+    # Fetch from GitHub API with timeout protection
     log_info "Fetching latest ${component} version from GitHub..."
-    local version=$(curl -s "https://api.github.com/repos/${repo}/releases/latest" | \
+    local version=$(curl --connect-timeout 10 --max-time 30 -s "https://api.github.com/repos/${repo}/releases/latest" | \
                    grep '"tag_name":' | \
                    sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null)
 
@@ -168,11 +168,15 @@ get_github_version() {
         version="$fallback"
     fi
 
-    # Update cache
+    # Update cache with atomic write (prevent race conditions)
     mkdir -p "$(dirname "$VERSION_CACHE")"
-    grep -v "^${cache_key}=" "$VERSION_CACHE" 2>/dev/null > "${VERSION_CACHE}.tmp" || true
-    echo "${cache_key}=${version}" >> "${VERSION_CACHE}.tmp"
-    mv "${VERSION_CACHE}.tmp" "$VERSION_CACHE" 2>/dev/null || true
+    (
+        # Use flock for atomic cache update
+        flock -x 200 || return 0
+        grep -v "^${cache_key}=" "$VERSION_CACHE" 2>/dev/null > "${VERSION_CACHE}.tmp" || true
+        echo "${cache_key}=${version}" >> "${VERSION_CACHE}.tmp"
+        mv "${VERSION_CACHE}.tmp" "$VERSION_CACHE"
+    ) 200>/var/lock/chom-version-cache.lock 2>/dev/null || true
 
     log_success "${component} version: ${version}"
     echo "$version"
@@ -398,16 +402,36 @@ download_and_extract() {
     local filename="$2"
 
     cd /tmp
-    wget -q "$url" -O "$filename"
 
+    # Download with timeout and retry protection
+    if ! wget --timeout=60 --tries=3 --continue --quiet "$url" -O "$filename"; then
+        log_error "Failed to download: $url"
+        return 1
+    fi
+
+    # Verify file was downloaded
+    if [[ ! -f "$filename" ]]; then
+        log_error "Download file not found: $filename"
+        return 1
+    fi
+
+    # Extract based on file type
     if [[ "$filename" == *.tar.gz ]]; then
-        tar xzf "$filename"
+        if ! tar xzf "$filename"; then
+            log_error "Failed to extract: $filename"
+            return 1
+        fi
     elif [[ "$filename" == *.zip ]]; then
-        unzip -qq "$filename"
+        if ! unzip -qq "$filename"; then
+            log_error "Failed to extract: $filename"
+            return 1
+        fi
     else
         log_error "Unsupported archive format: $filename"
         return 1
     fi
+
+    return 0
 }
 
 # Generate secure random password
@@ -491,28 +515,50 @@ setup_letsencrypt_ssl() {
         return 1
     fi
 
+    # Validate domain format (prevent injection)
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+        log_error "Invalid domain format: ${domain}"
+        return 1
+    fi
+
+    # Check domain length
+    if [[ ${#domain} -gt 253 ]]; then
+        log_error "Domain name too long: ${domain}"
+        return 1
+    fi
+
     # Validate email parameter
     if [[ -z "$email" ]]; then
         log_error "Email parameter is required for SSL setup"
         return 1
     fi
 
-    # Build certbot command
-    local certbot_cmd="sudo certbot --nginx -d ${domain}"
+    # Validate email format (prevent injection)
+    if [[ ! "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        log_error "Invalid email format: ${email}"
+        return 1
+    fi
+
+    # Build certbot command as array (avoid eval injection)
+    local certbot_args=(
+        certbot
+        --nginx
+        -d "$domain"
+    )
 
     # Add additional domains
     for add_domain in "${additional_domains[@]}"; do
-        certbot_cmd+=" -d ${add_domain}"
+        certbot_args+=(-d "$add_domain")
     done
 
     # Add non-interactive flags
-    certbot_cmd+=" --non-interactive --agree-tos --email ${email} --redirect"
+    certbot_args+=(--non-interactive --agree-tos --email "$email" --redirect)
 
     log_info "Running certbot for ${domain}..."
     log_info "Email: ${email}"
 
-    # Execute certbot
-    if eval "$certbot_cmd"; then
+    # Execute certbot (safe from injection)
+    if sudo "${certbot_args[@]}"; then
         log_success "SSL certificate installed for ${domain}"
 
         # Test nginx configuration
@@ -571,6 +617,12 @@ check_domain_accessible() {
     local domain="$1"
 
     log_info "Checking if ${domain} is accessible..."
+
+    # Validate domain format
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        log_error "Invalid domain format: ${domain}"
+        return 1
+    fi
 
     # Try to resolve domain
     if host "$domain" >/dev/null 2>&1; then

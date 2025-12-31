@@ -179,27 +179,71 @@ log_info "=========================================="
 
 cd /tmp
 
-# Start all downloads in background
-log_info "Starting parallel downloads..."
+# Check available disk space (need at least 1GB for downloads + extraction)
+AVAILABLE_SPACE=$(df -BM /tmp | tail -1 | awk '{print $4}' | sed 's/M//')
+if [[ "$AVAILABLE_SPACE" -lt 1024 ]]; then
+    log_error "Insufficient disk space in /tmp: ${AVAILABLE_SPACE}MB available (need 1024MB)"
+    log_error "Please free up disk space and try again"
+    exit 1
+fi
+log_info "Disk space check passed: ${AVAILABLE_SPACE}MB available"
 
-wget -q "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" &
+# Wget options: timeout 60s, 3 retries, continue partial downloads
+WGET_OPTS="--timeout=60 --tries=3 --continue --quiet"
+
+# Start all downloads in background
+log_info "Starting parallel downloads with timeout protection..."
+
+wget $WGET_OPTS "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" &
 PROM_PID=$!
 
-wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" &
+wget $WGET_OPTS "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" &
 NODE_PID=$!
 
-wget -q "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip" &
+wget $WGET_OPTS "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip" &
 LOKI_PID=$!
 
-wget -q "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz" &
+wget $WGET_OPTS "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz" &
 ALERT_PID=$!
 
-# Wait for all downloads
+# Wait for all downloads and track failures
 log_info "Waiting for downloads to complete..."
-wait $PROM_PID && log_success "Prometheus downloaded" || log_error "Prometheus download failed"
-wait $NODE_PID && log_success "Node Exporter downloaded" || log_error "Node Exporter download failed"
-wait $LOKI_PID && log_success "Loki downloaded" || log_error "Loki download failed"
-wait $ALERT_PID && log_success "Alertmanager downloaded" || log_error "Alertmanager download failed"
+DOWNLOAD_FAILED=0
+
+if wait $PROM_PID; then
+    log_success "Prometheus downloaded"
+else
+    log_error "Prometheus download failed"
+    DOWNLOAD_FAILED=1
+fi
+
+if wait $NODE_PID; then
+    log_success "Node Exporter downloaded"
+else
+    log_error "Node Exporter download failed"
+    DOWNLOAD_FAILED=1
+fi
+
+if wait $LOKI_PID; then
+    log_success "Loki downloaded"
+else
+    log_error "Loki download failed"
+    DOWNLOAD_FAILED=1
+fi
+
+if wait $ALERT_PID; then
+    log_success "Alertmanager downloaded"
+else
+    log_error "Alertmanager download failed"
+    DOWNLOAD_FAILED=1
+fi
+
+# Exit if any download failed
+if [[ "$DOWNLOAD_FAILED" -eq 1 ]]; then
+    log_error "One or more downloads failed. Cannot continue installation."
+    log_error "Please check your internet connection and try again."
+    exit 1
+fi
 
 # Extract all in parallel
 log_info "Extracting archives in parallel..."
