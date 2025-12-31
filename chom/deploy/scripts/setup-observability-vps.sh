@@ -47,7 +47,7 @@ stop_and_verify_service() {
     # Stop service if running
     if systemctl is-active --quiet "$service_name"; then
         log_info "Stopping ${service_name}..."
-        systemctl stop "$service_name" || {
+sudo systemctl stop "$service_name" || {
             log_error "Failed to stop ${service_name}"
             return 1
         }
@@ -67,9 +67,10 @@ stop_and_verify_service() {
     return 1
 }
 
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-    log_error "This script must be run as root"
+# Check if user has sudo access
+if ! sudo -n true 2>/dev/null; then
+    log_error "This script requires passwordless sudo access"
+    log_error "Please run: sudo visudo and add: $USER ALL=(ALL) NOPASSWD:ALL"
     exit 1
 fi
 
@@ -85,16 +86,15 @@ log_info "Starting Observability Stack installation..."
 # =============================================================================
 
 log_info "Updating system packages..."
-apt-get update -qq
-apt-get upgrade -y -qq
+sudo apt-get update -qq
+sudo apt-get upgrade -y -qq
 
 log_info "Installing dependencies..."
-apt-get install -y -qq \
+sudo apt-get install -y -qq \
     curl \
     wget \
     gnupg \
     apt-transport-https \
-    software-properties-common \
     unzip \
     jq \
     nginx \
@@ -103,14 +103,14 @@ apt-get install -y -qq \
     ufw
 
 # Create directories
-mkdir -p "$DATA_DIR"/{prometheus,loki,grafana,alertmanager}
-mkdir -p "$CONFIG_DIR"/{prometheus,loki,grafana,alertmanager}
-mkdir -p "$LOG_DIR"
-mkdir -p /opt/observability/bin
+sudo mkdir -p "$DATA_DIR"/{prometheus,loki,grafana,alertmanager}
+sudo mkdir -p "$CONFIG_DIR"/{prometheus,loki,grafana,alertmanager}
+sudo mkdir -p "$LOG_DIR"
+sudo mkdir -p /opt/observability/bin
 
 # Create service user
 if ! id -u observability &>/dev/null; then
-    useradd --system --no-create-home --shell /usr/sbin/nologin observability
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin observability
 fi
 
 # =============================================================================
@@ -165,8 +165,8 @@ scrape_configs:
   #       - /etc/observability/prometheus/targets/*.json
 EOF
 
-mkdir -p "$CONFIG_DIR/prometheus/rules"
-mkdir -p "$CONFIG_DIR/prometheus/targets"
+sudo mkdir -p "$CONFIG_DIR/prometheus/rules"
+sudo mkdir -p "$CONFIG_DIR/prometheus/targets"
 
 # Prometheus systemd service
 cat > /etc/systemd/system/prometheus.service << EOF
@@ -192,7 +192,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-chown -R observability:observability "$DATA_DIR/prometheus" "$CONFIG_DIR/prometheus"
+sudo chown -R observability:observability "$DATA_DIR/prometheus" "$CONFIG_DIR/prometheus"
 
 # =============================================================================
 # NODE EXPORTER
@@ -248,7 +248,7 @@ stop_and_verify_service "loki" "/opt/observability/bin/loki" || {
 }
 
 mv loki-linux-amd64 /opt/observability/bin/loki
-chmod +x /opt/observability/bin/loki
+sudo chmod +x /opt/observability/bin/loki
 rm -f loki-linux-amd64.zip
 
 # Loki config
@@ -294,7 +294,7 @@ compactor:
   delete_request_store: filesystem
 EOF
 
-mkdir -p "$DATA_DIR/loki"/{chunks,rules,compactor}
+sudo mkdir -p "$DATA_DIR/loki"/{chunks,rules,compactor}
 
 cat > /etc/systemd/system/loki.service << EOF
 [Unit]
@@ -314,7 +314,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-chown -R observability:observability "$DATA_DIR/loki" "$CONFIG_DIR/loki"
+sudo chown -R observability:observability "$DATA_DIR/loki" "$CONFIG_DIR/loki"
 
 # =============================================================================
 # ALERTMANAGER
@@ -374,7 +374,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-chown -R observability:observability "$DATA_DIR/alertmanager" "$CONFIG_DIR/alertmanager"
+sudo chown -R observability:observability "$DATA_DIR/alertmanager" "$CONFIG_DIR/alertmanager"
 
 # =============================================================================
 # GRAFANA
@@ -385,8 +385,8 @@ log_info "Installing Grafana ${GRAFANA_VERSION}..."
 # Add Grafana repo
 wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
-apt-get update -qq
-apt-get install -y -qq grafana
+sudo apt-get update -qq
+sudo apt-get install -y -qq grafana
 
 # Configure Grafana
 cat > /etc/grafana/provisioning/datasources/datasources.yaml << 'EOF'
@@ -455,15 +455,15 @@ nginx -t
 
 log_info "Configuring firewall..."
 
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw allow 80/tcp      # Nginx/Grafana
-ufw allow 443/tcp     # HTTPS
-ufw allow 3100/tcp    # Loki (for log ingestion from monitored hosts)
-ufw allow 9090/tcp    # Prometheus (for federation if needed)
-ufw --force enable
+sudo ufw --force reset
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow 80/tcp      # Nginx/Grafana
+sudo ufw allow 443/tcp     # HTTPS
+sudo ufw allow 3100/tcp    # Loki (for log ingestion from monitored hosts)
+sudo ufw allow 9090/tcp    # Prometheus (for federation if needed)
+sudo ufw --force enable
 
 # =============================================================================
 # START SERVICES
@@ -471,14 +471,14 @@ ufw --force enable
 
 log_info "Starting services..."
 
-systemctl daemon-reload
+sudo systemctl daemon-reload
 
-systemctl enable --now prometheus
-systemctl enable --now node_exporter
-systemctl enable --now loki
-systemctl enable --now alertmanager
-systemctl enable --now grafana-server
-systemctl restart nginx
+sudo systemctl enable --now prometheus
+sudo systemctl enable --now node_exporter
+sudo systemctl enable --now loki
+sudo systemctl enable --now alertmanager
+sudo systemctl enable --now grafana-server
+sudo systemctl restart nginx
 
 # Wait for services to start
 sleep 5
@@ -529,7 +529,7 @@ echo ""
 cat > /root/.observability-credentials << EOF
 GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
 EOF
-chmod 600 /root/.observability-credentials
+sudo chmod 600 /root/.observability-credentials
 
 if $ALL_OK; then
     log_success "Installation completed successfully!"

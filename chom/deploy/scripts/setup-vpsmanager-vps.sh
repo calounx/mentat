@@ -52,7 +52,7 @@ stop_and_verify_service() {
     # Stop service if running
     if systemctl is-active --quiet "$service_name"; then
         log_info "Stopping ${service_name}..."
-        systemctl stop "$service_name" || {
+sudo systemctl stop "$service_name" || {
             log_error "Failed to stop ${service_name}"
             return 1
         }
@@ -72,9 +72,10 @@ stop_and_verify_service() {
     return 1
 }
 
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-    log_error "This script must be run as root"
+# Check if user has sudo access
+if ! sudo -n true 2>/dev/null; then
+    log_error "This script requires passwordless sudo access"
+    log_error "Please run: sudo visudo and add: $USER ALL=(ALL) NOPASSWD:ALL"
     exit 1
 fi
 
@@ -85,16 +86,15 @@ log_info "Starting VPSManager installation..."
 # =============================================================================
 
 log_info "Updating system packages..."
-apt-get update -qq
-apt-get upgrade -y -qq
+sudo apt-get update -qq
+sudo apt-get upgrade -y -qq
 
 log_info "Installing base dependencies..."
-apt-get install -y -qq \
+sudo apt-get install -y -qq \
     curl \
     wget \
     gnupg \
     apt-transport-https \
-    software-properties-common \
     unzip \
     git \
     jq \
@@ -106,10 +106,10 @@ apt-get install -y -qq \
     ncdu
 
 # Create directories
-mkdir -p "$VPSMANAGER_DIR"
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$LOG_DIR"
-mkdir -p "$WWW_DIR"
+sudo mkdir -p "$VPSMANAGER_DIR"
+sudo mkdir -p "$CONFIG_DIR"
+sudo mkdir -p "$LOG_DIR"
+sudo mkdir -p "$WWW_DIR"
 
 # =============================================================================
 # NGINX
@@ -117,7 +117,7 @@ mkdir -p "$WWW_DIR"
 
 log_info "Installing Nginx..."
 
-apt-get install -y -qq nginx
+sudo apt-get install -y -qq nginx
 
 # Basic nginx optimization
 cat > /etc/nginx/nginx.conf << 'EOF'
@@ -169,11 +169,11 @@ log_info "Installing PHP..."
 # Add PHP repository
 wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
 echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
-apt-get update -qq
+sudo apt-get update -qq
 
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
     log_info "Installing PHP ${PHP_VERSION}..."
-    apt-get install -y -qq \
+sudo apt-get install -y -qq \
         "php${PHP_VERSION}-fpm" \
         "php${PHP_VERSION}-cli" \
         "php${PHP_VERSION}-common" \
@@ -215,19 +215,19 @@ log_info "Installing MariaDB ${MARIADB_VERSION}..."
 # Add MariaDB repository
 curl -sS https://mariadb.org/mariadb_release_signing_key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg
 echo "deb [arch=amd64] https://mirrors.xtom.de/mariadb/repo/${MARIADB_VERSION}/debian $(lsb_release -sc) main" > /etc/apt/sources.list.d/mariadb.list
-apt-get update -qq
-apt-get install -y -qq mariadb-server mariadb-client
+sudo apt-get update -qq
+sudo apt-get install -y -qq mariadb-server mariadb-client
 
 # Generate root password
 MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 
 # Secure installation
-mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
 
 # Use .my.cnf to avoid password in process list
 # Create secure temporary file to prevent race condition attacks
 MYSQL_CNF_FILE=$(mktemp -t mysql.XXXXXX)
-chmod 600 "$MYSQL_CNF_FILE"  # Set permissions before writing sensitive data
+sudo chmod 600 "$MYSQL_CNF_FILE"  # Set permissions before writing sensitive data
 
 cat > "$MYSQL_CNF_FILE" << EOF
 [client]
@@ -235,7 +235,7 @@ user=root
 password=${MYSQL_ROOT_PASSWORD}
 EOF
 
-mysql --defaults-extra-file="$MYSQL_CNF_FILE" << 'SQL'
+sudo mysql --defaults-extra-file="$MYSQL_CNF_FILE" << 'SQL'
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
@@ -259,7 +259,7 @@ query_cache_size = 32M
 query_cache_limit = 2M
 EOF
 
-systemctl restart mariadb
+sudo systemctl restart mariadb
 
 # =============================================================================
 # REDIS
@@ -267,13 +267,13 @@ systemctl restart mariadb
 
 log_info "Installing Redis..."
 
-apt-get install -y -qq redis-server
+sudo apt-get install -y -qq redis-server
 
 # Redis optimization
 sed -i 's/^# maxmemory .*/maxmemory 128mb/' /etc/redis/redis.conf
 sed -i 's/^# maxmemory-policy .*/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
 
-systemctl restart redis-server
+sudo systemctl restart redis-server
 
 # =============================================================================
 # COMPOSER
@@ -296,7 +296,7 @@ if [[ -d "$VPSMANAGER_DIR/.git" ]]; then
 else
     git clone "$VPSMANAGER_REPO" "$VPSMANAGER_DIR" || {
         log_warn "Could not clone VPSManager repo, creating placeholder"
-        mkdir -p "$VPSMANAGER_DIR/bin"
+sudo mkdir -p "$VPSMANAGER_DIR/bin"
     }
 fi
 
@@ -312,7 +312,7 @@ if [[ -f "$VPSMANAGER_DIR/bin/vpsmanager" ]]; then
 fi
 
 # VPSManager config
-mkdir -p "$CONFIG_DIR"
+sudo mkdir -p "$CONFIG_DIR"
 cat > "$CONFIG_DIR/config.yaml" << EOF
 # VPSManager Configuration
 php:
@@ -355,7 +355,7 @@ stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
 cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
 rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64"*
 
-useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter || true
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter || true
 
 cat > /etc/systemd/system/node_exporter.service << 'EOF'
 [Unit]
@@ -375,8 +375,8 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now node_exporter
+sudo systemctl daemon-reload
+sudo systemctl enable --now node_exporter
 
 # =============================================================================
 # VPSMANAGER DASHBOARD
@@ -385,7 +385,7 @@ systemctl enable --now node_exporter
 log_info "Setting up VPSManager Dashboard..."
 
 # Create dashboard directory
-mkdir -p /var/www/dashboard
+sudo mkdir -p /var/www/dashboard
 
 # Generate dashboard credentials
 DASHBOARD_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
@@ -599,7 +599,7 @@ cat > /etc/vpsmanager/dashboard-auth.php << EOF
 <?php
 \$password_hash = '${DASHBOARD_PASSWORD_HASH}';
 EOF
-chmod 600 /etc/vpsmanager/dashboard-auth.php
+sudo chmod 600 /etc/vpsmanager/dashboard-auth.php
 
 # Dashboard nginx config
 cat > /etc/nginx/sites-available/dashboard << 'EOF'
@@ -629,15 +629,15 @@ rm -f /etc/nginx/sites-enabled/default
 
 log_info "Configuring firewall..."
 
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw allow 80/tcp      # HTTP
-ufw allow 443/tcp     # HTTPS
-ufw allow 8080/tcp    # Dashboard
-ufw allow 9100/tcp    # Node exporter (for observability)
-ufw --force enable
+sudo ufw --force reset
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow 80/tcp      # HTTP
+sudo ufw allow 443/tcp     # HTTPS
+sudo ufw allow 8080/tcp    # Dashboard
+sudo ufw allow 9100/tcp    # Node exporter (for observability)
+sudo ufw --force enable
 
 # =============================================================================
 # FAIL2BAN
@@ -661,7 +661,7 @@ enabled = true
 enabled = true
 EOF
 
-systemctl restart fail2ban
+sudo systemctl restart fail2ban
 
 # =============================================================================
 # START SERVICES
@@ -669,16 +669,16 @@ systemctl restart fail2ban
 
 log_info "Starting services..."
 
-systemctl daemon-reload
+sudo systemctl daemon-reload
 
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-    systemctl enable --now "php${PHP_VERSION}-fpm"
+sudo systemctl enable --now "php${PHP_VERSION}-fpm"
 done
 
-systemctl enable --now nginx
-systemctl enable --now mariadb
-systemctl enable --now redis-server
-systemctl enable --now fail2ban
+sudo systemctl enable --now nginx
+sudo systemctl enable --now mariadb
+sudo systemctl enable --now redis-server
+sudo systemctl enable --now fail2ban
 
 nginx -t && systemctl reload nginx
 
@@ -731,7 +731,7 @@ cat > /root/.vpsmanager-credentials << EOF
 DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
 MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
 EOF
-chmod 600 /root/.vpsmanager-credentials
+sudo chmod 600 /root/.vpsmanager-credentials
 
 if [[ -n "${OBSERVABILITY_IP}" ]]; then
     echo "Observability Integration:"
