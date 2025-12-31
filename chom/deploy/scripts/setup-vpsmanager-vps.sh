@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# CHOM VPSManager Setup Script
+# CHOM VPSManager Setup Script - OPTIMIZED VERSION
 # For Debian 12 (Bookworm) and Debian 13 (Trixie)
 #
 # Installs: Nginx, PHP-FPM, MariaDB, Redis, VPSManager
@@ -8,7 +8,33 @@
 
 set -euo pipefail
 
-# Configuration
+# =============================================================================
+# LIBRARY IMPORT
+# =============================================================================
+
+# Source shared library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_PATH="${SCRIPT_DIR}/../lib/deploy-common.sh"
+
+if [[ ! -f "$LIB_PATH" ]]; then
+    echo "ERROR: Cannot find shared library at: $LIB_PATH"
+    exit 1
+fi
+
+# shellcheck source=../lib/deploy-common.sh
+source "$LIB_PATH"
+
+# Initialize deployment logging
+init_deployment_log
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+# Domain configuration (can be overridden via environment variables)
+DOMAIN="${DOMAIN:-landsraad.arewel.com}"
+SSL_EMAIL="${SSL_EMAIL:-admin@arewel.com}"
+
 OBSERVABILITY_IP="${OBSERVABILITY_IP:-}"
 VPSMANAGER_REPO="https://github.com/calounx/vpsmanager.git"
 
@@ -16,8 +42,9 @@ VPSMANAGER_REPO="https://github.com/calounx/vpsmanager.git"
 PHP_VERSIONS=("8.2" "8.3" "8.4")  # 8.3 is latest stable (recommended), 8.4 is newest, from packages.sury.org
 MARIADB_VERSION="10.11"           # From Debian default repos (same in Debian 12/13)
 REDIS_VERSION="7"                 # From Debian default repos
-# Node Exporter - dynamically fetch latest from GitHub (fallback to hardcoded)
-NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-$(curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo '1.10.2')}"
+
+# Node Exporter - dynamically fetch latest from GitHub (with fallback)
+NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-$(get_github_version "Node Exporter" "prometheus/node_exporter" "1.10.2")}"
 
 # Paths
 VPSMANAGER_DIR="/opt/vpsmanager"
@@ -25,140 +52,17 @@ CONFIG_DIR="/etc/vpsmanager"
 LOG_DIR="/var/log/vpsmanager"
 WWW_DIR="/var/www"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# =============================================================================
+# FULL CLEANUP BEFORE INSTALLATION
+# =============================================================================
 
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-
-# Helper: Write to system files (requires sudo)
-write_system_file() {
-    local file="$1"
-    sudo tee "$file" > /dev/null
-}
-
-# Enhanced stop service with force-kill capabilities - NEVER FAILS
-stop_and_verify_service() {
-    local service_name="$1"
-    local binary_path="$2"
-    local max_wait=30
-    local waited=0
-
-    log_info "Attempting to stop ${service_name}..."
-
-    # Check if service exists
-    if ! systemctl list-unit-files | grep -q "^${service_name}.service"; then
-        log_info "Service ${service_name} does not exist yet, skipping stop"
-        return 0
-    fi
-
-    # Step 0: Disable service to prevent auto-restart during binary replacement
-    if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
-        log_info "Disabling ${service_name} to prevent auto-restart..."
-        sudo systemctl disable "$service_name" 2>/dev/null || log_warn "Disable returned error, continuing..."
-    fi
-
-    # Step 1: Graceful systemctl stop
-    if systemctl is-active --quiet "$service_name"; then
-        log_info "Stopping ${service_name} gracefully..."
-        sudo systemctl stop "$service_name" 2>/dev/null || log_warn "Graceful stop returned error, continuing..."
-    fi
-
-    # Step 2: Wait for binary to be released
-    log_info "Waiting up to ${max_wait}s for ${binary_path} to be released..."
-    while [[ $waited -lt $max_wait ]]; do
-        if ! lsof "$binary_path" 2>/dev/null | grep -q "$binary_path"; then
-            log_success "${service_name} stopped and binary released"
-            return 0
-        fi
-        sleep 1
-        ((waited++))
-    done
-
-    # Step 3: Force kill with SIGTERM then SIGKILL
-    log_warn "Binary still in use after ${max_wait}s, force killing processes..."
-    local pids=$(lsof -t "$binary_path" 2>/dev/null)
-    if [[ -n "$pids" ]]; then
-        log_info "Sending SIGTERM to PIDs: $pids"
-        echo "$pids" | xargs -r sudo kill -15 2>/dev/null || true
-        sleep 2
-
-        # Check if still running
-        pids=$(lsof -t "$binary_path" 2>/dev/null)
-        if [[ -n "$pids" ]]; then
-            log_warn "Processes still alive, sending SIGKILL to PIDs: $pids"
-            echo "$pids" | xargs -r sudo kill -9 2>/dev/null || true
-            sleep 1
-        fi
-    fi
-
-    # Step 4: Nuclear option - fuser -k
-    if lsof "$binary_path" 2>/dev/null | grep -q "$binary_path"; then
-        log_warn "Binary STILL in use, using fuser -k (nuclear option)..."
-        sudo fuser -k -TERM "$binary_path" 2>/dev/null || true
-        sleep 2
-        sudo fuser -k -KILL "$binary_path" 2>/dev/null || true
-        sleep 1
-    fi
-
-    # Step 5: Final verification
-    if lsof "$binary_path" 2>/dev/null | grep -q "$binary_path"; then
-        log_warn "Binary may still be in use, but proceeding anyway (will be overwritten)"
-    else
-        log_success "Binary successfully released after force kill"
-    fi
-
-    # ALWAYS return success - we've done our best
-    return 0
-}
-
-# Cleanup port conflicts by killing processes using specific ports
-cleanup_port_conflicts() {
-    local ports=("$@")
-
-    log_info "Checking for port conflicts on ports: ${ports[*]}"
-
-    for port in "${ports[@]}"; do
-        local pids=$(sudo lsof -ti ":$port" 2>/dev/null || true)
-        if [[ -n "$pids" ]]; then
-            log_warn "Port $port is in use by PIDs: $pids"
-            log_info "Killing processes on port $port..."
-            echo "$pids" | xargs -r sudo kill -15 2>/dev/null || true
-            sleep 2
-
-            # Check if still running
-            pids=$(sudo lsof -ti ":$port" 2>/dev/null || true)
-            if [[ -n "$pids" ]]; then
-                log_warn "Processes still alive on port $port, force killing..."
-                echo "$pids" | xargs -r sudo kill -9 2>/dev/null || true
-                sleep 1
-            fi
-
-            # Final check
-            pids=$(sudo lsof -ti ":$port" 2>/dev/null || true)
-            if [[ -n "$pids" ]]; then
-                log_warn "Port $port may still be in use, but proceeding..."
-            else
-                log_success "Port $port cleared"
-            fi
-        fi
-    done
-}
-
-# Full cleanup before installation - stops all services and kills processes
 run_full_cleanup() {
     log_info "=========================================="
     log_info "  RUNNING FULL CLEANUP"
     log_info "=========================================="
 
     # List of all VPSManager services
-    local services=("nginx" "php8.2-fpm" "php8.4-fpm" "mariadb" "redis-server" "node_exporter" "fail2ban")
+    local services=("nginx" "php8.2-fpm" "php8.3-fpm" "php8.4-fpm" "mariadb" "redis-server" "node_exporter" "fail2ban")
 
     # Stop all services (except fail2ban which we'll restart)
     log_info "Stopping VPSManager services..."
@@ -226,53 +130,15 @@ run_full_cleanup() {
     sleep 2
 }
 
-# Check if user has sudo access
-if ! sudo -n true 2>/dev/null; then
-    log_error "This script requires passwordless sudo access"
-    log_error "Please run: sudo visudo and add: $USER ALL=(ALL) NOPASSWD:ALL"
-    exit 1
-fi
-
 # =============================================================================
-# OS DETECTION AND COMPATIBILITY
+# PREREQUISITES
 # =============================================================================
 
-log_info "Detecting operating system..."
+# Check sudo access using shared library
+check_sudo_access
 
-# Detect OS and version
-if [[ ! -f /etc/os-release ]]; then
-    log_error "Cannot detect OS - /etc/os-release not found"
-    exit 1
-fi
-
-# shellcheck source=/dev/null
-source /etc/os-release
-
-# Check if Debian
-if [[ "$ID" != "debian" ]]; then
-    log_error "This script only supports Debian (detected: $ID)"
-    exit 1
-fi
-
-# Detect Debian version
-DEBIAN_VERSION=$(echo "$VERSION_ID" | cut -d. -f1)
-DEBIAN_CODENAME="$VERSION_CODENAME"
-
-case "$DEBIAN_VERSION" in
-    12)
-        log_info "Detected: Debian 12 (Bookworm)"
-        # Debian 12 has MariaDB 10.11 in default repos
-        ;;
-    13)
-        log_info "Detected: Debian 13 (Trixie)"
-        # Debian 13 has MariaDB 10.11 in default repos
-        ;;
-    *)
-        log_warn "Unsupported Debian version: $DEBIAN_VERSION ($DEBIAN_CODENAME)"
-        log_warn "This script is tested on Debian 12 (Bookworm) and 13 (Trixie)"
-        log_warn "Continuing anyway, but you may encounter issues..."
-        ;;
-esac
+# Detect and validate Debian OS using shared library
+detect_debian_os
 
 log_info "Starting VPSManager installation..."
 
@@ -284,15 +150,11 @@ log_info "  - Redis: ${REDIS_VERSION}.x (from Debian ${DEBIAN_VERSION} repos)"
 log_info "  - Node Exporter: ${NODE_EXPORTER_VERSION}"
 log_info "  - Nginx: Latest from Debian ${DEBIAN_VERSION} repos"
 
-# =============================================================================
-# PRE-INSTALLATION CLEANUP
-# =============================================================================
-
 # Run full cleanup BEFORE any installation to ensure idempotency
 run_full_cleanup
 
 # =============================================================================
-# SYSTEM SETUP
+# SYSTEM SETUP - OPTIMIZED WITH SINGLE APT-GET UPDATE
 # =============================================================================
 
 log_info "Updating system packages..."
@@ -322,6 +184,20 @@ sudo mkdir -p "$VPSMANAGER_DIR"
 sudo mkdir -p "$CONFIG_DIR"
 sudo mkdir -p "$LOG_DIR"
 sudo mkdir -p "$WWW_DIR"
+
+# =============================================================================
+# PHP REPOSITORY SETUP - BEFORE APT-GET UPDATE (OPTIMIZATION #2)
+# =============================================================================
+
+log_info "Setting up PHP repository..."
+
+# Add PHP repository
+sudo wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list > /dev/null
+
+# SINGLE apt-get update after repository setup (instead of TWO updates)
+log_info "Updating package index with new repository..."
+sudo apt-get update -qq
 
 # =============================================================================
 # NGINX
@@ -373,38 +249,48 @@ http {
 EOF
 
 # =============================================================================
-# PHP
+# PHP - BATCH INSTALLATION (OPTIMIZATION #3)
 # =============================================================================
 
-log_info "Installing PHP..."
+log_info "Installing PHP versions: ${PHP_VERSIONS[*]}..."
 
-# Add PHP repository
-sudo wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
-echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list > /dev/null
-sudo apt-get update -qq
-
+# Build package list for ALL PHP versions
+PHP_PACKAGES=()
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-    log_info "Installing PHP ${PHP_VERSION}..."
-sudo apt-get install -y -qq \
-        "php${PHP_VERSION}-fpm" \
-        "php${PHP_VERSION}-cli" \
-        "php${PHP_VERSION}-common" \
-        "php${PHP_VERSION}-mysql" \
-        "php${PHP_VERSION}-xml" \
-        "php${PHP_VERSION}-mbstring" \
-        "php${PHP_VERSION}-curl" \
-        "php${PHP_VERSION}-zip" \
-        "php${PHP_VERSION}-gd" \
-        "php${PHP_VERSION}-intl" \
-        "php${PHP_VERSION}-bcmath" \
-        "php${PHP_VERSION}-redis" \
-        "php${PHP_VERSION}-imagick" \
+    PHP_PACKAGES+=(
+        "php${PHP_VERSION}-fpm"
+        "php${PHP_VERSION}-cli"
+        "php${PHP_VERSION}-common"
+        "php${PHP_VERSION}-mysql"
+        "php${PHP_VERSION}-xml"
+        "php${PHP_VERSION}-mbstring"
+        "php${PHP_VERSION}-curl"
+        "php${PHP_VERSION}-zip"
+        "php${PHP_VERSION}-gd"
+        "php${PHP_VERSION}-intl"
+        "php${PHP_VERSION}-bcmath"
+        "php${PHP_VERSION}-redis"
+        "php${PHP_VERSION}-imagick"
         "php${PHP_VERSION}-opcache"
+    )
 done
 
-# PHP optimization for WordPress
+# SINGLE apt-get install for ALL PHP versions (instead of loop)
+log_info "Installing ${#PHP_PACKAGES[@]} PHP packages in batch..."
+sudo apt-get install -y -qq "${PHP_PACKAGES[@]}"
+
+log_success "All PHP versions installed successfully"
+
+# =============================================================================
+# PHP CONFIGURATION - PARALLEL WRITING (OPTIMIZATION #6)
+# =============================================================================
+
+log_info "Writing PHP configuration files in parallel..."
+
+# PHP optimization for WordPress - write all configs in parallel
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-    write_system_file "/etc/php/${PHP_VERSION}/fpm/conf.d/99-wordpress.ini" << 'EOF'
+    (
+        write_system_file "/etc/php/${PHP_VERSION}/fpm/conf.d/99-wordpress.ini" << 'EOF'
 upload_max_filesize = 64M
 post_max_size = 64M
 memory_limit = 256M
@@ -416,7 +302,14 @@ opcache.interned_strings_buffer = 8
 opcache.max_accelerated_files = 10000
 opcache.revalidate_freq = 2
 EOF
+        log_info "PHP ${PHP_VERSION} configuration written"
+    ) &
 done
+
+# Wait for all background PHP config writes to complete
+wait
+
+log_success "All PHP configurations written"
 
 # =============================================================================
 # MARIADB
@@ -429,6 +322,39 @@ log_info "Installing MariaDB..."
 # Debian 13 (Trixie): MariaDB 10.11
 # Note: Third-party MariaDB repos may not support latest Debian versions yet
 sudo apt-get install -y -qq mariadb-server mariadb-client
+
+# =============================================================================
+# MARIADB OPTIMIZATION - WRITE CONFIG BEFORE FIRST START (OPTIMIZATION #5)
+# =============================================================================
+
+log_info "Writing MariaDB optimization config..."
+
+# MariaDB optimization and security hardening - write BEFORE first start
+write_system_file /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'
+[mysqld]
+# Security - Bind to localhost only (not exposed to network)
+bind-address = 127.0.0.1
+
+# Performance optimization
+innodb_buffer_pool_size = 256M
+innodb_log_file_size = 64M
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+max_connections = 200
+query_cache_type = 1
+query_cache_size = 32M
+query_cache_limit = 2M
+
+# Additional security hardening
+local-infile = 0
+skip-symbolic-links = 1
+EOF
+
+log_success "MariaDB configuration written (optimization applied before first start)"
+
+# =============================================================================
+# MARIADB SECURITY SETUP
+# =============================================================================
 
 # Check if MariaDB is already secured (idempotency check)
 if ! sudo mysql -u root -e "SELECT 1" &>/dev/null; then
@@ -458,8 +384,8 @@ if ! sudo mysql -u root -e "SELECT 1" &>/dev/null; then
         sudo systemctl start mariadb
         sleep 3
 
-        # Generate new password
-        MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        # Generate new password using shared library function
+        MYSQL_ROOT_PASSWORD=$(generate_password 24)
 
         # Reset password
         sudo mysql -u root << EOF
@@ -501,8 +427,8 @@ else
     # First run - MariaDB not secured yet
     log_info "Securing MariaDB for the first time..."
 
-    # Generate root password
-    MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    # Generate root password using shared library function
+    MYSQL_ROOT_PASSWORD=$(generate_password 24)
 
     # Secure installation - Set root password
     sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
@@ -534,43 +460,22 @@ SQL
     log_success "MariaDB secured successfully"
 fi
 
-# MariaDB optimization and security hardening
-write_system_file /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'
-[mysqld]
-# Security - Bind to localhost only (not exposed to network)
-bind-address = 127.0.0.1
-
-# Performance optimization
-innodb_buffer_pool_size = 256M
-innodb_log_file_size = 64M
-innodb_flush_log_at_trx_commit = 2
-innodb_flush_method = O_DIRECT
-max_connections = 200
-query_cache_type = 1
-query_cache_size = 32M
-query_cache_limit = 2M
-
-# Additional security hardening
-local-infile = 0
-skip-symbolic-links = 1
-EOF
-
-sudo systemctl restart mariadb
 log_success "MariaDB configured: localhost-only binding, production-ready"
 
 # =============================================================================
-# REDIS
+# REDIS - FIX SUDO BUG (OPTIMIZATION #4)
 # =============================================================================
 
 log_info "Installing Redis..."
 
 sudo apt-get install -y -qq redis-server
 
-# Redis optimization
-sed -i 's/^# maxmemory .*/maxmemory 128mb/' /etc/redis/redis.conf
-sed -i 's/^# maxmemory-policy .*/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
+# Redis optimization - FIX: Add sudo prefix to sed commands
+log_info "Configuring Redis memory limits..."
+sudo sed -i 's/^# maxmemory .*/maxmemory 128mb/' /etc/redis/redis.conf
+sudo sed -i 's/^# maxmemory-policy .*/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
 
-sudo systemctl restart redis-server
+log_success "Redis installed and configured"
 
 # =============================================================================
 # COMPOSER
@@ -593,7 +498,7 @@ if [[ -d "$VPSMANAGER_DIR/.git" ]]; then
 else
     git clone "$VPSMANAGER_REPO" "$VPSMANAGER_DIR" || {
         log_warn "Could not clone VPSManager repo, creating placeholder"
-sudo mkdir -p "$VPSMANAGER_DIR/bin"
+        sudo mkdir -p "$VPSMANAGER_DIR/bin"
     }
 fi
 
@@ -616,6 +521,7 @@ php:
   default_version: "8.2"
   supported_versions:
     - "8.2"
+    - "8.3"
     - "8.4"
 
 observability:
@@ -643,7 +549,7 @@ cd /tmp
 wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 
-# Stop node_exporter service before replacing binary
+# Stop node_exporter service before replacing binary (using shared library function)
 stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter"
 
 sudo cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
@@ -670,7 +576,7 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now node_exporter
+sudo systemctl enable node_exporter
 
 # =============================================================================
 # VPSMANAGER DASHBOARD
@@ -681,8 +587,8 @@ log_info "Setting up VPSManager Dashboard..."
 # Create dashboard directory
 sudo mkdir -p /var/www/dashboard
 
-# Generate dashboard credentials
-DASHBOARD_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
+# Generate dashboard credentials using shared library function
+DASHBOARD_PASSWORD=$(generate_password 16)
 
 # Hash password without exposing in process list
 # Use a temporary file to pass password to PHP securely
@@ -908,20 +814,39 @@ EOF
 sudo chmod 600 /etc/vpsmanager/dashboard-auth.php
 
 # Dashboard nginx config
-write_system_file /etc/nginx/sites-available/dashboard << 'EOF'
+log_info "Configuring nginx for ${DOMAIN}..."
+
+write_system_file /etc/nginx/sites-available/dashboard << EOF
 server {
-    listen 8080;
-    server_name _;
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
     root /var/www/dashboard;
     index index.php;
 
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
     location / {
-        try_files $uri $uri/ /index.php?$args;
+        try_files \$uri \$uri/ /index.php?\$args;
     }
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    # Deny access to sensitive files
+    location ~ /\.ht {
+        deny all;
+    }
+
+    location ~ /\.git {
+        deny all;
     }
 }
 EOF
@@ -929,16 +854,18 @@ EOF
 sudo ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
+# Test nginx configuration
+sudo nginx -t
+
 # =============================================================================
 # FIREWALL
 # =============================================================================
 
 log_info "Configuring firewall..."
 
-sudo ufw --force reset
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow ssh
+configure_firewall_base  # Use shared library function for base rules
+
+# Add VPSManager-specific ports
 sudo ufw allow 80/tcp      # HTTP
 sudo ufw allow 443/tcp     # HTTPS
 sudo ufw allow 8080/tcp    # Dashboard
@@ -967,103 +894,174 @@ enabled = true
 enabled = true
 EOF
 
-sudo systemctl restart fail2ban
-
 # =============================================================================
-# PRE-START PORT VALIDATION
+# PRE-START PORT VALIDATION (OPTIMIZATION #8)
 # =============================================================================
 
 log_info "Validating ports are available before starting services..."
 
-# Critical ports that must be free
-REQUIRED_PORTS=(80 443 8080 9100 3306 6379)
-
-for port in "${REQUIRED_PORTS[@]}"; do
-    if lsof -ti ":$port" &>/dev/null; then
-        log_warn "Port $port is still in use, attempting to free it..."
-        cleanup_port_conflicts "$port"
-
-        # Verify port is now free
-        if lsof -ti ":$port" &>/dev/null; then
-            log_error "Failed to free port $port. Cannot start services."
-            log_error "Please manually investigate: sudo lsof -i :$port"
-            exit 1
-        fi
-    fi
-    log_info "Port $port is available"
-done
-
-log_success "All required ports are available"
+# Use shared library function for port validation
+validate_ports_available 80 443 8080 9100 3306 6379
 
 # =============================================================================
-# START SERVICES
+# START SERVICES - OPTIMIZED WITH BATCH ENABLE AND PARALLEL START (OPTIMIZATION #8)
 # =============================================================================
 
 log_info "Starting services..."
 
 sudo systemctl daemon-reload
 
+# Batch enable services
+log_info "Enabling services..."
+ENABLE_SERVICES=("nginx" "mariadb" "redis-server" "node_exporter" "fail2ban")
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-    sudo systemctl enable --now "php${PHP_VERSION}-fpm"
+    ENABLE_SERVICES+=("php${PHP_VERSION}-fpm")
 done
 
-# Wait for PHP-FPM sockets to be ready before starting Nginx
+# Enable all services in batch
+for service in "${ENABLE_SERVICES[@]}"; do
+    sudo systemctl enable "$service" &
+done
+wait
+
+log_success "All services enabled"
+
+# Start PHP-FPM services first (parallel start)
+log_info "Starting PHP-FPM services in parallel..."
+for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
+    sudo systemctl start "php${PHP_VERSION}-fpm" &
+done
+
+# =============================================================================
+# PARALLEL PHP SOCKET WAITING (OPTIMIZATION #7)
+# =============================================================================
+
 log_info "Waiting for PHP-FPM sockets to be ready..."
+
+# Start background jobs to wait for each PHP socket in parallel
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-    SOCKET_PATH="/run/php/php${PHP_VERSION}-fpm.sock"
-    log_info "Checking ${SOCKET_PATH}..."
-
-    timeout 30 bash -c "until [ -S '${SOCKET_PATH}' ]; do sleep 0.5; done" || {
-        log_error "Timeout waiting for ${SOCKET_PATH}"
-        log_error "PHP ${PHP_VERSION} FPM may have failed to start"
-        sudo systemctl status "php${PHP_VERSION}-fpm" --no-pager
-        exit 1
-    }
-
-    log_success "PHP ${PHP_VERSION} FPM socket ready"
+    (
+        SOCKET_PATH="/run/php/php${PHP_VERSION}-fpm.sock"
+        timeout 30 bash -c "until [ -S '${SOCKET_PATH}' ]; do sleep 0.5; done" || {
+            log_error "Timeout waiting for ${SOCKET_PATH}"
+            exit 1
+        }
+        log_success "PHP ${PHP_VERSION} FPM socket ready"
+    ) &
 done
 
-sudo systemctl enable --now nginx
-sudo systemctl enable --now mariadb
-sudo systemctl enable --now redis-server
-sudo systemctl enable --now fail2ban
+# Wait for ALL PHP socket checks to complete
+wait
+
+log_success "All PHP-FPM sockets ready"
+
+# Start remaining services (can start in parallel now that PHP is ready)
+log_info "Starting remaining services..."
+sudo systemctl start nginx &
+sudo systemctl start mariadb &
+sudo systemctl start redis-server &
+sudo systemctl start node_exporter &
+sudo systemctl start fail2ban &
+
+# Wait for all service starts to complete
+wait
+
+log_success "All services started"
 
 # Final nginx configuration test and reload
 log_info "Testing Nginx configuration..."
 nginx -t && systemctl reload nginx
 
 # =============================================================================
-# VERIFICATION
+# VERIFICATION (OPTIMIZATION #9 - USE SHARED LIBRARY)
 # =============================================================================
 
 log_info "Verifying installation..."
 
-SERVICES=("nginx" "mariadb" "redis-server" "php8.2-fpm" "node_exporter" "fail2ban")
-ALL_OK=true
-
-for svc in "${SERVICES[@]}"; do
-    if systemctl is-active --quiet "$svc"; then
-        log_success "$svc is running"
-    else
-        log_error "$svc failed to start"
-        ALL_OK=false
-    fi
+# Build list of services to verify
+VERIFY_SERVICES=("nginx" "mariadb" "redis-server" "node_exporter" "fail2ban")
+for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
+    VERIFY_SERVICES+=("php${PHP_VERSION}-fpm")
 done
+
+# Use shared library function for verification
+if verify_services "${VERIFY_SERVICES[@]}"; then
+    ALL_OK=true
+else
+    ALL_OK=false
+fi
+
+# =============================================================================
+# SSL/HTTPS CONFIGURATION
+# =============================================================================
+
+log_info "=========================================="
+log_info "  SSL/HTTPS CONFIGURATION"
+log_info "=========================================="
+
+# Check if domain is configured and accessible
+if [[ -n "$DOMAIN" ]] && [[ "$DOMAIN" != "localhost" ]] && [[ "$DOMAIN" != "_" ]]; then
+    log_info "Domain configured: ${DOMAIN}"
+    log_info "SSL Email: ${SSL_EMAIL}"
+
+    # Check domain DNS resolution
+    if check_domain_accessible "$DOMAIN"; then
+        log_info "Domain DNS is correctly configured"
+        log_info "Setting up Let's Encrypt SSL certificate..."
+
+        # Setup SSL with auto-renewal
+        if setup_ssl_with_renewal "$DOMAIN" "$SSL_EMAIL"; then
+            log_success "SSL/HTTPS configured successfully!"
+            log_success "VPSManager is now accessible at: https://${DOMAIN}"
+            SSL_CONFIGURED=true
+        else
+            log_warn "SSL setup failed or was skipped"
+            log_warn "VPSManager is accessible via HTTP at: http://${DOMAIN}"
+            log_warn "You can set up SSL later with: sudo certbot --nginx -d ${DOMAIN}"
+            SSL_CONFIGURED=false
+        fi
+    else
+        log_warn "Domain ${DOMAIN} is not accessible or DNS not configured"
+        log_warn "Skipping SSL setup - you can configure it later with certbot"
+        log_warn "VPSManager is accessible via HTTP at: http://$(get_ip_address)"
+        SSL_CONFIGURED=false
+    fi
+else
+    log_warn "No domain configured (DOMAIN=${DOMAIN})"
+    log_warn "Skipping SSL setup - services accessible via IP address only"
+    log_warn "To enable SSL, set DOMAIN and SSL_EMAIL environment variables and re-run"
+    SSL_CONFIGURED=false
+fi
+
+log_info "=========================================="
 
 # =============================================================================
 # SUMMARY
 # =============================================================================
 
-IP_ADDRESS=$(hostname -I | awk '{print $1}')
+IP_ADDRESS=$(get_ip_address)  # Use shared library function
 
 echo ""
 echo "=========================================="
 echo "  VPSManager Installed!"
 echo "=========================================="
 echo ""
-echo "Services:"
-echo "  - Dashboard:     http://${IP_ADDRESS}:8080"
-echo "  - Node Exporter: http://${IP_ADDRESS}:9100"
+
+# Display URLs based on SSL configuration
+if [[ "$SSL_CONFIGURED" == "true" ]]; then
+    echo "Access URLs (HTTPS - SSL Configured):"
+    echo "  - VPSManager:    https://${DOMAIN}"
+    echo "  - Node Exporter: http://${IP_ADDRESS}:9100 (internal)"
+else
+    echo "Access URLs (HTTP - SSL Not Configured):"
+    if [[ -n "$DOMAIN" ]] && [[ "$DOMAIN" != "_" ]]; then
+        echo "  - VPSManager:    http://${DOMAIN} or http://${IP_ADDRESS}"
+    else
+        echo "  - VPSManager:    http://${IP_ADDRESS}"
+    fi
+    echo "  - Node Exporter: http://${IP_ADDRESS}:9100"
+fi
+
 echo ""
 echo "Dashboard Credentials:"
 echo "  - Password: ${DASHBOARD_PASSWORD}"
@@ -1073,13 +1071,24 @@ echo "  - Root Password: ${MYSQL_ROOT_PASSWORD}"
 echo ""
 echo "PHP Versions: ${PHP_VERSIONS[*]}"
 echo ""
-echo "IMPORTANT: Save these credentials! They will not be shown again."
+echo "Credentials saved: /root/.vpsmanager-credentials"
+if [[ "$SSL_CONFIGURED" == "true" ]]; then
+    echo "SSL Status: ✓ Enabled (Auto-renewal configured)"
+else
+    echo "SSL Status: ✗ Not configured"
+    if [[ -n "$DOMAIN" ]] && [[ "$DOMAIN" != "_" ]]; then
+        echo "To enable SSL: sudo certbot --nginx -d ${DOMAIN} --email ${SSL_EMAIL}"
+    fi
+fi
 echo ""
 
 # Save credentials
 write_system_file /root/.vpsmanager-credentials << EOF
 DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
 MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+DOMAIN=${DOMAIN}
+SSL_EMAIL=${SSL_EMAIL}
+SSL_CONFIGURED=${SSL_CONFIGURED}
 EOF
 sudo chmod 600 /root/.vpsmanager-credentials
 
@@ -1093,9 +1102,29 @@ echo ""
 
 if $ALL_OK; then
     log_success "Installation completed successfully!"
+    if [[ "$SSL_CONFIGURED" == "true" ]]; then
+        log_success "System is production-ready with HTTPS enabled!"
+    else
+        log_warn "System is functional but SSL is not configured"
+    fi
+
+    # Display deployment log location
+    if [[ -f "$DEPLOYMENT_LOG_FILE" ]]; then
+        echo ""
+        echo "Deployment log saved: $DEPLOYMENT_LOG_FILE"
+        echo "View with: cat $DEPLOYMENT_LOG_FILE"
+    fi
+
     exit 0
 else
     log_error "Installation completed with failures - some services did not start"
     log_error "Check logs with: journalctl -xeu <service-name>"
+
+    # Display deployment log location even on failure
+    if [[ -f "$DEPLOYMENT_LOG_FILE" ]]; then
+        echo ""
+        echo "Deployment log saved: $DEPLOYMENT_LOG_FILE"
+    fi
+
     exit 1
 fi

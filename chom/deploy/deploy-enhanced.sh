@@ -50,6 +50,8 @@ KEYS_DIR="${SCRIPT_DIR}/keys"
 SCRIPTS_DIR="${SCRIPT_DIR}/scripts"
 STATE_DIR="${SCRIPT_DIR}/.deploy-state"
 STATE_FILE="${STATE_DIR}/deployment.state"
+LOGS_DIR="${SCRIPT_DIR}/logs"
+LOG_FILE="${LOGS_DIR}/deployment-$(date +%Y%m%d-%H%M%S).log"
 
 # Auto-healing configuration
 INTERACTIVE_MODE=false          # Minimal interaction by default (1-prompt workflow)
@@ -102,12 +104,45 @@ EOF
     echo "${NC}"
 }
 
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[✓]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[✗]${NC} $1"; }
-log_step() { echo -e "${MAGENTA}[STEP]${NC} ${BOLD}$1${NC}"; }
-log_debug() { if [[ "${DEBUG:-}" == "1" ]]; then echo -e "${CYAN}[DEBUG]${NC} $1"; fi; }
+# Enhanced logging - writes to both console and log file
+log_to_file() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    # Strip ANSI color codes for log file
+    local clean_msg=$(echo "$1" | sed 's/\x1B\[[0-9;]*[JKmsu]//g')
+    echo "[$timestamp] $clean_msg" >> "$LOG_FILE"
+}
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+    log_to_file "[INFO] $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[✓]${NC} $1"
+    log_to_file "[SUCCESS] $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+    log_to_file "[WARN] $1"
+}
+
+log_error() {
+    echo -e "${RED}[✗]${NC} $1"
+    log_to_file "[ERROR] $1"
+}
+
+log_step() {
+    echo -e "${MAGENTA}[STEP]${NC} ${BOLD}$1${NC}"
+    log_to_file "[STEP] $1"
+}
+
+log_debug() {
+    if [[ "${DEBUG:-}" == "1" ]]; then
+        echo -e "${CYAN}[DEBUG]${NC} $1"
+        log_to_file "[DEBUG] $1"
+    fi
+}
 
 print_section() {
     echo ""
