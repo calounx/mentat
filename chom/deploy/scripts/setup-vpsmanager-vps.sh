@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # CHOM VPSManager Setup Script
-# For vanilla Debian 13 VPS
+# For Debian 12 (Bookworm) and Debian 13 (Trixie)
 #
 # Installs: Nginx, PHP-FPM, MariaDB, Redis, VPSManager
 #
@@ -12,11 +12,12 @@ set -euo pipefail
 OBSERVABILITY_IP="${OBSERVABILITY_IP:-}"
 VPSMANAGER_REPO="https://github.com/calounx/vpsmanager.git"
 
-# Versions
-PHP_VERSIONS=("8.2" "8.4")
-MARIADB_VERSION="11.4"
-REDIS_VERSION="7"
-NODE_EXPORTER_VERSION="1.8.2"
+# Versions - Dynamic and OS Default
+PHP_VERSIONS=("8.2" "8.3" "8.4")  # 8.3 is latest stable (recommended), 8.4 is newest, from packages.sury.org
+MARIADB_VERSION="10.11"           # From Debian default repos (same in Debian 12/13)
+REDIS_VERSION="7"                 # From Debian default repos
+# Node Exporter - dynamically fetch latest from GitHub (fallback to hardcoded)
+NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-$(curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo '1.10.2')}"
 
 # Paths
 VPSMANAGER_DIR="/opt/vpsmanager"
@@ -232,7 +233,56 @@ if ! sudo -n true 2>/dev/null; then
     exit 1
 fi
 
+# =============================================================================
+# OS DETECTION AND COMPATIBILITY
+# =============================================================================
+
+log_info "Detecting operating system..."
+
+# Detect OS and version
+if [[ ! -f /etc/os-release ]]; then
+    log_error "Cannot detect OS - /etc/os-release not found"
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+source /etc/os-release
+
+# Check if Debian
+if [[ "$ID" != "debian" ]]; then
+    log_error "This script only supports Debian (detected: $ID)"
+    exit 1
+fi
+
+# Detect Debian version
+DEBIAN_VERSION=$(echo "$VERSION_ID" | cut -d. -f1)
+DEBIAN_CODENAME="$VERSION_CODENAME"
+
+case "$DEBIAN_VERSION" in
+    12)
+        log_info "Detected: Debian 12 (Bookworm)"
+        # Debian 12 has MariaDB 10.11 in default repos
+        ;;
+    13)
+        log_info "Detected: Debian 13 (Trixie)"
+        # Debian 13 has MariaDB 10.11 in default repos
+        ;;
+    *)
+        log_warn "Unsupported Debian version: $DEBIAN_VERSION ($DEBIAN_CODENAME)"
+        log_warn "This script is tested on Debian 12 (Bookworm) and 13 (Trixie)"
+        log_warn "Continuing anyway, but you may encounter issues..."
+        ;;
+esac
+
 log_info "Starting VPSManager installation..."
+
+# Display versions
+log_info "Component versions to be installed:"
+log_info "  - PHP: ${PHP_VERSIONS[*]}"
+log_info "  - MariaDB: ${MARIADB_VERSION} (from Debian ${DEBIAN_VERSION} repos)"
+log_info "  - Redis: ${REDIS_VERSION}.x (from Debian ${DEBIAN_VERSION} repos)"
+log_info "  - Node Exporter: ${NODE_EXPORTER_VERSION}"
+log_info "  - Nginx: Latest from Debian ${DEBIAN_VERSION} repos"
 
 # =============================================================================
 # PRE-INSTALLATION CLEANUP
@@ -374,8 +424,10 @@ done
 
 log_info "Installing MariaDB..."
 
-# Use Debian default MariaDB (Debian 13 has MariaDB 10.11)
-# Third-party repos don't support Debian 13 (trixie) yet
+# Use Debian default repositories (works on both Debian 12 and 13)
+# Debian 12 (Bookworm): MariaDB 10.11
+# Debian 13 (Trixie): MariaDB 10.11
+# Note: Third-party MariaDB repos may not support latest Debian versions yet
 sudo apt-get install -y -qq mariadb-server mariadb-client
 
 # Check if MariaDB is already secured (idempotency check)

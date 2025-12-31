@@ -1,19 +1,20 @@
 #!/bin/bash
 #
 # CHOM Observability Stack Setup Script
-# For vanilla Debian 13 VPS
+# For Debian 12 (Bookworm) and Debian 13 (Trixie)
 #
 # Installs: Prometheus, Loki, Grafana, Alertmanager, Nginx
 #
 
 set -euo pipefail
 
-# Configuration
-PROMETHEUS_VERSION="2.54.1"
-LOKI_VERSION="3.2.1"
-GRAFANA_VERSION="11.3.0"
-ALERTMANAGER_VERSION="0.27.0"
-NODE_EXPORTER_VERSION="1.8.2"
+# Configuration - Dynamic Version Detection
+# Fetch latest stable versions from GitHub releases (fallback to hardcoded if API fails)
+PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-$(curl -s https://api.github.com/repos/prometheus/prometheus/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo '3.8.1')}"
+LOKI_VERSION="${LOKI_VERSION:-$(curl -s https://api.github.com/repos/grafana/loki/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo '3.6.3')}"
+ALERTMANAGER_VERSION="${ALERTMANAGER_VERSION:-$(curl -s https://api.github.com/repos/prometheus/alertmanager/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo '0.27.0')}"
+NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-$(curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo '1.10.2')}"
+# Grafana installed via APT - version managed by repository
 
 DATA_DIR="/var/lib/observability"
 CONFIG_DIR="/etc/observability"
@@ -219,12 +220,54 @@ if ! sudo -n true 2>/dev/null; then
     exit 1
 fi
 
-# Check Debian version
-if ! grep -q "bookworm\|13" /etc/os-release 2>/dev/null; then
-    log_warn "This script is designed for Debian 13 (Bookworm)"
+# =============================================================================
+# OS DETECTION AND COMPATIBILITY
+# =============================================================================
+
+log_info "Detecting operating system..."
+
+# Detect OS and version
+if [[ ! -f /etc/os-release ]]; then
+    log_error "Cannot detect OS - /etc/os-release not found"
+    exit 1
 fi
 
+# shellcheck source=/dev/null
+source /etc/os-release
+
+# Check if Debian
+if [[ "$ID" != "debian" ]]; then
+    log_error "This script only supports Debian (detected: $ID)"
+    exit 1
+fi
+
+# Detect Debian version
+DEBIAN_VERSION=$(echo "$VERSION_ID" | cut -d. -f1)
+DEBIAN_CODENAME="$VERSION_CODENAME"
+
+case "$DEBIAN_VERSION" in
+    12)
+        log_info "Detected: Debian 12 (Bookworm)"
+        ;;
+    13)
+        log_info "Detected: Debian 13 (Trixie)"
+        ;;
+    *)
+        log_warn "Unsupported Debian version: $DEBIAN_VERSION ($DEBIAN_CODENAME)"
+        log_warn "This script is tested on Debian 12 (Bookworm) and 13 (Trixie)"
+        log_warn "Continuing anyway, but you may encounter issues..."
+        ;;
+esac
+
 log_info "Starting Observability Stack installation..."
+
+# Display detected versions
+log_info "Component versions to be installed:"
+log_info "  - Prometheus: ${PROMETHEUS_VERSION}"
+log_info "  - Loki: ${LOKI_VERSION}"
+log_info "  - Alertmanager: ${ALERTMANAGER_VERSION}"
+log_info "  - Node Exporter: ${NODE_EXPORTER_VERSION}"
+log_info "  - Grafana: Latest from APT repository"
 
 # =============================================================================
 # PRE-INSTALLATION CLEANUP
