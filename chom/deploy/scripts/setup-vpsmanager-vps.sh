@@ -216,12 +216,10 @@ done
 # MARIADB
 # =============================================================================
 
-log_info "Installing MariaDB ${MARIADB_VERSION}..."
+log_info "Installing MariaDB..."
 
-# Add MariaDB repository
-curl -sS https://mariadb.org/mariadb_release_signing_key.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg
-echo "deb [arch=amd64] https://mirrors.xtom.de/mariadb/repo/${MARIADB_VERSION}/debian $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/mariadb.list > /dev/null
-sudo apt-get update -qq
+# Use Debian default MariaDB (Debian 13 has MariaDB 10.11)
+# Third-party repos don't support Debian 13 (trixie) yet
 sudo apt-get install -y -qq mariadb-server mariadb-client
 
 # Generate root password
