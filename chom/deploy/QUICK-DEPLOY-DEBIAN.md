@@ -26,7 +26,6 @@ apt install -y \
     curl \
     git \
     unzip \
-    software-properties-common \
     ca-certificates \
     lsb-release \
     gnupg2 \
@@ -607,7 +606,7 @@ set -e
 
 echo "==> Installing system dependencies..."
 apt update && apt upgrade -y
-apt install -y curl git unzip software-properties-common ca-certificates lsb-release gnupg2 supervisor nginx
+apt install -y curl git unzip ca-certificates lsb-release gnupg2 supervisor nginx
 apt install -y php8.2 php8.2-fpm php8.2-cli php8.2-common php8.2-mysql php8.2-zip php8.2-gd php8.2-mbstring php8.2-curl php8.2-xml php8.2-bcmath php8.2-redis php8.2-intl
 
 echo "==> Installing Composer..."
