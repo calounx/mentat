@@ -140,7 +140,7 @@ sudo cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /opt/observabili
 rm -rf "prometheus-${PROMETHEUS_VERSION}.linux-amd64"*
 
 # Prometheus config
-cat > "$CONFIG_DIR/prometheus/prometheus.yml" << 'EOF'
+write_system_file "$CONFIG_DIR/prometheus/prometheus.yml" << 'EOF'
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -258,7 +258,7 @@ sudo chmod +x /opt/observability/bin/loki
 rm -f loki-linux-amd64.zip
 
 # Loki config
-cat > "$CONFIG_DIR/loki/loki.yml" << EOF
+write_system_file "$CONFIG_DIR/loki/loki.yml" << EOF
 auth_enabled: true
 
 server:
@@ -342,7 +342,7 @@ sudo cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /opt/obs
 rm -rf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64"*
 
 # Alertmanager config
-cat > "$CONFIG_DIR/alertmanager/alertmanager.yml" << 'EOF'
+write_system_file "$CONFIG_DIR/alertmanager/alertmanager.yml" << 'EOF'
 global:
   resolve_timeout: 5m
 
@@ -389,13 +389,13 @@ sudo chown -R observability:observability "$DATA_DIR/alertmanager" "$CONFIG_DIR/
 log_info "Installing Grafana ${GRAFANA_VERSION}..."
 
 # Add Grafana repo
-wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
-echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
+wget -q -O - https://apt.grafana.com/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list > /dev/null
 sudo apt-get update -qq
 sudo apt-get install -y -qq grafana
 
 # Configure Grafana
-cat > /etc/grafana/provisioning/datasources/datasources.yaml << 'EOF'
+write_system_file /etc/grafana/provisioning/datasources/datasources.yaml << 'EOF'
 apiVersion: 1
 datasources:
   - name: Prometheus
@@ -416,7 +416,7 @@ EOF
 
 # Generate admin password
 GRAFANA_ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
-sed -i "s/;admin_password = admin/admin_password = ${GRAFANA_ADMIN_PASSWORD}/" /etc/grafana/grafana.ini
+sudo sed -i "s/;admin_password = admin/admin_password = ${GRAFANA_ADMIN_PASSWORD}/" /etc/grafana/grafana.ini
 
 # =============================================================================
 # NGINX REVERSE PROXY
@@ -450,10 +450,10 @@ server {
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/observability /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/observability /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
 
-nginx -t
+sudo nginx -t
 
 # =============================================================================
 # FIREWALL
@@ -532,7 +532,7 @@ echo "IMPORTANT: Save this password! It will not be shown again."
 echo ""
 
 # Save credentials
-cat > /root/.observability-credentials << EOF
+write_system_file /root/.observability-credentials << EOF
 GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
 EOF
 sudo chmod 600 /root/.observability-credentials

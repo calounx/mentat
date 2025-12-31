@@ -173,8 +173,8 @@ EOF
 log_info "Installing PHP..."
 
 # Add PHP repository
-wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
-echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+sudo wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list > /dev/null
 sudo apt-get update -qq
 
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
@@ -198,7 +198,7 @@ done
 
 # PHP optimization for WordPress
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-    cat > "/etc/php/${PHP_VERSION}/fpm/conf.d/99-wordpress.ini" << 'EOF'
+    write_system_file "/etc/php/${PHP_VERSION}/fpm/conf.d/99-wordpress.ini" << 'EOF'
 upload_max_filesize = 64M
 post_max_size = 64M
 memory_limit = 256M
@@ -219,8 +219,8 @@ done
 log_info "Installing MariaDB ${MARIADB_VERSION}..."
 
 # Add MariaDB repository
-curl -sS https://mariadb.org/mariadb_release_signing_key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg
-echo "deb [arch=amd64] https://mirrors.xtom.de/mariadb/repo/${MARIADB_VERSION}/debian $(lsb_release -sc) main" > /etc/apt/sources.list.d/mariadb.list
+curl -sS https://mariadb.org/mariadb_release_signing_key.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg
+echo "deb [arch=amd64] https://mirrors.xtom.de/mariadb/repo/${MARIADB_VERSION}/debian $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/mariadb.list > /dev/null
 sudo apt-get update -qq
 sudo apt-get install -y -qq mariadb-server mariadb-client
 
@@ -235,7 +235,7 @@ sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWOR
 MYSQL_CNF_FILE=$(mktemp -t mysql.XXXXXX)
 sudo chmod 600 "$MYSQL_CNF_FILE"  # Set permissions before writing sensitive data
 
-cat > "$MYSQL_CNF_FILE" << EOF
+write_system_file "$MYSQL_CNF_FILE" << EOF
 [client]
 user=root
 password=${MYSQL_ROOT_PASSWORD}
@@ -253,7 +253,7 @@ SQL
 shred -u "$MYSQL_CNF_FILE" 2>/dev/null || rm -f "$MYSQL_CNF_FILE"
 
 # MariaDB optimization
-cat > /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'
+write_system_file /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'
 [mysqld]
 innodb_buffer_pool_size = 256M
 innodb_log_file_size = 64M
@@ -314,12 +314,12 @@ fi
 
 # Create vpsmanager symlink
 if [[ -f "$VPSMANAGER_DIR/bin/vpsmanager" ]]; then
-    ln -sf "$VPSMANAGER_DIR/bin/vpsmanager" /usr/local/bin/vpsmanager
+    sudo ln -sf "$VPSMANAGER_DIR/bin/vpsmanager" /usr/local/bin/vpsmanager
 fi
 
 # VPSManager config
 sudo mkdir -p "$CONFIG_DIR"
-cat > "$CONFIG_DIR/config.yaml" << EOF
+write_system_file "$CONFIG_DIR/config.yaml" << EOF
 # VPSManager Configuration
 php:
   default_version: "8.2"
@@ -397,7 +397,7 @@ sudo mkdir -p /var/www/dashboard
 DASHBOARD_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
 DASHBOARD_PASSWORD_HASH=$(php -r "echo password_hash('${DASHBOARD_PASSWORD}', PASSWORD_BCRYPT);")
 
-cat > /var/www/dashboard/index.php << 'DASHBOARD_EOF'
+write_system_file /var/www/dashboard/index.php << 'DASHBOARD_EOF'
 <?php
 // VPSManager Dashboard with Security Hardening
 session_start();
@@ -601,7 +601,7 @@ $system_info = [
 DASHBOARD_EOF
 
 # Dashboard auth file
-cat > /etc/vpsmanager/dashboard-auth.php << EOF
+write_system_file /etc/vpsmanager/dashboard-auth.php << EOF
 <?php
 \$password_hash = '${DASHBOARD_PASSWORD_HASH}';
 EOF
@@ -626,8 +626,8 @@ server {
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
 
 # =============================================================================
 # FIREWALL
@@ -733,7 +733,7 @@ echo "IMPORTANT: Save these credentials! They will not be shown again."
 echo ""
 
 # Save credentials
-cat > /root/.vpsmanager-credentials << EOF
+write_system_file /root/.vpsmanager-credentials << EOF
 DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
 MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
 EOF
