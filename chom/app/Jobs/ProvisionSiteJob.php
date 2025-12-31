@@ -46,6 +46,13 @@ class ProvisionSiteJob implements ShouldQueue
                 'domain' => $site->domain,
             ]);
             $site->update(['status' => 'failed']);
+
+            // Emit provisioning failed event
+            \App\Events\Site\SiteProvisioningFailed::dispatch(
+                $site->fresh(),
+                'No VPS server associated with site'
+            );
+
             return;
         }
 
@@ -55,6 +62,9 @@ class ProvisionSiteJob implements ShouldQueue
             'site_type' => $site->site_type,
             'vps' => $vps->hostname,
         ]);
+
+        // Track provisioning duration for metrics
+        $startTime = microtime(true);
 
         try {
             // Get appropriate provisioner using Strategy pattern
@@ -71,12 +81,21 @@ class ProvisionSiteJob implements ShouldQueue
             $result = $provisioner->provision($site, $vps);
 
             if ($result['success']) {
+                $duration = microtime(true) - $startTime;
+
                 $site->update(['status' => 'active']);
+
+                // Emit successful provisioning event
+                \App\Events\Site\SiteProvisioned::dispatch(
+                    $site->fresh(),
+                    ['duration' => $duration]
+                );
 
                 Log::info('ProvisionSiteJob: Site provisioned successfully', [
                     'site_id' => $site->id,
                     'domain' => $site->domain,
                     'site_type' => $site->site_type,
+                    'duration_seconds' => round($duration, 2),
                 ]);
 
                 // Issue SSL if enabled
@@ -85,6 +104,12 @@ class ProvisionSiteJob implements ShouldQueue
                 }
             } else {
                 $site->update(['status' => 'failed']);
+
+                // Emit provisioning failed event
+                \App\Events\Site\SiteProvisioningFailed::dispatch(
+                    $site->fresh(),
+                    $result['output'] ?? 'Provisioning failed with no output'
+                );
 
                 Log::error('ProvisionSiteJob: Site provisioning failed', [
                     'site_id' => $site->id,
@@ -95,6 +120,13 @@ class ProvisionSiteJob implements ShouldQueue
             }
         } catch (\Exception $e) {
             $site->update(['status' => 'failed']);
+
+            // Emit provisioning failed event with exception details
+            \App\Events\Site\SiteProvisioningFailed::dispatch(
+                $site->fresh(),
+                $e->getMessage(),
+                $e->getTraceAsString()
+            );
 
             Log::error('ProvisionSiteJob: Exception during provisioning', [
                 'site_id' => $site->id,
@@ -120,5 +152,12 @@ class ProvisionSiteJob implements ShouldQueue
         ]);
 
         $this->site->update(['status' => 'failed']);
+
+        // Emit provisioning failed event (if not already emitted)
+        \App\Events\Site\SiteProvisioningFailed::dispatch(
+            $this->site->fresh(),
+            $exception?->getMessage() ?? 'Job failed after all retries',
+            $exception?->getTraceAsString()
+        );
     }
 }

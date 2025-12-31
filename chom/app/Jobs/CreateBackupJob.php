@@ -57,6 +57,9 @@ class CreateBackupJob implements ShouldQueue
             'backup_type' => $this->backupType,
         ]);
 
+        // Track backup duration for metrics
+        $startTime = microtime(true);
+
         // Create backup record first with pending status
         $backup = SiteBackup::create([
             'site_id' => $site->id,
@@ -67,6 +70,9 @@ class CreateBackupJob implements ShouldQueue
             'retention_days' => $this->retentionDays ?? $site->tenant?->tierLimits?->backup_retention_days ?? 7,
             'expires_at' => now()->addDays($this->retentionDays ?? $site->tenant?->tierLimits?->backup_retention_days ?? 7),
         ]);
+
+        // Emit BackupCreated event
+        \App\Events\Backup\BackupCreated::dispatch($backup, $site);
 
         try {
             // Determine backup components
@@ -80,6 +86,8 @@ class CreateBackupJob implements ShouldQueue
             $result = $vpsManager->createBackup($vps, $site->domain, $components);
 
             if ($result['success']) {
+                $duration = (int) round(microtime(true) - $startTime);
+
                 // Update backup record with actual data
                 $backup->update([
                     'storage_path' => $result['data']['path'] ?? $backup->storage_path,
@@ -87,15 +95,31 @@ class CreateBackupJob implements ShouldQueue
                     'checksum' => $result['data']['checksum'] ?? null,
                 ]);
 
+                // Emit BackupCompleted event
+                \App\Events\Backup\BackupCompleted::dispatch(
+                    $backup->fresh(),
+                    $backup->size_bytes,
+                    $duration
+                );
+
                 Log::info('CreateBackupJob: Backup created successfully', [
                     'site_id' => $site->id,
                     'domain' => $site->domain,
                     'backup_id' => $backup->id,
                     'size' => $backup->getSizeFormatted(),
+                    'duration_seconds' => $duration,
                 ]);
             } else {
+                // Capture data before deletion (for event)
+                $siteId = $site->id;
+                $backupType = $this->backupType;
+                $errorMessage = $result['output'] ?? 'Backup creation failed with no output';
+
                 // Delete the pending backup record on failure
                 $backup->delete();
+
+                // Emit BackupFailed event
+                \App\Events\Backup\BackupFailed::dispatch($siteId, $backupType, $errorMessage);
 
                 Log::error('CreateBackupJob: Backup creation failed', [
                     'site_id' => $site->id,
@@ -104,8 +128,15 @@ class CreateBackupJob implements ShouldQueue
                 ]);
             }
         } catch (\Exception $e) {
+            // Capture data before deletion (for event)
+            $siteId = $site->id;
+            $backupType = $this->backupType;
+
             // Delete the pending backup record on exception
             $backup->delete();
+
+            // Emit BackupFailed event
+            \App\Events\Backup\BackupFailed::dispatch($siteId, $backupType, $e->getMessage());
 
             Log::error('CreateBackupJob: Exception during backup creation', [
                 'site_id' => $site->id,
@@ -129,5 +160,12 @@ class CreateBackupJob implements ShouldQueue
             'backup_type' => $this->backupType,
             'error' => $exception?->getMessage(),
         ]);
+
+        // Emit BackupFailed event (if not already emitted)
+        \App\Events\Backup\BackupFailed::dispatch(
+            $this->site->id,
+            $this->backupType,
+            $exception?->getMessage() ?? 'Job failed after all retries'
+        );
     }
 }

@@ -25,33 +25,12 @@ class Site extends Model
             }
         });
 
-        // Automatic cache invalidation for tenant statistics
-        // When a site is created, updated, or deleted, invalidate the parent tenant's cached stats
-        // This ensures getSiteCount() and getStorageUsedMb() always return accurate values
-
-        // Invalidate cache when site is saved (created or updated)
-        static::saved(function (Site $site) {
-            // Only update if tenant relationship is loaded to avoid extra query
-            if ($site->tenant) {
-                $site->tenant->updateCachedStats();
-            }
-        });
-
-        // Invalidate cache when site is deleted (soft or hard delete)
-        static::deleted(function (Site $site) {
-            // Only update if tenant relationship is loaded to avoid extra query
-            if ($site->tenant) {
-                $site->tenant->updateCachedStats();
-            }
-        });
-
-        // Also handle restoration of soft-deleted sites
-        static::restored(function (Site $site) {
-            // Only update if tenant relationship is loaded to avoid extra query
-            if ($site->tenant) {
-                $site->tenant->updateCachedStats();
-            }
-        });
+        // Tenant cache invalidation is now handled by the UpdateTenantMetrics event listener
+        // See: App\Listeners\UpdateTenantMetrics
+        // Events: SiteCreated, SiteDeleted
+        //
+        // This provides better separation of concerns and allows the cache updates
+        // to be queued for improved performance.
     }
 
     protected $fillable = [

@@ -218,8 +218,16 @@ class SiteController extends Controller
                 }
             }
 
+            // Capture data before deletion (for event)
+            $siteId = $site->id;
+            $tenantId = $site->tenant_id;
+            $domain = $site->domain;
+
             // Soft delete
             $site->delete();
+
+            // Emit SiteDeleted event (triggers cache update, audit log, metrics)
+            \App\Events\Site\SiteDeleted::dispatch($siteId, $tenantId, $domain);
 
             return response()->json([
                 'success' => true,

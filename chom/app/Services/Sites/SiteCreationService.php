@@ -85,6 +85,9 @@ class SiteCreationService
             return $site;
         });
 
+        // Emit SiteCreated event (triggers cache update, audit log, metrics)
+        \App\Events\Site\SiteCreated::dispatch($site, $tenant);
+
         // Step 4: Dispatch async provisioning job
         ProvisionSiteJob::dispatch($site);
 
