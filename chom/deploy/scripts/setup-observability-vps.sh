@@ -31,6 +31,12 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Helper: Write to system files (requires sudo)
+write_system_file() {
+    local file="$1"
+    sudo tee "$file" > /dev/null
+}
+
 # Stop service and verify binary is not in use before replacement
 stop_and_verify_service() {
     local service_name="$1"
@@ -129,8 +135,8 @@ stop_and_verify_service "prometheus" "/opt/observability/bin/prometheus" || {
     exit 1
 }
 
-cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /opt/observability/bin/
-cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /opt/observability/bin/
+sudo cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /opt/observability/bin/
+sudo cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /opt/observability/bin/
 rm -rf "prometheus-${PROMETHEUS_VERSION}.linux-amd64"*
 
 # Prometheus config
@@ -169,7 +175,7 @@ sudo mkdir -p "$CONFIG_DIR/prometheus/rules"
 sudo mkdir -p "$CONFIG_DIR/prometheus/targets"
 
 # Prometheus systemd service
-cat > /etc/systemd/system/prometheus.service << EOF
+write_system_file /etc/systemd/system/prometheus.service << EOF
 [Unit]
 Description=Prometheus
 Wants=network-online.target
@@ -210,10 +216,10 @@ stop_and_verify_service "node_exporter" "/opt/observability/bin/node_exporter" |
     exit 1
 }
 
-cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /opt/observability/bin/
+sudo cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /opt/observability/bin/
 rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64"*
 
-cat > /etc/systemd/system/node_exporter.service << 'EOF'
+write_system_file /etc/systemd/system/node_exporter.service << 'EOF'
 [Unit]
 Description=Node Exporter
 Wants=network-online.target
@@ -247,7 +253,7 @@ stop_and_verify_service "loki" "/opt/observability/bin/loki" || {
     exit 1
 }
 
-mv loki-linux-amd64 /opt/observability/bin/loki
+sudo mv loki-linux-amd64 /opt/observability/bin/loki
 sudo chmod +x /opt/observability/bin/loki
 rm -f loki-linux-amd64.zip
 
@@ -296,7 +302,7 @@ EOF
 
 sudo mkdir -p "$DATA_DIR/loki"/{chunks,rules,compactor}
 
-cat > /etc/systemd/system/loki.service << EOF
+write_system_file /etc/systemd/system/loki.service << EOF
 [Unit]
 Description=Loki
 Wants=network-online.target
@@ -332,7 +338,7 @@ stop_and_verify_service "alertmanager" "/opt/observability/bin/alertmanager" || 
     exit 1
 }
 
-cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /opt/observability/bin/
+sudo cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" /opt/observability/bin/
 rm -rf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64"*
 
 # Alertmanager config
@@ -354,7 +360,7 @@ receivers:
     #   - to: 'alerts@example.com'
 EOF
 
-cat > /etc/systemd/system/alertmanager.service << EOF
+write_system_file /etc/systemd/system/alertmanager.service << EOF
 [Unit]
 Description=Alertmanager
 Wants=network-online.target
@@ -418,7 +424,7 @@ sed -i "s/;admin_password = admin/admin_password = ${GRAFANA_ADMIN_PASSWORD}/" /
 
 log_info "Configuring Nginx..."
 
-cat > /etc/nginx/sites-available/observability << 'EOF'
+write_system_file /etc/nginx/sites-available/observability << 'EOF'
 # Grafana
 server {
     listen 80;
@@ -533,6 +539,9 @@ sudo chmod 600 /root/.observability-credentials
 
 if $ALL_OK; then
     log_success "Installation completed successfully!"
+    exit 0
 else
-    log_warn "Installation completed with some warnings"
+    log_error "Installation completed with failures - some services did not start"
+    log_error "Check logs with: journalctl -xeu <service-name>"
+    exit 1
 fi

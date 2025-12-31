@@ -36,6 +36,12 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Helper: Write to system files (requires sudo)
+write_system_file() {
+    local file="$1"
+    sudo tee "$file" > /dev/null
+}
+
 # Stop service and verify binary is not in use before replacement
 stop_and_verify_service() {
     local service_name="$1"
@@ -120,7 +126,7 @@ log_info "Installing Nginx..."
 sudo apt-get install -y -qq nginx
 
 # Basic nginx optimization
-cat > /etc/nginx/nginx.conf << 'EOF'
+write_system_file /etc/nginx/nginx.conf << 'EOF'
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
@@ -352,12 +358,12 @@ stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
     exit 1
 }
 
-cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
+sudo cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
 rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64"*
 
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter || true
 
-cat > /etc/systemd/system/node_exporter.service << 'EOF'
+write_system_file /etc/systemd/system/node_exporter.service << 'EOF'
 [Unit]
 Description=Node Exporter
 Wants=network-online.target
@@ -602,7 +608,7 @@ EOF
 sudo chmod 600 /etc/vpsmanager/dashboard-auth.php
 
 # Dashboard nginx config
-cat > /etc/nginx/sites-available/dashboard << 'EOF'
+write_system_file /etc/nginx/sites-available/dashboard << 'EOF'
 server {
     listen 8080;
     server_name _;
@@ -645,7 +651,7 @@ sudo ufw --force enable
 
 log_info "Configuring Fail2ban..."
 
-cat > /etc/fail2ban/jail.local << 'EOF'
+write_system_file /etc/fail2ban/jail.local << 'EOF'
 [DEFAULT]
 bantime = 3600
 findtime = 600
@@ -743,6 +749,9 @@ echo ""
 
 if $ALL_OK; then
     log_success "Installation completed successfully!"
+    exit 0
 else
-    log_warn "Installation completed with some warnings"
+    log_error "Installation completed with failures - some services did not start"
+    log_error "Check logs with: journalctl -xeu <service-name>"
+    exit 1
 fi

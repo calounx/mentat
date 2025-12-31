@@ -2202,17 +2202,25 @@ run_wizard() {
 
     print_section "Deployment Complete!"
 
+    local obs_hostname
+    obs_hostname=$(get_config '.observability.hostname')
     local obs_ip
     obs_ip=$(get_config '.observability.ip')
+    local vps_hostname
+    vps_hostname=$(get_config '.vpsmanager.hostname')
     local vps_ip
     vps_ip=$(get_config '.vpsmanager.ip')
+
+    # Use hostname if configured, fallback to IP
+    local obs_url="${obs_hostname:-$obs_ip}"
+    local vps_url="${vps_hostname:-$vps_ip}"
 
     echo "${GREEN}${BOLD}✓ All components deployed successfully!${NC}"
     echo ""
     echo "${BOLD}Access URLs:${NC}"
-    echo "  Grafana:     http://${obs_ip}:3000"
-    echo "  Prometheus:  http://${obs_ip}:9090"
-    echo "  VPSManager:  http://${vps_ip}:8080"
+    echo "  Grafana:     http://${obs_url}:3000"
+    echo "  Prometheus:  http://${obs_url}:9090"
+    echo "  VPSManager:  http://${vps_url}:8080"
     echo ""
     echo "${BOLD}Next Steps:${NC}"
     echo "  1. Access Grafana and configure dashboards"
@@ -2417,19 +2425,27 @@ error_exit() {
 }
 
 show_deployment_summary() {
+    local obs_hostname
+    obs_hostname=$(get_config '.observability.hostname')
     local obs_ip
     obs_ip=$(get_config '.observability.ip')
+    local vps_hostname
+    vps_hostname=$(get_config '.vpsmanager.hostname')
     local vps_ip
     vps_ip=$(get_config '.vpsmanager.ip')
+
+    # Use hostname if configured, fallback to IP
+    local obs_url="${obs_hostname:-$obs_ip}"
+    local vps_url="${vps_hostname:-$vps_ip}"
 
     print_section "Deployment Complete!"
 
     echo "${GREEN}${BOLD}✓ All components deployed successfully!${NC}"
     echo ""
     echo "${BOLD}Access URLs:${NC}"
-    echo "  ${CYAN}Grafana:${NC}     http://${obs_ip}:3000"
-    echo "  ${CYAN}Prometheus:${NC}  http://${obs_ip}:9090"
-    echo "  ${CYAN}VPSManager:${NC}  http://${vps_ip}:8080"
+    echo "  ${CYAN}Grafana:${NC}     http://${obs_url}:3000"
+    echo "  ${CYAN}Prometheus:${NC}  http://${obs_url}:9090"
+    echo "  ${CYAN}VPSManager:${NC}  http://${vps_url}:8080"
     echo ""
     echo "${BOLD}Next Steps:${NC}"
     echo "  1. Access Grafana and configure dashboards"

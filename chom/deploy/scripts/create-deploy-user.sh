@@ -75,21 +75,39 @@ else
     exit 1
 fi
 
-# Set a password for initial ssh-copy-id
-log_info "Setting password for $USERNAME (needed for initial ssh-copy-id)"
-passwd "$USERNAME"
+# Check if SSH keys already exist
+if [[ -s /home/"$USERNAME"/.ssh/authorized_keys ]]; then
+    log_success "SSH keys already configured ($(wc -l < /home/"$USERNAME"/.ssh/authorized_keys) key(s) present)"
+    KEYS_CONFIGURED=true
+else
+    log_warn "No SSH keys found - password authentication will be enabled"
+    KEYS_CONFIGURED=false
+fi
+
+# Only set password if keys aren't configured
+if [[ "$KEYS_CONFIGURED" == "false" ]]; then
+    log_info "Setting password for $USERNAME (needed for initial ssh-copy-id)"
+    passwd "$USERNAME"
+fi
 
 echo ""
 echo "${GREEN}✓ User $USERNAME configured successfully!${NC}"
-echo ""
-echo "${YELLOW}Next steps (from your control machine):${NC}"
 echo ""
 
 # Get server IP
 SERVER_IP=$(hostname -I | awk '{print $1}' || echo "<this-server-ip>")
 
-echo "  ${CYAN}1. Copy your SSH key using ssh-copy-id:${NC}"
-echo "     ssh-copy-id $USERNAME@$SERVER_IP"
+if [[ "$KEYS_CONFIGURED" == "false" ]]; then
+    echo "${YELLOW}Next steps (from your control machine):${NC}"
+    echo ""
+    echo "  ${CYAN}1. Copy your SSH key using ssh-copy-id:${NC}"
+    echo "     ssh-copy-id $USERNAME@$SERVER_IP"
+else
+    echo "${GREEN}SSH keys already configured - you can connect directly:${NC}"
+    echo ""
+    echo "  ${CYAN}Test SSH connection:${NC}"
+    echo "     ssh $USERNAME@$SERVER_IP"
+fi
 echo ""
 echo "  ${CYAN}2. Update inventory.yaml:${NC}"
 echo "     ssh_user: $USERNAME"
