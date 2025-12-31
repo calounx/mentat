@@ -1604,6 +1604,39 @@ show_deployment_plan() {
 #===============================================================================
 
 # Step 1: Show inventory review and get confirmation
+# Detect hardware specs dynamically from remote VPS
+detect_hardware_specs() {
+    local host=$1
+    local user=$2
+    local port=$3
+    local name=$4
+
+    log_info "Detecting hardware specs for $name..."
+
+    # Detect CPU
+    local cpu_count
+    cpu_count=$(remote_exec "$host" "$user" "$port" "nproc" 2>/dev/null || echo "")
+    if [[ -z "$cpu_count" ]]; then
+        # Fallback to /proc/cpuinfo
+        cpu_count=$(remote_exec "$host" "$user" "$port" "grep -c ^processor /proc/cpuinfo" 2>/dev/null || echo "unknown")
+    fi
+
+    # Detect RAM
+    local ram_mb
+    ram_mb=$(remote_exec "$host" "$user" "$port" "free -m | awk '/^Mem:/ {print \$2}'" 2>/dev/null || echo "")
+    if [[ -z "$ram_mb" ]]; then
+        # Fallback to /proc/meminfo
+        ram_mb=$(remote_exec "$host" "$user" "$port" "awk '/MemTotal/ {printf \"%d\", \$2/1024}' /proc/meminfo" 2>/dev/null || echo "unknown")
+    fi
+
+    # Detect Total Disk
+    local disk_total
+    disk_total=$(remote_exec "$host" "$user" "$port" "df -BG / | awk 'NR==2 {print \$2}' | tr -d 'G'" 2>/dev/null || echo "unknown")
+
+    # Return as space-separated values: cpu ram disk
+    echo "$cpu_count $ram_mb $disk_total"
+}
+
 show_inventory_review() {
     print_section "STEP 1 of 3: Inventory Review & Confirmation"
 
@@ -1619,12 +1652,12 @@ show_inventory_review() {
     obs_user=$(get_config '.observability.ssh_user')
     local obs_port
     obs_port=$(get_config '.observability.ssh_port')
-    local obs_cpu
-    obs_cpu=$(get_config '.observability.specs.cpu')
-    local obs_ram
-    obs_ram=$(get_config '.observability.specs.memory_mb')
-    local obs_disk
-    obs_disk=$(get_config '.observability.specs.disk_gb')
+
+    # Read specs from inventory (may be null/empty for auto-detection)
+    local obs_cpu_inv obs_ram_inv obs_disk_inv
+    obs_cpu_inv=$(get_config '.observability.specs.cpu')
+    obs_ram_inv=$(get_config '.observability.specs.memory_mb')
+    obs_disk_inv=$(get_config '.observability.specs.disk_gb')
 
     local vps_ip
     vps_ip=$(get_config '.vpsmanager.ip')
@@ -1634,12 +1667,70 @@ show_inventory_review() {
     vps_user=$(get_config '.vpsmanager.ssh_user')
     local vps_port
     vps_port=$(get_config '.vpsmanager.ssh_port')
-    local vps_cpu
-    vps_cpu=$(get_config '.vpsmanager.specs.cpu')
-    local vps_ram
-    vps_ram=$(get_config '.vpsmanager.specs.memory_mb')
-    local vps_disk
-    vps_disk=$(get_config '.vpsmanager.specs.disk_gb')
+
+    # Read specs from inventory (may be null/empty for auto-detection)
+    local vps_cpu_inv vps_ram_inv vps_disk_inv
+    vps_cpu_inv=$(get_config '.vpsmanager.specs.cpu')
+    vps_ram_inv=$(get_config '.vpsmanager.specs.memory_mb')
+    vps_disk_inv=$(get_config '.vpsmanager.specs.disk_gb')
+
+    # Detect hardware dynamically (only if SSH is accessible)
+    local obs_cpu obs_ram obs_disk
+    local vps_cpu vps_ram vps_disk
+
+    # Try to detect observability hardware
+    if [[ "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
+        log_info "Detecting Observability VPS hardware..."
+        local obs_specs
+        obs_specs=$(detect_hardware_specs "$obs_ip" "$obs_user" "$obs_port" "Observability" 2>/dev/null || echo "unknown unknown unknown")
+        read obs_cpu obs_ram obs_disk <<< "$obs_specs"
+
+        # Use detected values, fallback to inventory if detection failed
+        [[ "$obs_cpu" == "unknown" || -z "$obs_cpu" ]] && obs_cpu="${obs_cpu_inv:-unknown}"
+        [[ "$obs_ram" == "unknown" || -z "$obs_ram" ]] && obs_ram="${obs_ram_inv:-unknown}"
+        [[ "$obs_disk" == "unknown" || -z "$obs_disk" ]] && obs_disk="${obs_disk_inv:-unknown}"
+    else
+        # Use inventory values if IP not configured
+        obs_cpu="${obs_cpu_inv:-unknown}"
+        obs_ram="${obs_ram_inv:-unknown}"
+        obs_disk="${obs_disk_inv:-unknown}"
+    fi
+
+    # Try to detect vpsmanager hardware
+    if [[ "$vps_ip" != "0.0.0.0" && "$vps_ip" != "null" ]]; then
+        log_info "Detecting VPSManager VPS hardware..."
+        local vps_specs
+        vps_specs=$(detect_hardware_specs "$vps_ip" "$vps_user" "$vps_port" "VPSManager" 2>/dev/null || echo "unknown unknown unknown")
+        read vps_cpu vps_ram vps_disk <<< "$vps_specs"
+
+        # Use detected values, fallback to inventory if detection failed
+        [[ "$vps_cpu" == "unknown" || -z "$vps_cpu" ]] && vps_cpu="${vps_cpu_inv:-unknown}"
+        [[ "$vps_ram" == "unknown" || -z "$vps_ram" ]] && vps_ram="${vps_ram_inv:-unknown}"
+        [[ "$vps_disk" == "unknown" || -z "$vps_disk" ]] && vps_disk="${vps_disk_inv:-unknown}"
+    else
+        # Use inventory values if IP not configured
+        vps_cpu="${vps_cpu_inv:-unknown}"
+        vps_ram="${vps_ram_inv:-unknown}"
+        vps_disk="${vps_disk_inv:-unknown}"
+    fi
+
+    # Determine if specs were detected or from inventory
+    local obs_spec_label vps_spec_label
+    if [[ "$obs_cpu" != "unknown" && "$obs_cpu" != "$obs_cpu_inv" ]]; then
+        obs_spec_label="${GREEN}(detected)${NC}"
+    elif [[ "$obs_cpu" == "unknown" ]]; then
+        obs_spec_label="${RED}(unavailable)${NC}"
+    else
+        obs_spec_label="${YELLOW}(inventory)${NC}"
+    fi
+
+    if [[ "$vps_cpu" != "unknown" && "$vps_cpu" != "$vps_cpu_inv" ]]; then
+        vps_spec_label="${GREEN}(detected)${NC}"
+    elif [[ "$vps_cpu" == "unknown" ]]; then
+        vps_spec_label="${RED}(unavailable)${NC}"
+    else
+        vps_spec_label="${YELLOW}(inventory)${NC}"
+    fi
 
     # Observability VPS
     echo "${CYAN}┌─────────────────────────────────────────────────────────────────────────┐${NC}"
@@ -1649,7 +1740,7 @@ show_inventory_review() {
     printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "Hostname:" "$obs_hostname"
     printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "SSH User:" "$obs_user"
     printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "SSH Port:" "$obs_port"
-    printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "Specs:" "${obs_cpu} vCPU, ${obs_ram}MB RAM, ${obs_disk}GB Disk"
+    echo -e "${CYAN}│${NC} Specs:               ${YELLOW}${obs_cpu} vCPU, ${obs_ram}MB RAM, ${obs_disk}GB Disk${NC} $obs_spec_label ${CYAN}│${NC}"
     echo "${CYAN}└─────────────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
@@ -1661,7 +1752,7 @@ show_inventory_review() {
     printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "Hostname:" "$vps_hostname"
     printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "SSH User:" "$vps_user"
     printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "SSH Port:" "$vps_port"
-    printf "${CYAN}│${NC} %-20s ${YELLOW}%-50s${NC} ${CYAN}│${NC}\n" "Specs:" "${vps_cpu} vCPU, ${vps_ram}MB RAM, ${vps_disk}GB Disk"
+    echo -e "${CYAN}│${NC} Specs:               ${YELLOW}${vps_cpu} vCPU, ${vps_ram}MB RAM, ${vps_disk}GB Disk${NC} $vps_spec_label ${CYAN}│${NC}"
     echo "${CYAN}└─────────────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
