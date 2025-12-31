@@ -32,22 +32,25 @@ apt install -y \
     supervisor \
     nginx
 
-# Install PHP 8.2 and extensions
+# Install PHP (Debian 13 default version) and extensions
 apt install -y \
-    php8.2 \
-    php8.2-fpm \
-    php8.2-cli \
-    php8.2-common \
-    php8.2-mysql \
-    php8.2-pgsql \
-    php8.2-zip \
-    php8.2-gd \
-    php8.2-mbstring \
-    php8.2-curl \
-    php8.2-xml \
-    php8.2-bcmath \
-    php8.2-redis \
-    php8.2-intl
+    php \
+    php-fpm \
+    php-cli \
+    php-common \
+    php-mysql \
+    php-pgsql \
+    php-zip \
+    php-gd \
+    php-mbstring \
+    php-curl \
+    php-xml \
+    php-bcmath \
+    php-redis \
+    php-intl
+
+# Get PHP version for later use
+PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
 ```
 
 ---
@@ -211,8 +214,11 @@ php artisan db:seed --class=TestUserSeeder
 ## Step 9: Configure Nginx (5 min)
 
 ```bash
+# Get PHP version for Nginx config
+PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+
 # Create Nginx config
-cat > /etc/nginx/sites-available/chom << 'EOF'
+cat > /etc/nginx/sites-available/chom << EOF
 server {
     listen 80;
     server_name your-domain.com www.your-domain.com;
@@ -226,7 +232,7 @@ server {
     charset utf-8;
 
     location / {
-        try_files $uri $uri/ /index.php?$query_string;
+        try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
     location = /favicon.ico { access_log off; log_not_found off; }
@@ -235,8 +241,8 @@ server {
     error_page 404 /index.php;
 
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_pass unix:/var/run/php/php${PHP_VERSION}-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
         include fastcgi_params;
     }
 
@@ -456,13 +462,17 @@ supervisorctl restart chom-worker:*
 
 ### Check PHP-FPM Status
 ```bash
-systemctl status php8.2-fpm
+# Replace X.X with your PHP version (e.g., 8.3, 8.4)
+systemctl status phpX.X-fpm
+
+# Or list all PHP-FPM services:
+systemctl list-units | grep php.*fpm
 ```
 
 ### Restart Services
 ```bash
 systemctl restart nginx
-systemctl restart php8.2-fpm
+systemctl restart phpX.X-fpm  # Replace X.X with your PHP version
 systemctl restart redis-server
 supervisorctl restart all
 ```
@@ -531,8 +541,11 @@ systemctl restart sshd
 
 ### 1. Enable OPcache
 ```bash
-# Edit PHP-FPM config
-nano /etc/php/8.2/fpm/php.ini
+# Find your PHP version
+PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+
+# Edit PHP-FPM config (replace X.X with your version, e.g., 8.3 or 8.4)
+nano /etc/php/${PHP_VERSION}/fpm/php.ini
 
 # Find and set:
 opcache.enable=1
@@ -542,12 +555,13 @@ opcache.max_accelerated_files=10000
 opcache.revalidate_freq=2
 
 # Restart PHP-FPM
-systemctl restart php8.2-fpm
+systemctl restart php${PHP_VERSION}-fpm
 ```
 
 ### 2. Increase PHP Limits
 ```bash
-nano /etc/php/8.2/fpm/php.ini
+PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+nano /etc/php/${PHP_VERSION}/fpm/php.ini
 
 # Set:
 memory_limit = 512M
@@ -555,7 +569,7 @@ upload_max_filesize = 64M
 post_max_size = 64M
 max_execution_time = 300
 
-systemctl restart php8.2-fpm
+systemctl restart php${PHP_VERSION}-fpm
 ```
 
 ### 3. Optimize Nginx
@@ -575,7 +589,7 @@ systemctl restart nginx
 ## Quick Deployment Checklist
 
 - [ ] System updated
-- [ ] PHP 8.2 installed
+- [ ] PHP (Debian default version) installed
 - [ ] Composer installed
 - [ ] Node.js installed
 - [ ] MySQL/MariaDB installed and configured
@@ -607,7 +621,7 @@ set -e
 echo "==> Installing system dependencies..."
 apt update && apt upgrade -y
 apt install -y curl git unzip ca-certificates lsb-release gnupg2 supervisor nginx
-apt install -y php8.2 php8.2-fpm php8.2-cli php8.2-common php8.2-mysql php8.2-zip php8.2-gd php8.2-mbstring php8.2-curl php8.2-xml php8.2-bcmath php8.2-redis php8.2-intl
+apt install -y php php-fpm php-cli php-common php-mysql php-zip php-gd php-mbstring php-curl php-xml php-bcmath php-redis php-intl
 
 echo "==> Installing Composer..."
 curl -sS https://getcomposer.org/installer | php
