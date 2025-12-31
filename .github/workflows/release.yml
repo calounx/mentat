@@ -111,7 +111,8 @@ jobs:
       - name: Install Composer dependencies
         working-directory: chom
         run: |
-          composer install --prefer-dist --no-dev --no-interaction --no-progress --optimize-autoloader
+          composer install --prefer-dist --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts
+          composer dump-autoload --optimize --no-scripts
 
       - name: Install NPM dependencies
         working-directory: chom
