@@ -46,8 +46,6 @@ export default defineConfig({
                     // Split vendor chunks for better caching
                     'vendor': [
                         'alpinejs',
-                        '@alpinejs/persist',
-                        '@alpinejs/focus',
                     ],
                 },
             },
@@ -57,8 +55,6 @@ export default defineConfig({
     optimizeDeps: {
         include: [
             'alpinejs',
-            '@alpinejs/persist',
-            '@alpinejs/focus',
         ],
     },
 });
