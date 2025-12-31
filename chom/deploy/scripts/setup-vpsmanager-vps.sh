@@ -57,6 +57,12 @@ stop_and_verify_service() {
         return 0
     fi
 
+    # Step 0: Disable service to prevent auto-restart during binary replacement
+    if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+        log_info "Disabling ${service_name} to prevent auto-restart..."
+        sudo systemctl disable "$service_name" 2>/dev/null || log_warn "Disable returned error, continuing..."
+    fi
+
     # Step 1: Graceful systemctl stop
     if systemctl is-active --quiet "$service_name"; then
         log_info "Stopping ${service_name} gracefully..."
@@ -372,24 +378,48 @@ log_info "Installing MariaDB..."
 # Third-party repos don't support Debian 13 (trixie) yet
 sudo apt-get install -y -qq mariadb-server mariadb-client
 
-# Generate root password
-MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+# Check if MariaDB is already secured (idempotency check)
+if ! sudo mysql -u root -e "SELECT 1" &>/dev/null; then
+    # MariaDB already secured, load existing password
+    if [[ -f /root/.vpsmanager-credentials ]]; then
+        source /root/.vpsmanager-credentials
+        log_info "MariaDB already secured, using existing credentials"
+        MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-}"
 
-# Secure installation
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
+        if [[ -z "$MYSQL_ROOT_PASSWORD" ]]; then
+            log_error "MariaDB secured but password not found in credentials file"
+            log_error "Manual intervention required. Reset MariaDB root password first."
+            exit 1
+        fi
+    else
+        log_error "MariaDB secured but credentials file missing at /root/.vpsmanager-credentials"
+        log_error "Manual intervention required. Reset MariaDB root password first."
+        exit 1
+    fi
+else
+    # First run - MariaDB not secured yet
+    log_info "Securing MariaDB for the first time..."
 
-# Use .my.cnf to avoid password in process list
-# Create secure temporary file to prevent race condition attacks
-MYSQL_CNF_FILE=$(mktemp -t mysql.XXXXXX)
-sudo chmod 600 "$MYSQL_CNF_FILE"  # Set permissions before writing sensitive data
+    # Generate root password
+    MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 
-write_system_file "$MYSQL_CNF_FILE" << EOF
+    # Secure installation - Set root password
+    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
+
+    # Use .my.cnf to avoid password in process list
+    # Create secure temporary file with proper permissions BEFORE writing
+    MYSQL_CNF_FILE=$(mktemp)
+    sudo chmod 600 "$MYSQL_CNF_FILE"  # Set permissions IMMEDIATELY
+
+    # Write credentials to temp file
+    cat > "$MYSQL_CNF_FILE" << EOF
 [client]
 user=root
 password=${MYSQL_ROOT_PASSWORD}
 EOF
 
-sudo mysql --defaults-extra-file="$MYSQL_CNF_FILE" << 'SQL'
+    # Run secure installation queries
+    sudo mysql --defaults-extra-file="$MYSQL_CNF_FILE" << 'SQL'
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
@@ -397,12 +427,19 @@ DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 SQL
 
-# Securely clean up temporary file
-shred -u "$MYSQL_CNF_FILE" 2>/dev/null || rm -f "$MYSQL_CNF_FILE"
+    # Securely clean up temporary file
+    shred -u "$MYSQL_CNF_FILE" 2>/dev/null || rm -f "$MYSQL_CNF_FILE"
 
-# MariaDB optimization
+    log_success "MariaDB secured successfully"
+fi
+
+# MariaDB optimization and security hardening
 write_system_file /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'
 [mysqld]
+# Security - Bind to localhost only (not exposed to network)
+bind-address = 127.0.0.1
+
+# Performance optimization
 innodb_buffer_pool_size = 256M
 innodb_log_file_size = 64M
 innodb_flush_log_at_trx_commit = 2
@@ -411,9 +448,14 @@ max_connections = 200
 query_cache_type = 1
 query_cache_size = 32M
 query_cache_limit = 2M
+
+# Additional security hardening
+local-infile = 0
+skip-symbolic-links = 1
 EOF
 
 sudo systemctl restart mariadb
+log_success "MariaDB configured: localhost-only binding, production-ready"
 
 # =============================================================================
 # REDIS
@@ -540,7 +582,14 @@ sudo mkdir -p /var/www/dashboard
 
 # Generate dashboard credentials
 DASHBOARD_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
-DASHBOARD_PASSWORD_HASH=$(php -r "echo password_hash('${DASHBOARD_PASSWORD}', PASSWORD_BCRYPT);")
+
+# Hash password without exposing in process list
+# Use a temporary file to pass password to PHP securely
+PASS_TEMP=$(mktemp)
+chmod 600 "$PASS_TEMP"
+echo -n "${DASHBOARD_PASSWORD}" > "$PASS_TEMP"
+DASHBOARD_PASSWORD_HASH=$(php -r "echo password_hash(file_get_contents('${PASS_TEMP}'), PASSWORD_BCRYPT);")
+shred -u "$PASS_TEMP" 2>/dev/null || rm -f "$PASS_TEMP"
 
 write_system_file /var/www/dashboard/index.php << 'DASHBOARD_EOF'
 <?php
@@ -553,7 +602,12 @@ if (file_exists($auth_file)) {
 }
 
 // Rate limiting configuration
-$attempts_file = '/tmp/dashboard_login_attempts_' . md5($_SERVER['REMOTE_ADDR']);
+// Use secure directory instead of /tmp (world-readable)
+$attempts_dir = '/var/lib/vpsmanager/sessions';
+if (!is_dir($attempts_dir)) {
+    mkdir($attempts_dir, 0700, true);
+}
+$attempts_file = $attempts_dir . '/login_attempts_' . md5($_SERVER['REMOTE_ADDR']);
 $max_attempts = 5;
 $lockout_duration = 300; // 5 minutes
 
@@ -815,6 +869,32 @@ EOF
 sudo systemctl restart fail2ban
 
 # =============================================================================
+# PRE-START PORT VALIDATION
+# =============================================================================
+
+log_info "Validating ports are available before starting services..."
+
+# Critical ports that must be free
+REQUIRED_PORTS=(80 443 8080 9100 3306 6379)
+
+for port in "${REQUIRED_PORTS[@]}"; do
+    if lsof -ti ":$port" &>/dev/null; then
+        log_warn "Port $port is still in use, attempting to free it..."
+        cleanup_port_conflicts "$port"
+
+        # Verify port is now free
+        if lsof -ti ":$port" &>/dev/null; then
+            log_error "Failed to free port $port. Cannot start services."
+            log_error "Please manually investigate: sudo lsof -i :$port"
+            exit 1
+        fi
+    fi
+    log_info "Port $port is available"
+done
+
+log_success "All required ports are available"
+
+# =============================================================================
 # START SERVICES
 # =============================================================================
 
@@ -823,7 +903,23 @@ log_info "Starting services..."
 sudo systemctl daemon-reload
 
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
-sudo systemctl enable --now "php${PHP_VERSION}-fpm"
+    sudo systemctl enable --now "php${PHP_VERSION}-fpm"
+done
+
+# Wait for PHP-FPM sockets to be ready before starting Nginx
+log_info "Waiting for PHP-FPM sockets to be ready..."
+for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
+    SOCKET_PATH="/run/php/php${PHP_VERSION}-fpm.sock"
+    log_info "Checking ${SOCKET_PATH}..."
+
+    timeout 30 bash -c "until [ -S '${SOCKET_PATH}' ]; do sleep 0.5; done" || {
+        log_error "Timeout waiting for ${SOCKET_PATH}"
+        log_error "PHP ${PHP_VERSION} FPM may have failed to start"
+        sudo systemctl status "php${PHP_VERSION}-fpm" --no-pager
+        exit 1
+    }
+
+    log_success "PHP ${PHP_VERSION} FPM socket ready"
 done
 
 sudo systemctl enable --now nginx
@@ -831,6 +927,8 @@ sudo systemctl enable --now mariadb
 sudo systemctl enable --now redis-server
 sudo systemctl enable --now fail2ban
 
+# Final nginx configuration test and reload
+log_info "Testing Nginx configuration..."
 nginx -t && systemctl reload nginx
 
 # =============================================================================

@@ -52,6 +52,12 @@ stop_and_verify_service() {
         return 0
     fi
 
+    # Step 0: Disable service to prevent auto-restart during binary replacement
+    if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+        log_info "Disabling ${service_name} to prevent auto-restart..."
+        sudo systemctl disable "$service_name" 2>/dev/null || log_warn "Disable returned error, continuing..."
+    fi
+
     # Step 1: Graceful systemctl stop
     if systemctl is-active --quiet "$service_name"; then
         log_info "Stopping ${service_name} gracefully..."
@@ -600,6 +606,32 @@ sudo ufw allow 443/tcp     # HTTPS
 sudo ufw allow 3100/tcp    # Loki (for log ingestion from monitored hosts)
 sudo ufw allow 9090/tcp    # Prometheus (for federation if needed)
 sudo ufw --force enable
+
+# =============================================================================
+# PRE-START PORT VALIDATION
+# =============================================================================
+
+log_info "Validating ports are available before starting services..."
+
+# Critical ports that must be free
+REQUIRED_PORTS=(9090 9100 3100 9093 3000)
+
+for port in "${REQUIRED_PORTS[@]}"; do
+    if lsof -ti ":$port" &>/dev/null; then
+        log_warn "Port $port is still in use, attempting to free it..."
+        cleanup_port_conflicts "$port"
+
+        # Verify port is now free
+        if lsof -ti ":$port" &>/dev/null; then
+            log_error "Failed to free port $port. Cannot start services."
+            log_error "Please manually investigate: sudo lsof -i :$port"
+            exit 1
+        fi
+    fi
+    log_info "Port $port is available"
+done
+
+log_success "All required ports are available"
 
 # =============================================================================
 # START SERVICES
