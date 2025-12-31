@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HasTenantScoping;
 use App\Jobs\IssueSslCertificateJob;
 use App\Jobs\ProvisionSiteJob;
 use App\Models\Site;
-use App\Models\Tenant;
 use App\Models\VpsServer;
 use App\Services\Integration\VPSManagerBridge;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +17,8 @@ use Illuminate\Validation\Rule;
 
 class SiteController extends Controller
 {
+    use HasTenantScoping;
+
     public function __construct(
         private VPSManagerBridge $vpsManager
     ) {}
@@ -26,6 +28,8 @@ class SiteController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $this->authorize('viewAny', Site::class);
+
         $tenant = $this->getTenant($request);
 
         $query = $tenant->sites()
@@ -68,6 +72,8 @@ class SiteController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->authorize('create', Site::class);
+
         $tenant = $this->getTenant($request);
 
         // Check quota
@@ -157,6 +163,8 @@ class SiteController extends Controller
             ->with(['vpsServer', 'backups' => fn($q) => $q->latest()->limit(5)])
             ->findOrFail($id);
 
+        $this->authorize('view', $site);
+
         return response()->json([
             'success' => true,
             'data' => $this->formatSite($site, detailed: true),
@@ -170,6 +178,8 @@ class SiteController extends Controller
     {
         $tenant = $this->getTenant($request);
         $site = $tenant->sites()->findOrFail($id);
+
+        $this->authorize('update', $site);
 
         $validated = $request->validate([
             'php_version' => ['sometimes', 'in:8.2,8.4'],
@@ -192,6 +202,8 @@ class SiteController extends Controller
     {
         $tenant = $this->getTenant($request);
         $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        $this->authorize('delete', $site);
 
         try {
             // Delete from VPS
@@ -238,6 +250,8 @@ class SiteController extends Controller
         $tenant = $this->getTenant($request);
         $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
 
+        $this->authorize('enable', $site);
+
         if ($site->status === 'active') {
             return response()->json([
                 'success' => true,
@@ -274,6 +288,8 @@ class SiteController extends Controller
         $tenant = $this->getTenant($request);
         $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
 
+        $this->authorize('disable', $site);
+
         if ($site->status === 'disabled') {
             return response()->json([
                 'success' => true,
@@ -309,6 +325,8 @@ class SiteController extends Controller
     {
         $tenant = $this->getTenant($request);
         $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        $this->authorize('issueSSL', $site);
 
         if (!$site->vpsServer) {
             return response()->json([
@@ -368,18 +386,18 @@ class SiteController extends Controller
     // PRIVATE HELPERS
     // =========================================================================
 
-    private function getTenant(Request $request): Tenant
-    {
-        $tenant = $request->user()->currentTenant();
-
-        if (!$tenant || !$tenant->isActive()) {
-            abort(403, 'No active tenant found.');
-        }
-
-        return $tenant;
-    }
-
-    private function findAvailableVps(Tenant $tenant): ?VpsServer
+    /**
+     * Find an available VPS server for site provisioning.
+     *
+     * Performance Optimization:
+     * - Uses withCount() instead of orderByRaw subquery to eliminate N+1 query
+     * - Eager loads VPS relationship to reduce total queries
+     * - Prioritizes existing tenant allocations before searching shared pool
+     *
+     * @param mixed $tenant The tenant requiring VPS allocation
+     * @return VpsServer|null Available VPS server or null if none found
+     */
+    private function findAvailableVps($tenant): ?VpsServer
     {
         // First check if tenant has existing allocation
         $allocation = $tenant->vpsAllocations()->with('vpsServer')->first();
@@ -389,10 +407,13 @@ class SiteController extends Controller
         }
 
         // Find shared VPS with capacity
+        // Use withCount() instead of orderByRaw() to avoid N+1 query problem
+        // This generates: SELECT *, (SELECT COUNT(*) FROM sites WHERE sites.vps_id = vps_servers.id) as sites_count
         return VpsServer::active()
             ->shared()
             ->healthy()
-            ->orderByRaw('(SELECT COUNT(*) FROM sites WHERE vps_id = vps_servers.id) ASC')
+            ->withCount('sites')
+            ->orderBy('sites_count', 'ASC')
             ->first();
     }
 

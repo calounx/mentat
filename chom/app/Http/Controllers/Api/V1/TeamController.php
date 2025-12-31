@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HasTenantScoping;
 use App\Models\Organization;
-use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +15,7 @@ use Illuminate\Validation\Rule;
 
 class TeamController extends Controller
 {
+    use HasTenantScoping;
     /**
      * List all team members in the organization.
      */
@@ -458,17 +459,6 @@ class TeamController extends Controller
         }
 
         return $organization;
-    }
-
-    private function getTenant(Request $request): Tenant
-    {
-        $tenant = $request->user()->currentTenant();
-
-        if (!$tenant || !$tenant->isActive()) {
-            abort(403, 'No active tenant found.');
-        }
-
-        return $tenant;
     }
 
     private function formatMember(User $user, bool $detailed = false): array

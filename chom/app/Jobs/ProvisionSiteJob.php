@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Site;
-use App\Services\Integration\VPSManagerBridge;
+use App\Services\Sites\Provisioners\ProvisionerFactory;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -35,7 +35,7 @@ class ProvisionSiteJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(VPSManagerBridge $vpsManager): void
+    public function handle(ProvisionerFactory $provisionerFactory): void
     {
         $site = $this->site;
         $vps = $site->vpsServer;
@@ -52,18 +52,23 @@ class ProvisionSiteJob implements ShouldQueue
         Log::info('ProvisionSiteJob: Starting site provisioning', [
             'site_id' => $site->id,
             'domain' => $site->domain,
+            'site_type' => $site->site_type,
             'vps' => $vps->hostname,
         ]);
 
         try {
-            // Create site on VPS based on type
-            $result = match ($site->site_type) {
-                'wordpress' => $vpsManager->createWordPressSite($vps, $site->domain, [
-                    'php_version' => $site->php_version,
-                ]),
-                'html' => $vpsManager->createHtmlSite($vps, $site->domain),
-                default => throw new \InvalidArgumentException("Unsupported site type: {$site->site_type}"),
-            };
+            // Get appropriate provisioner using Strategy pattern
+            $provisioner = $provisionerFactory->make($site->site_type);
+
+            // Validate site configuration
+            if (!$provisioner->validate($site)) {
+                throw new \InvalidArgumentException(
+                    "Site configuration is invalid for type: {$site->site_type}"
+                );
+            }
+
+            // Provision the site using the strategy
+            $result = $provisioner->provision($site, $vps);
 
             if ($result['success']) {
                 $site->update(['status' => 'active']);
@@ -71,6 +76,7 @@ class ProvisionSiteJob implements ShouldQueue
                 Log::info('ProvisionSiteJob: Site provisioned successfully', [
                     'site_id' => $site->id,
                     'domain' => $site->domain,
+                    'site_type' => $site->site_type,
                 ]);
 
                 // Issue SSL if enabled
@@ -83,6 +89,7 @@ class ProvisionSiteJob implements ShouldQueue
                 Log::error('ProvisionSiteJob: Site provisioning failed', [
                     'site_id' => $site->id,
                     'domain' => $site->domain,
+                    'site_type' => $site->site_type,
                     'output' => $result['output'] ?? 'No output',
                 ]);
             }
@@ -92,6 +99,7 @@ class ProvisionSiteJob implements ShouldQueue
             Log::error('ProvisionSiteJob: Exception during provisioning', [
                 'site_id' => $site->id,
                 'domain' => $site->domain,
+                'site_type' => $site->site_type,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

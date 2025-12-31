@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class TierLimit extends Model
 {
@@ -123,5 +124,62 @@ class TierLimit extends Model
         }
 
         return (string) $value;
+    }
+
+    /**
+     * Get cached tier limits for a specific tier.
+     * Caches for 1 hour to reduce database queries.
+     *
+     * @param string $tier The tier name (starter, pro, enterprise)
+     * @return TierLimit|null
+     */
+    public static function getCached(string $tier): ?TierLimit
+    {
+        $cacheKey = "tier_limit:{$tier}";
+
+        return Cache::remember($cacheKey, 3600, function () use ($tier) {
+            return static::find($tier);
+        });
+    }
+
+    /**
+     * Get all cached tier limits.
+     * Caches for 1 hour to reduce database queries.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public static function getAllCached(): \Illuminate\Support\Collection
+    {
+        $cacheKey = "tier_limits:all";
+
+        return Cache::remember($cacheKey, 3600, function () {
+            return static::all();
+        });
+    }
+
+    /**
+     * Invalidate cache for a specific tier.
+     * Call this when tier limits are updated.
+     *
+     * @param string $tier
+     */
+    public static function invalidateCache(string $tier): void
+    {
+        Cache::forget("tier_limit:{$tier}");
+        Cache::forget("tier_limits:all");
+    }
+
+    /**
+     * Boot method to automatically invalidate cache on updates.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (TierLimit $tierLimit) {
+            static::invalidateCache($tierLimit->tier);
+        });
+
+        static::deleted(function (TierLimit $tierLimit) {
+            static::invalidateCache($tierLimit->tier);
+        });
     }
 }

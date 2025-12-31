@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<ruleset name="CHOM PHP Mess Detector Rules"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>CHOM Code Quality Rules</description>
+
+    <!-- Clean Code Rules -->
+    <rule ref="rulesets/cleancode.xml">
+        <exclude name="StaticAccess"/>
+        <exclude name="BooleanArgumentFlag"/>
+        <exclude name="ElseExpression"/>
+    </rule>
+
+    <!-- Code Size Rules -->
+    <rule ref="rulesets/codesize.xml">
+        <exclude name="TooManyPublicMethods"/>
+        <exclude name="ExcessiveClassComplexity"/>
+    </rule>
+
+    <!-- Controversial Rules -->
+    <rule ref="rulesets/controversial.xml">
+        <exclude name="Superglobals"/>
+    </rule>
+
+    <!-- Design Rules -->
+    <rule ref="rulesets/design.xml">
+        <exclude name="CouplingBetweenObjects"/>
+    </rule>
+
+    <!-- Naming Rules -->
+    <rule ref="rulesets/naming.xml">
+        <exclude name="ShortVariable"/>
+        <exclude name="LongVariable"/>
+    </rule>
+
+    <!-- Unused Code Rules -->
+    <rule ref="rulesets/unusedcode.xml"/>
+
+    <!-- Custom Rules -->
+    <rule ref="rulesets/codesize.xml/CyclomaticComplexity">
+        <properties>
+            <property name="reportLevel" value="15"/>
+        </properties>
+    </rule>
+
+    <rule ref="rulesets/codesize.xml/ExcessiveMethodLength">
+        <properties>
+            <property name="minimum" value="100"/>
+        </properties>
+    </rule>
+
+    <rule ref="rulesets/naming.xml/ShortVariable">
+        <properties>
+            <property name="minimum" value="2"/>
+            <property name="exceptions" value="id,db,ip"/>
+        </properties>
+    </rule>
+</ruleset>

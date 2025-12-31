@@ -127,6 +127,70 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => 'info',
+            'days' => 90, // Keep security logs for 90 days
+            'replace_placeholders' => true,
+        ],
+
+        'audit' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/audit.log'),
+            'level' => 'info',
+            'days' => 90, // Keep audit logs for 90 days
+            'replace_placeholders' => true,
+        ],
+
+        'slow_queries' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/slow-queries.log'),
+            'level' => 'warning',
+            'days' => 7,
+            'replace_placeholders' => true,
+        ],
+
+        'api' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/api.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
+        'deployment' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/deployment.log'),
+            'level' => 'info',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'json' => [
+            'driver' => 'monolog',
+            'handler' => StreamHandler::class,
+            'formatter' => \Monolog\Formatter\JsonFormatter::class,
+            'with' => [
+                'stream' => storage_path('logs/json.log'),
+            ],
+            'level' => 'debug',
+        ],
+
+        'structured_stack' => [
+            'driver' => 'stack',
+            'channels' => ['daily', 'json'],
+            'ignore_exceptions' => false,
+        ],
+
     ],
 
 ];

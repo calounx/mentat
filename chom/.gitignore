@@ -1,0 +1,53 @@
+# Laravel specific
+/node_modules
+/public/hot
+/public/storage
+/storage/*.key
+/vendor
+.env
+.env.backup
+.phpunit.result.cache
+docker-compose.override.yml
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/.idea
+/.vscode
+
+# Backup files - prevent accidental commits
+*.backup
+*.bak
+*~
+*Refactored.php
+*.orig
+*.swp
+*.swo
+
+# Test artifacts
+FILES_CREATED.txt
+/tests/coverage/
+/.phpunit.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Build artifacts
+/build/
+/dist/
+
+# Documentation drafts (use naming convention)
+*-DRAFT.md
+*-WIP.md

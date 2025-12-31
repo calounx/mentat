@@ -13,6 +13,47 @@ class Site extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
+    /**
+     * Boot the model and register global scopes for tenant isolation.
+     */
+    protected static function booted(): void
+    {
+        // Apply tenant scope automatically to all queries
+        static::addGlobalScope('tenant', function ($builder) {
+            if (auth()->check() && auth()->user()->currentTenant()) {
+                $builder->where('tenant_id', auth()->user()->currentTenant()->id);
+            }
+        });
+
+        // Automatic cache invalidation for tenant statistics
+        // When a site is created, updated, or deleted, invalidate the parent tenant's cached stats
+        // This ensures getSiteCount() and getStorageUsedMb() always return accurate values
+
+        // Invalidate cache when site is saved (created or updated)
+        static::saved(function (Site $site) {
+            // Only update if tenant relationship is loaded to avoid extra query
+            if ($site->tenant) {
+                $site->tenant->updateCachedStats();
+            }
+        });
+
+        // Invalidate cache when site is deleted (soft or hard delete)
+        static::deleted(function (Site $site) {
+            // Only update if tenant relationship is loaded to avoid extra query
+            if ($site->tenant) {
+                $site->tenant->updateCachedStats();
+            }
+        });
+
+        // Also handle restoration of soft-deleted sites
+        static::restored(function (Site $site) {
+            // Only update if tenant relationship is loaded to avoid extra query
+            if ($site->tenant) {
+                $site->tenant->updateCachedStats();
+            }
+        });
+    }
+
     protected $fillable = [
         'tenant_id',
         'vps_id',

@@ -21,10 +21,14 @@ class Tenant extends Model
         'status',
         'settings',
         'metrics_retention_days',
+        'cached_storage_mb',
+        'cached_sites_count',
+        'cached_at',
     ];
 
     protected $casts = [
         'settings' => 'array',
+        'cached_at' => 'datetime',
     ];
 
     /**
@@ -119,18 +123,78 @@ class Tenant extends Model
     }
 
     /**
-     * Get current site count.
+     * Get current site count (uses cached value with 5-minute freshness).
+     *
+     * This method uses a cached aggregate to avoid expensive COUNT queries.
+     * Cache is automatically invalidated when sites are created/updated/deleted.
+     * If cache is stale (>5 minutes), it will be refreshed automatically.
+     *
+     * @return int Number of sites belonging to this tenant
      */
     public function getSiteCount(): int
     {
-        return $this->sites()->count();
+        // Check if cache is stale or missing
+        if ($this->isCacheStale()) {
+            $this->updateCachedStats();
+        }
+
+        return $this->cached_sites_count;
     }
 
     /**
-     * Get total storage used in MB.
+     * Get total storage used in MB (uses cached value with 5-minute freshness).
+     *
+     * This method uses a cached aggregate to avoid expensive SUM queries.
+     * Cache is automatically invalidated when sites are created/updated/deleted.
+     * If cache is stale (>5 minutes), it will be refreshed automatically.
+     *
+     * @return int Total storage used in MB across all sites
      */
     public function getStorageUsedMb(): int
     {
-        return $this->sites()->sum('storage_used_mb');
+        // Check if cache is stale or missing
+        if ($this->isCacheStale()) {
+            $this->updateCachedStats();
+        }
+
+        return $this->cached_storage_mb;
+    }
+
+    /**
+     * Update cached aggregate statistics.
+     *
+     * This method recalculates and stores aggregate values for:
+     * - Total site count
+     * - Total storage usage
+     *
+     * Called automatically when:
+     * - Sites are created, updated, or deleted (via model events)
+     * - Cache is older than 5 minutes (staleness check)
+     *
+     * @return void
+     */
+    public function updateCachedStats(): void
+    {
+        // Use single query with both aggregates for efficiency
+        $stats = $this->sites()
+            ->selectRaw('COUNT(*) as site_count, COALESCE(SUM(storage_used_mb), 0) as total_storage')
+            ->first();
+
+        $this->update([
+            'cached_sites_count' => $stats->site_count ?? 0,
+            'cached_storage_mb' => $stats->total_storage ?? 0,
+            'cached_at' => now(),
+        ]);
+    }
+
+    /**
+     * Check if cached statistics are stale (older than 5 minutes).
+     *
+     * @return bool True if cache needs refresh, false if cache is fresh
+     */
+    private function isCacheStale(): bool
+    {
+        // Cache is stale if it doesn't exist or is older than 5 minutes
+        return !$this->cached_at || $this->cached_at->diffInMinutes(now()) > 5;
     }
 }

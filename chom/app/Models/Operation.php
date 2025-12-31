@@ -11,6 +11,19 @@ class Operation extends Model
 {
     use HasFactory, HasUuids;
 
+    /**
+     * Boot the model and register global scopes for tenant isolation.
+     */
+    protected static function booted(): void
+    {
+        // Apply tenant scope automatically to all queries
+        static::addGlobalScope('tenant', function ($builder) {
+            if (auth()->check() && auth()->user()->currentTenant()) {
+                $builder->where('tenant_id', auth()->user()->currentTenant()->id);
+            }
+        });
+    }
+
     protected $fillable = [
         'tenant_id',
         'user_id',

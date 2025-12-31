@@ -26,18 +26,41 @@ class VpsServer extends Model
         'vpsmanager_version',
         'observability_configured',
         'ssh_key_id',
+        'ssh_private_key',
+        'ssh_public_key',
+        'key_rotated_at',
         'last_health_check_at',
         'health_status',
     ];
 
+    /**
+     * SECURITY: Encrypted casts for SSH keys.
+     *
+     * Laravel automatically encrypts these fields using APP_KEY (AES-256-CBC + HMAC-SHA-256)
+     * when writing to database and decrypts when reading from database.
+     *
+     * OWASP Reference: A02:2021 – Cryptographic Failures
+     * Protection: Keys encrypted at rest, never stored in plain text
+     */
     protected $casts = [
         'observability_configured' => 'boolean',
         'last_health_check_at' => 'datetime',
+        'key_rotated_at' => 'datetime',
+        'ssh_private_key' => 'encrypted',
+        'ssh_public_key' => 'encrypted',
     ];
 
+    /**
+     * SECURITY: Hide sensitive fields from JSON serialization.
+     *
+     * These fields should never be exposed in API responses or logs.
+     * Even though keys are encrypted in database, we prevent accidental exposure.
+     */
     protected $hidden = [
         'ssh_key_id',
         'provider_id',
+        'ssh_private_key',
+        'ssh_public_key',
     ];
 
     /**

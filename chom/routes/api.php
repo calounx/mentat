@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\SiteController;
 use App\Http\Controllers\Api\V1\TeamController;
+use App\Http\Controllers\Api\V1\TwoFactorController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,17 +25,13 @@ Route::prefix('v1')->group(function () {
 
     // Authentication endpoints with strict rate limiting (5 req/min)
     Route::prefix('auth')->middleware('throttle:auth')->group(function () {
-        Route::post('/register', [AuthController::class, 'register']);
-        Route::post('/login', [AuthController::class, 'login']);
+        Route::post('/register', [AuthController::class, 'register'])->name('auth.register');
+        Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
     });
 
-    // Health check (no rate limiting for monitoring)
-    Route::get('/health', function () {
-        return response()->json([
-            'status' => 'ok',
-            'timestamp' => now()->toIso8601String(),
-        ]);
-    });
+    // Health check endpoints (no rate limiting for monitoring)
+    Route::get('/health', [HealthController::class, 'index'])->name('health.basic');
+    Route::get('/health/detailed', [HealthController::class, 'detailed'])->name('health.detailed');
 
     // =========================================================================
     // PROTECTED ROUTES (Require Authentication + Rate Limiting)
@@ -41,12 +39,52 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
+        // =====================================================================
+        // AUTHENTICATION & SECURITY
+        // =====================================================================
+
         // Auth (protected endpoints)
         Route::prefix('auth')->group(function () {
-            Route::post('/logout', [AuthController::class, 'logout']);
-            Route::get('/me', [AuthController::class, 'me']);
-            Route::post('/refresh', [AuthController::class, 'refresh']);
+            Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
+            Route::get('/me', [AuthController::class, 'me'])->name('auth.me');
+            Route::post('/refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
+
+            // Password confirmation for step-up authentication
+            Route::post('/password/confirm', [AuthController::class, 'confirmPassword'])
+                ->middleware('throttle:2fa')
+                ->name('auth.password.confirm');
+
+            // Two-Factor Authentication endpoints (with 2FA rate limiting)
+            Route::prefix('2fa')->middleware('throttle:2fa')->group(function () {
+                // Setup 2FA - generates QR code and secret
+                Route::post('/setup', [TwoFactorController::class, 'setup'])->name('auth.2fa.setup');
+
+                // Confirm 2FA setup - verifies first code and enables 2FA
+                Route::post('/confirm', [TwoFactorController::class, 'confirm'])->name('auth.2fa.confirm');
+
+                // Verify 2FA code during login or session validation
+                Route::post('/verify', [TwoFactorController::class, 'verify'])->name('auth.2fa.verify');
+
+                // Get 2FA status
+                Route::get('/status', [TwoFactorController::class, 'status'])->name('auth.2fa.status');
+
+                // Regenerate backup codes (requires password confirmation)
+                Route::post('/backup-codes/regenerate', [TwoFactorController::class, 'regenerateBackupCodes'])
+                    ->name('auth.2fa.backup-codes.regenerate');
+
+                // Disable 2FA (requires password confirmation)
+                Route::post('/disable', [TwoFactorController::class, 'disable'])
+                    ->name('auth.2fa.disable');
+            });
         });
+
+        // =====================================================================
+        // HEALTH & MONITORING
+        // =====================================================================
+
+        // Security health check (admin only)
+        Route::get('/health/security', [HealthController::class, 'security'])
+            ->name('health.security');
 
         // Sites
         Route::prefix('sites')->group(function () {
@@ -145,3 +183,54 @@ Route::prefix('v1')->group(function () {
         // - /billing
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| SECURITY IMPLEMENTATION NOTES
+|--------------------------------------------------------------------------
+|
+| This API implements comprehensive security controls:
+|
+| 1. TWO-FACTOR AUTHENTICATION (2FA)
+|    - Mandatory for owner/admin roles after 7-day grace period
+|    - TOTP using Google Authenticator protocol
+|    - 8 single-use backup codes for recovery
+|    - Rate limited to 5 attempts/minute
+|
+| 2. STEP-UP AUTHENTICATION
+|    - Password re-confirmation for sensitive operations
+|    - 10-minute validity window
+|    - Apply to: SSH key viewing, deletions, ownership transfers
+|
+| 3. RATE LIMITING
+|    - Tier-based: Enterprise (1000/min), Pro (500/min), Starter (100/min)
+|    - Authentication: 5/min per IP
+|    - Sensitive operations: 10/min
+|    - 2FA verification: 5/min
+|
+| 4. REQUEST SIGNING (Optional)
+|    - HMAC-SHA256 signature verification
+|    - 5-minute replay protection
+|    - Apply to webhooks and high-security operations
+|
+| 5. SECURITY MONITORING
+|    - /health/security endpoint checks security posture
+|    - Monitors: 2FA compliance, key rotation, SSL expiry
+|    - Comprehensive audit logging
+|
+| To apply step-up auth to a route:
+|   ->middleware('password.confirm')
+|
+| To apply request signing:
+|   ->middleware('verify.signature')
+|
+| OWASP Top 10 Coverage:
+|   A01: Access Control - Role-based authorization + 2FA
+|   A02: Cryptographic Failures - Encrypted secrets, HMAC signing
+|   A03: Injection - Input validation in all controllers
+|   A04: Insecure Design - Defense in depth, fail-safe defaults
+|   A05: Security Misconfiguration - Health checks, secure defaults
+|   A07: Auth Failures - 2FA, step-up auth, session security
+|   A09: Logging Failures - Comprehensive audit logging
+|
+*/

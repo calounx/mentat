@@ -88,5 +88,16 @@
     </div>
 
     @livewireScripts
+
+    <!-- Notification System -->
+    <x-notifications />
+
+    <!-- Initialize user data for Alpine stores -->
+    @auth
+    <script>
+        window.userData = @json(auth()->user());
+        window.organizationData = @json(auth()->user()->organization);
+    </script>
+    @endauth
 </body>
 </html>

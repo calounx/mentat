@@ -1,0 +1,938 @@
+{
+  "info": {
+    "name": "CHOM SaaS Platform API",
+    "description": "Complete REST API for CHOM multi-tenant WordPress hosting platform.\n\n## Quick Start\n1. Register a new account or login\n2. Copy the returned token\n3. Set the `api_token` environment variable\n4. Start making authenticated requests\n\n## Environment Variables\n- `base_url` - API base URL (default: http://localhost:8000/api/v1)\n- `api_token` - Bearer token from login/register\n- `site_id` - UUID of a site for testing\n- `backup_id` - UUID of a backup for testing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "chom-api-v1"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('api_token', response.data.token);",
+                  "    pm.environment.set('user_id', response.data.user.id);",
+                  "    pm.environment.set('organization_id', response.data.organization.id);",
+                  "    console.log('Token saved to environment:', response.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePassword123!\",\n  \"password_confirmation\": \"SecurePassword123!\",\n  \"organization_name\": \"ACME Corporation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Register a new user account with organization. Returns an API token for immediate use."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('api_token', response.data.token);",
+                  "    pm.environment.set('user_id', response.data.user.id);",
+                  "    pm.environment.set('organization_id', response.data.organization.id);",
+                  "    console.log('Token saved to environment:', response.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Authenticate with email and password to receive an API token."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Get currently authenticated user details."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('api_token', response.data.token);",
+                  "    console.log('New token saved:', response.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "Revoke current token and issue a new one."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout and revoke the current API token."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sites",
+      "item": [
+        {
+          "name": "List Sites",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["sites"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "wordpress",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "example.com",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all sites with optional filtering by status, type, or search term."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Site",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('site_id', response.data.id);",
+                  "    console.log('Site ID saved:', response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"domain\": \"example.com\",\n  \"site_type\": \"wordpress\",\n  \"php_version\": \"8.2\",\n  \"ssl_enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sites",
+              "host": ["{{base_url}}"],
+              "path": ["sites"]
+            },
+            "description": "Create a new WordPress site. Site provisioning is asynchronous."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Site",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}"]
+            },
+            "description": "Get detailed information about a specific site."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Site",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"php_version\": \"8.4\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}"]
+            },
+            "description": "Update site settings like PHP version."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Site",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}"]
+            },
+            "description": "Permanently delete a site. This is a destructive operation."
+          },
+          "response": []
+        },
+        {
+          "name": "Enable Site",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}/enable",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}", "enable"]
+            },
+            "description": "Enable a disabled site."
+          },
+          "response": []
+        },
+        {
+          "name": "Disable Site",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}/disable",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}", "disable"]
+            },
+            "description": "Disable a site temporarily."
+          },
+          "response": []
+        },
+        {
+          "name": "Issue SSL Certificate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}/ssl",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}", "ssl"]
+            },
+            "description": "Issue Let's Encrypt SSL certificate for the site."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Site Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}", "metrics"]
+            },
+            "description": "Get performance and usage metrics for the site."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Backups",
+      "item": [
+        {
+          "name": "List All Backups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/backups?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["backups"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                },
+                {
+                  "key": "site_id",
+                  "value": "{{site_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "full",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all backups with optional filtering."
+          },
+          "response": []
+        },
+        {
+          "name": "List Site Backups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}/backups",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}", "backups"]
+            },
+            "description": "List all backups for a specific site."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Backup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('backup_id', response.data.id);",
+                  "    console.log('Backup ID saved:', response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"site_id\": \"{{site_id}}\",\n  \"backup_type\": \"full\",\n  \"retention_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/backups",
+              "host": ["{{base_url}}"],
+              "path": ["backups"]
+            },
+            "description": "Create a new backup for a site."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Site Backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"backup_type\": \"full\",\n  \"retention_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sites/{{site_id}}/backups",
+              "host": ["{{base_url}}"],
+              "path": ["sites", "{{site_id}}", "backups"]
+            },
+            "description": "Create a backup for a specific site (nested route)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Backup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/backups/{{backup_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["backups", "{{backup_id}}"]
+            },
+            "description": "Get detailed information about a backup."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Backup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/backups/{{backup_id}}/download",
+              "host": ["{{base_url}}"],
+              "path": ["backups", "{{backup_id}}", "download"]
+            },
+            "description": "Get a temporary download URL for the backup (valid 15 minutes)."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/backups/{{backup_id}}/restore",
+              "host": ["{{base_url}}"],
+              "path": ["backups", "{{backup_id}}", "restore"]
+            },
+            "description": "Restore a site from a backup. This is a sensitive operation."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Backup",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/backups/{{backup_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["backups", "{{backup_id}}"]
+            },
+            "description": "Permanently delete a backup."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Team",
+      "item": [
+        {
+          "name": "List Team Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/team/members?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["team", "members"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "List all team members in the organization."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Team Member",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/team/members/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["team", "members", "{{user_id}}"]
+            },
+            "description": "Get details about a specific team member."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Team Member Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/team/members/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["team", "members", "{{user_id}}"]
+            },
+            "description": "Update a team member's role (requires admin/owner)."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Team Member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/team/members/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["team", "members", "{{user_id}}"]
+            },
+            "description": "Remove a team member from the organization."
+          },
+          "response": []
+        },
+        {
+          "name": "List Invitations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/team/invitations",
+              "host": ["{{base_url}}"],
+              "path": ["team", "invitations"]
+            },
+            "description": "List all pending team invitations."
+          },
+          "response": []
+        },
+        {
+          "name": "Invite Team Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newmember@example.com\",\n  \"role\": \"member\",\n  \"name\": \"New Member\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/team/invitations",
+              "host": ["{{base_url}}"],
+              "path": ["team", "invitations"]
+            },
+            "description": "Invite a new team member."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Invitation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/team/invitations/:invitation_id",
+              "host": ["{{base_url}}"],
+              "path": ["team", "invitations", ":invitation_id"],
+              "variable": [
+                {
+                  "key": "invitation_id",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Cancel a pending invitation."
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer Ownership",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"password\": \"your-password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/team/transfer-ownership",
+              "host": ["{{base_url}}"],
+              "path": ["team", "transfer-ownership"]
+            },
+            "description": "Transfer organization ownership (requires owner + password)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Organization",
+      "item": [
+        {
+          "name": "Get Organization",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/organization",
+              "host": ["{{base_url}}"],
+              "path": ["organization"]
+            },
+            "description": "Get organization details and settings."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Organization",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Organization Name\",\n  \"billing_email\": \"billing@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/organization",
+              "host": ["{{base_url}}"],
+              "path": ["organization"]
+            },
+            "description": "Update organization settings (requires owner)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "API health check endpoint (no authentication required)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "api_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "site_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "backup_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "organization_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

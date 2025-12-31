@@ -1,0 +1,172 @@
+================================================================
+       BLADE COMPONENT LIBRARY - FILE STRUCTURE
+================================================================
+
+COMPONENT LIBRARY FILES
+================================================================
+
+/home/calounx/repositories/mentat/chom/resources/views/components/
+
+BASE UI COMPONENTS:
+  ✓ alert.blade.php            - Contextual alerts (success, error, warning, info)
+  ✓ badge.blade.php            - Status badges with variants
+  ✓ button.blade.php           - Buttons with variants, icons, loading states
+  ✓ card.blade.php             - Container cards with header/footer
+  ✓ dropdown.blade.php         - Dropdown menus with Alpine.js
+  ✓ empty-state.blade.php      - Empty state placeholders
+  ✓ icon.blade.php             - SVG icon component (30+ Heroicons)
+  ✓ loading.blade.php          - Loading spinners
+  ✓ modal.blade.php            - Modal dialogs with transitions
+  ✓ nav-link.blade.php         - Navigation links
+  ✓ notifications.blade.php    - Toast notification system
+  ✓ page-header.blade.php      - Page headers with actions
+  ✓ stats-card.blade.php       - Dashboard statistics cards
+  ✓ table.blade.php            - Responsive table wrapper
+
+FORM COMPONENTS:
+  ✓ form/input.blade.php       - Text inputs with validation
+  ✓ form/select.blade.php      - Select dropdowns
+  ✓ form/textarea.blade.php    - Multi-line text inputs
+  ✓ form/toggle.blade.php      - Toggle switches
+
+TABLE COMPONENTS:
+  ✓ table/td.blade.php         - Table data cells
+  ✓ table/th.blade.php         - Table header cells
+
+Total: 20 component files
+
+================================================================
+ALPINE.JS STORE FILES
+================================================================
+
+/home/calounx/repositories/mentat/chom/resources/js/
+
+  ✓ app.js                     - Main JavaScript entry (UPDATED)
+  ✓ stores/app.js              - Global Alpine.js stores (NEW)
+
+Features:
+  - User data store
+  - Organization store
+  - Notification queue system
+  - UI state management
+  - Global notification helpers
+
+================================================================
+REFACTORED VIEW FILES
+================================================================
+
+/home/calounx/repositories/mentat/chom/resources/views/livewire/
+
+  ✓ dashboard/overview.blade.php    - Dashboard (REFACTORED: 197→142 lines)
+  ✓ sites/site-list.blade.php       - Site list (REFACTORED: 215→182 lines)
+  ✓ sites/site-create.blade.php     - Site creation (REFACTORED: 185→124 lines)
+
+Total lines reduced: 148 (25% average reduction)
+
+================================================================
+LAYOUT FILES
+================================================================
+
+/home/calounx/repositories/mentat/chom/resources/views/layouts/
+
+  ✓ app.blade.php              - Main layout (UPDATED with notifications)
+
+================================================================
+DOCUMENTATION FILES
+================================================================
+
+/home/calounx/repositories/mentat/chom/
+
+  ✓ COMPONENT-README.md              - Quick start guide
+  ✓ COMPONENT-QUICK-REFERENCE.md     - Common usage patterns
+  ✓ COMPONENT-LIBRARY.md             - Complete component reference (14KB)
+  ✓ COMPONENT-SUMMARY.md             - Implementation summary (11KB)
+  ✓ COMPONENT-FILES.txt              - This file
+
+Total: 5 documentation files
+
+================================================================
+COMPONENT USAGE SUMMARY
+================================================================
+
+DASHBOARD OVERVIEW uses:
+  - stats-card (4 instances)
+  - card (3 instances)
+  - button (2 instances)
+  - badge (multiple)
+  - alert (1 instance)
+  - empty-state (1 instance)
+
+SITE LIST uses:
+  - button (2 instances)
+  - alert (2 instances)
+  - card (1 instance)
+  - form.select (1 instance)
+  - table + table.th + table.td
+  - badge (multiple)
+  - icon (multiple)
+  - modal (1 instance)
+  - empty-state (1 instance)
+
+SITE CREATE uses:
+  - icon (2 instances)
+  - alert (3 instances)
+  - card (1 instance)
+  - form.input (1 instance)
+  - form.select (1 instance)
+  - form.toggle (1 instance)
+  - button (2 instances)
+
+================================================================
+ICON LIBRARY
+================================================================
+
+30+ Heroicons included in icon.blade.php:
+
+Navigation: chevron-left, chevron-right, x-mark, plus, minus, bars-3
+Status: check-circle, x-circle, exclamation-triangle, information-circle
+Objects: globe, server, database, lock-closed, document, folder
+Search: magnifying-glass
+Media: play-circle, pause-circle
+Actions: trash, pencil, cog-6-tooth
+Charts: chart-bar
+People: users, user-circle
+Other: bell, link, arrow-up, arrow-down
+
+================================================================
+QUICK ACCESS PATHS
+================================================================
+
+Components:
+  cd /home/calounx/repositories/mentat/chom/resources/views/components
+
+Form Components:
+  cd /home/calounx/repositories/mentat/chom/resources/views/components/form
+
+Table Components:
+  cd /home/calounx/repositories/mentat/chom/resources/views/components/table
+
+Alpine Stores:
+  cd /home/calounx/repositories/mentat/chom/resources/js/stores
+
+Refactored Views:
+  cd /home/calounx/repositories/mentat/chom/resources/views/livewire
+
+Documentation:
+  cd /home/calounx/repositories/mentat/chom
+  ls COMPONENT-*.md
+
+================================================================
+FILE COUNT SUMMARY
+================================================================
+
+Component Files:        20
+JavaScript Files:       2 (1 new, 1 updated)
+Refactored Views:       3
+Layout Updates:         1
+Documentation:          5
+
+Total New Files:        26
+Total Updated Files:    4
+
+================================================================

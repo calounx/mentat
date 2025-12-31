@@ -1,0 +1,1906 @@
+openapi: 3.1.0
+info:
+  title: CHOM SaaS Platform API
+  description: |
+    Comprehensive REST API for the CHOM multi-tenant SaaS platform for WordPress hosting management.
+
+    ## Features
+    - Multi-tenant architecture with organization and tenant isolation
+    - WordPress site provisioning and management
+    - Automated backups and restore capabilities
+    - Team collaboration with role-based access control
+    - Real-time metrics and monitoring
+
+    ## Authentication
+    All authenticated endpoints require a Bearer token obtained from the `/api/v1/auth/login` or `/api/v1/auth/register` endpoints.
+    Include the token in the `Authorization` header:
+    ```
+    Authorization: Bearer {your-token-here}
+    ```
+
+    ## Rate Limiting
+    - **Authentication endpoints**: 5 requests per minute
+    - **Standard API endpoints**: 60 requests per minute
+    - **Sensitive operations** (delete, backup, restore): 10 requests per minute
+
+    ## Pagination
+    List endpoints support pagination with the following query parameters:
+    - `page` - Page number (default: 1)
+    - `per_page` - Items per page (default: 20, max: 100)
+
+    ## Error Handling
+    All errors follow a consistent format:
+    ```json
+    {
+      "success": false,
+      "error": {
+        "code": "ERROR_CODE",
+        "message": "Human-readable error message",
+        "details": {}
+      }
+    }
+    ```
+
+  version: 1.0.0
+  contact:
+    name: CHOM API Support
+    email: support@chom.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.chom.example.com/api/v1
+    description: Production server
+  - url: https://staging.chom.example.com/api/v1
+    description: Staging server
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Sites
+    description: WordPress site management and provisioning
+  - name: Backups
+    description: Backup creation, management, and restoration
+  - name: Team
+    description: Team member and invitation management
+  - name: Organization
+    description: Organization settings and configuration
+  - name: Health
+    description: API health and status endpoints
+
+paths:
+  # =========================================================================
+  # AUTHENTICATION
+  # =========================================================================
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user and organization
+      description: Creates a new user account with an associated organization and default tenant. Returns an API token for immediate use.
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              basic:
+                value:
+                  name: John Doe
+                  email: john@example.com
+                  password: SecurePassword123!
+                  password_confirmation: SecurePassword123!
+                  organization_name: ACME Corporation
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: REGISTRATION_FAILED
+                  message: Failed to create account. Please try again.
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      description: Authenticate with email and password to receive an API token.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              basic:
+                value:
+                  email: john@example.com
+                  password: SecurePassword123!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_CREDENTIALS
+                  message: The provided credentials are incorrect.
+        '403':
+          description: No organization associated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: NO_ORGANIZATION
+                  message: User is not associated with an organization.
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Revokes the current API token.
+      operationId: logout
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+              example:
+                success: true
+                message: Successfully logged out.
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Returns details about the currently authenticated user, their organization, and tenant.
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: User details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh API token
+      description: Revokes the current token and issues a new one.
+      operationId: refreshToken
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        example: 1|abcdefghijklmnopqrstuvwxyz1234567890
+
+  # =========================================================================
+  # SITES
+  # =========================================================================
+  /sites:
+    get:
+      tags:
+        - Sites
+      summary: List all sites
+      description: Returns a paginated list of all sites for the current tenant with optional filtering.
+      operationId: listSites
+      parameters:
+        - name: status
+          in: query
+          description: Filter by site status
+          schema:
+            type: string
+            enum: [creating, active, disabled, failed, deleting]
+        - name: type
+          in: query
+          description: Filter by site type
+          schema:
+            type: string
+            enum: [wordpress, html, laravel]
+        - name: search
+          in: query
+          description: Search by domain name
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sites retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteListResponse'
+
+    post:
+      tags:
+        - Sites
+      summary: Create a new site
+      description: Provisions a new WordPress site on the platform. The site creation is async and starts in 'creating' status.
+      operationId: createSite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSiteRequest'
+            examples:
+              wordpress:
+                value:
+                  domain: example.com
+                  site_type: wordpress
+                  php_version: "8.2"
+                  ssl_enabled: true
+              laravel:
+                value:
+                  domain: myapp.com
+                  site_type: laravel
+                  php_version: "8.4"
+                  ssl_enabled: true
+      responses:
+        '201':
+          description: Site creation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteResponse'
+        '403':
+          description: Site limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: SITE_LIMIT_EXCEEDED
+                  message: You have reached your plan's site limit.
+                  details:
+                    current_sites: 10
+                    limit: 10
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Site creation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sites/{id}:
+    get:
+      tags:
+        - Sites
+      summary: Get site details
+      description: Returns detailed information about a specific site including recent backups.
+      operationId: getSite
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Site details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteDetailResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags:
+        - Sites
+      summary: Update site settings
+      description: Updates site configuration such as PHP version or custom settings.
+      operationId: updateSite
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSiteRequest'
+      responses:
+        '200':
+          description: Site updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Sites
+      summary: Delete a site
+      description: Permanently deletes a site and all associated data. This is a destructive operation with rate limiting.
+      operationId: deleteSite
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Site deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Deletion failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sites/{id}/enable:
+    post:
+      tags:
+        - Sites
+      summary: Enable a site
+      description: Enables a disabled site, making it accessible again.
+      operationId: enableSite
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Site enabled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sites/{id}/disable:
+    post:
+      tags:
+        - Sites
+      summary: Disable a site
+      description: Disables a site, making it temporarily inaccessible.
+      operationId: disableSite
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Site disabled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sites/{id}/ssl:
+    post:
+      tags:
+        - Sites
+      summary: Issue SSL certificate
+      description: Initiates SSL certificate issuance for the site using Let's Encrypt.
+      operationId: issueSslCertificate
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: SSL issuance started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sites/{id}/metrics:
+    get:
+      tags:
+        - Sites
+      summary: Get site metrics
+      description: Returns performance and usage metrics for the site.
+      operationId: getSiteMetrics
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteMetricsResponse'
+
+  # =========================================================================
+  # BACKUPS
+  # =========================================================================
+  /backups:
+    get:
+      tags:
+        - Backups
+      summary: List all backups
+      description: Returns a paginated list of all backups for the current tenant with optional filtering.
+      operationId: listBackups
+      parameters:
+        - name: site_id
+          in: query
+          description: Filter by site ID
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          description: Filter by backup type
+          schema:
+            type: string
+            enum: [full, database, files]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Backups retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupListResponse'
+
+    post:
+      tags:
+        - Backups
+      summary: Create a new backup
+      description: Initiates a backup for the specified site. The backup is processed asynchronously.
+      operationId: createBackup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBackupRequest'
+      responses:
+        '201':
+          description: Backup queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Backup creation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /backups/{id}:
+    get:
+      tags:
+        - Backups
+      summary: Get backup details
+      description: Returns detailed information about a specific backup.
+      operationId: getBackup
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+      responses:
+        '200':
+          description: Backup details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupDetailResponse'
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Backups
+      summary: Delete a backup
+      description: Permanently deletes a backup file and its record.
+      operationId: deleteBackup
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+      responses:
+        '200':
+          description: Backup deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /backups/{id}/download:
+    get:
+      tags:
+        - Backups
+      summary: Download a backup
+      description: Generates a temporary download URL for the backup file (valid for 15 minutes).
+      operationId: downloadBackup
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+      responses:
+        '200':
+          description: Download URL generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupDownloadResponse'
+        '400':
+          description: Backup not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /backups/{id}/restore:
+    post:
+      tags:
+        - Backups
+      summary: Restore from backup
+      description: Initiates a site restore from the specified backup. This is a sensitive operation with rate limiting.
+      operationId: restoreBackup
+      parameters:
+        - $ref: '#/components/parameters/BackupId'
+      responses:
+        '200':
+          description: Restore initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupRestoreResponse'
+        '400':
+          description: Invalid backup state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Backup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sites/{siteId}/backups:
+    get:
+      tags:
+        - Backups
+      summary: List backups for a site
+      description: Returns all backups for a specific site.
+      operationId: listSiteBackups
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Site backups retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupListResponse'
+
+    post:
+      tags:
+        - Backups
+      summary: Create backup for a site
+      description: Creates a backup for the specified site.
+      operationId: createSiteBackup
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup_type:
+                  type: string
+                  enum: [full, database, files]
+                  default: full
+                retention_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  default: 30
+      responses:
+        '201':
+          description: Backup queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupResponse'
+
+  # =========================================================================
+  # TEAM MANAGEMENT
+  # =========================================================================
+  /team/members:
+    get:
+      tags:
+        - Team
+      summary: List team members
+      description: Returns a paginated list of all team members in the organization.
+      operationId: listTeamMembers
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Team members retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberListResponse'
+
+  /team/members/{id}:
+    get:
+      tags:
+        - Team
+      summary: Get team member details
+      description: Returns detailed information about a specific team member.
+      operationId: getTeamMember
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Team member details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberDetailResponse'
+
+    patch:
+      tags:
+        - Team
+      summary: Update team member role
+      description: Updates the role of a team member. Requires admin or owner permissions.
+      operationId: updateTeamMember
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTeamMemberRequest'
+      responses:
+        '200':
+          description: Team member updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberResponse'
+        '400':
+          description: Invalid operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Team
+      summary: Remove team member
+      description: Removes a team member from the organization. Requires admin or owner permissions.
+      operationId: removeTeamMember
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Team member removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '400':
+          description: Invalid operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /team/invitations:
+    get:
+      tags:
+        - Team
+      summary: List pending invitations
+      description: Returns all pending team invitations.
+      operationId: listInvitations
+      responses:
+        '200':
+          description: Invitations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationListResponse'
+
+    post:
+      tags:
+        - Team
+      summary: Invite team member
+      description: Sends an invitation to join the organization. Requires admin or owner permissions.
+      operationId: inviteTeamMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteTeamMemberRequest'
+      responses:
+        '201':
+          description: Invitation sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '400':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /team/invitations/{id}:
+    delete:
+      tags:
+        - Team
+      summary: Cancel invitation
+      description: Cancels a pending invitation. Requires admin or owner permissions.
+      operationId: cancelInvitation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invitation cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /team/transfer-ownership:
+    post:
+      tags:
+        - Team
+      summary: Transfer organization ownership
+      description: Transfers organization ownership to another team member. Requires owner permissions and password confirmation.
+      operationId: transferOwnership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequest'
+      responses:
+        '200':
+          description: Ownership transferred successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOwnershipResponse'
+        '401':
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # ORGANIZATION
+  # =========================================================================
+  /organization:
+    get:
+      tags:
+        - Organization
+      summary: Get organization details
+      description: Returns detailed information about the current organization.
+      operationId: getOrganization
+      responses:
+        '200':
+          description: Organization details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+
+    patch:
+      tags:
+        - Organization
+      summary: Update organization settings
+      description: Updates organization settings. Requires owner permissions.
+      operationId: updateOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUpdateResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # =========================================================================
+  # HEALTH
+  # =========================================================================
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns API health status. No authentication required.
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-01-15T10:30:00Z'
+
+# =========================================================================
+# COMPONENTS
+# =========================================================================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Laravel Sanctum bearer token authentication
+
+  parameters:
+    SiteId:
+      name: id
+      in: path
+      required: true
+      description: Site UUID
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+
+    BackupId:
+      name: id
+      in: path
+      required: true
+      description: Backup UUID
+      schema:
+        type: string
+        format: uuid
+      example: 650e8400-e29b-41d4-a716-446655440000
+
+    UserId:
+      name: id
+      in: path
+      required: true
+      description: User UUID
+      schema:
+        type: string
+        format: uuid
+      example: 750e8400-e29b-41d4-a716-446655440000
+
+  schemas:
+    # =========================================================================
+    # AUTHENTICATION SCHEMAS
+    # =========================================================================
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - password_confirmation
+        - organization_name
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: John Doe
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: john@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecurePassword123!
+        password_confirmation:
+          type: string
+          format: password
+          example: SecurePassword123!
+        organization_name:
+          type: string
+          maxLength: 255
+          example: ACME Corporation
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            organization:
+              $ref: '#/components/schemas/Organization'
+            tenant:
+              $ref: '#/components/schemas/Tenant'
+            token:
+              type: string
+              example: 1|abcdefghijklmnopqrstuvwxyz1234567890
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          format: password
+          example: SecurePassword123!
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            organization:
+              $ref: '#/components/schemas/Organization'
+            token:
+              type: string
+              example: 1|abcdefghijklmnopqrstuvwxyz1234567890
+
+    CurrentUserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/UserDetail'
+            organization:
+              $ref: '#/components/schemas/Organization'
+            tenant:
+              $ref: '#/components/schemas/Tenant'
+
+    # =========================================================================
+    # SITE SCHEMAS
+    # =========================================================================
+    CreateSiteRequest:
+      type: object
+      required:
+        - domain
+      properties:
+        domain:
+          type: string
+          maxLength: 253
+          pattern: '^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$'
+          example: example.com
+        site_type:
+          type: string
+          enum: [wordpress, html, laravel]
+          default: wordpress
+        php_version:
+          type: string
+          enum: ['8.2', '8.4']
+          default: '8.2'
+        ssl_enabled:
+          type: boolean
+          default: true
+
+    UpdateSiteRequest:
+      type: object
+      properties:
+        php_version:
+          type: string
+          enum: ['8.2', '8.4']
+        settings:
+          type: object
+          additionalProperties: true
+
+    Site:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        domain:
+          type: string
+          example: example.com
+        url:
+          type: string
+          format: uri
+          example: https://example.com
+        site_type:
+          type: string
+          enum: [wordpress, html, laravel]
+          example: wordpress
+        php_version:
+          type: string
+          example: '8.2'
+        ssl_enabled:
+          type: boolean
+          example: true
+        ssl_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2024-04-15T10:30:00Z'
+        status:
+          type: string
+          enum: [creating, active, disabled, failed, deleting]
+          example: active
+        storage_used_mb:
+          type: integer
+          example: 245
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        vps:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            hostname:
+              type: string
+
+    SiteDetail:
+      allOf:
+        - $ref: '#/components/schemas/Site'
+        - type: object
+          properties:
+            db_name:
+              type: string
+              example: wp_example_com
+            document_root:
+              type: string
+              example: /var/www/example.com
+            settings:
+              type: object
+              additionalProperties: true
+            recent_backups:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+                  size:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+    SiteListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Site'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    SiteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Site'
+        message:
+          type: string
+          example: Site is being created.
+
+    SiteDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/SiteDetail'
+
+    SiteMetricsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            site_id:
+              type: string
+              format: uuid
+            domain:
+              type: string
+            metrics:
+              type: object
+              properties:
+                requests_per_minute:
+                  type: integer
+                  example: 42
+                response_time_ms:
+                  type: integer
+                  example: 125
+                storage_used_mb:
+                  type: integer
+                  example: 245
+
+    # =========================================================================
+    # BACKUP SCHEMAS
+    # =========================================================================
+    CreateBackupRequest:
+      type: object
+      required:
+        - site_id
+      properties:
+        site_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        backup_type:
+          type: string
+          enum: [full, database, files]
+          default: full
+        retention_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 30
+
+    Backup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 650e8400-e29b-41d4-a716-446655440000
+        site_id:
+          type: string
+          format: uuid
+        backup_type:
+          type: string
+          enum: [full, database, files]
+          example: full
+        size:
+          type: string
+          example: 1.2 GB
+        size_bytes:
+          type: integer
+          example: 1288490188
+        is_ready:
+          type: boolean
+          example: true
+        is_expired:
+          type: boolean
+          example: false
+        expires_at:
+          type: string
+          format: date-time
+          example: '2024-02-15T10:30:00Z'
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        site:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            domain:
+              type: string
+
+    BackupDetail:
+      allOf:
+        - $ref: '#/components/schemas/Backup'
+        - type: object
+          properties:
+            storage_path:
+              type: string
+              nullable: true
+              example: backups/2024/01/backup-650e8400.tar.gz
+            checksum:
+              type: string
+              nullable: true
+              example: a1b2c3d4e5f6
+            retention_days:
+              type: integer
+              example: 30
+
+    BackupListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backup'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    BackupResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Backup'
+        message:
+          type: string
+          example: Backup has been queued for processing.
+
+    BackupDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BackupDetail'
+
+    BackupDownloadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            download_url:
+              type: string
+              format: uri
+              example: https://storage.example.com/backups/temp-url?token=abc123
+            expires_at:
+              type: string
+              format: date-time
+              example: '2024-01-15T10:45:00Z'
+
+    BackupRestoreResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Site restore has been queued. This may take several minutes.
+        data:
+          type: object
+          properties:
+            backup_id:
+              type: string
+              format: uuid
+            site_id:
+              type: string
+              format: uuid
+            site_domain:
+              type: string
+
+    # =========================================================================
+    # TEAM SCHEMAS
+    # =========================================================================
+    TeamMember:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 750e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: Jane Smith
+        email:
+          type: string
+          format: email
+          example: jane@example.com
+        role:
+          type: string
+          enum: [owner, admin, member, viewer]
+          example: member
+        email_verified:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+
+    TeamMemberDetail:
+      allOf:
+        - $ref: '#/components/schemas/TeamMember'
+        - type: object
+          properties:
+            two_factor_enabled:
+              type: boolean
+              example: false
+            updated_at:
+              type: string
+              format: date-time
+
+    UpdateTeamMemberRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum: [admin, member, viewer]
+          description: Owner role cannot be set via this endpoint
+
+    InviteTeamMemberRequest:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          example: newmember@example.com
+        role:
+          type: string
+          enum: [admin, member, viewer]
+          example: member
+        name:
+          type: string
+          example: New Member
+
+    TransferOwnershipRequest:
+      type: object
+      required:
+        - user_id
+        - password
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          example: 750e8400-e29b-41d4-a716-446655440000
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    TeamMemberListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    TeamMemberResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/TeamMember'
+        message:
+          type: string
+          example: Team member role updated successfully.
+
+    TeamMemberDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/TeamMemberDetail'
+
+    InvitationListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              email:
+                type: string
+              role:
+                type: string
+              expires_at:
+                type: string
+                format: date-time
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    InvitationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Invitation sent successfully.
+        data:
+          type: object
+          properties:
+            email:
+              type: string
+            role:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+
+    TransferOwnershipResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Ownership transferred successfully.
+        data:
+          type: object
+          properties:
+            new_owner:
+              $ref: '#/components/schemas/TeamMember'
+            previous_owner:
+              $ref: '#/components/schemas/TeamMember'
+
+    # =========================================================================
+    # ORGANIZATION SCHEMAS
+    # =========================================================================
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 850e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: ACME Corporation
+        slug:
+          type: string
+          example: acme-corporation-a1b2c3
+
+    OrganizationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            slug:
+              type: string
+            billing_email:
+              type: string
+              format: email
+            member_count:
+              type: integer
+            owner:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                email:
+                  type: string
+            subscription:
+              type: object
+              nullable: true
+              properties:
+                tier:
+                  type: string
+                status:
+                  type: string
+            created_at:
+              type: string
+              format: date-time
+
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        billing_email:
+          type: string
+          format: email
+          maxLength: 255
+
+    OrganizationUpdateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            slug:
+              type: string
+            billing_email:
+              type: string
+        message:
+          type: string
+          example: Organization updated successfully.
+
+    # =========================================================================
+    # COMMON SCHEMAS
+    # =========================================================================
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 750e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        role:
+          type: string
+          enum: [owner, admin, member, viewer]
+          example: owner
+
+    UserDetail:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            email_verified_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 950e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: Default
+        tier:
+          type: string
+          enum: [starter, professional, enterprise]
+          example: starter
+        status:
+          type: string
+          enum: [active, suspended, cancelled]
+          example: active
+
+    PaginationMeta:
+      type: object
+      properties:
+        pagination:
+          type: object
+          properties:
+            current_page:
+              type: integer
+              example: 1
+            per_page:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 42
+            total_pages:
+              type: integer
+              example: 3
+
+    SuccessMessage:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Operation completed successfully.
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: ERROR_CODE
+            message:
+              type: string
+              example: An error occurred.
+            details:
+              type: object
+              additionalProperties: true
+
+    ValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: The given data was invalid.
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            email:
+              - The email field is required.
+            password:
+              - The password must be at least 8 characters.

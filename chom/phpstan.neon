@@ -1,0 +1,26 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - config
+        - database
+        - routes
+
+    # Level (0-9, higher is stricter)
+    level: 5
+
+    ignoreErrors:
+        # Livewire dynamic properties
+        - '#Livewire\\Component#'
+        # Laravel magic methods
+        - '#Call to an undefined method Illuminate\\#'
+
+    excludePaths:
+        - app/Console/Commands/stubs
+        - database/migrations
+        - vendor
+
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false

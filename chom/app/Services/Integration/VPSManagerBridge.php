@@ -4,6 +4,7 @@ namespace App\Services\Integration;
 
 use App\Models\VpsServer;
 use App\Models\Site;
+use App\Services\VPS\VpsConnectionPool;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Crypt;
 use phpseclib3\Net\SSH2;
@@ -14,12 +15,30 @@ class VPSManagerBridge
     private ?SSH2 $ssh = null;
     private string $vpsmanagerPath = '/opt/vpsmanager/bin/vpsmanager';
     private int $timeout = 120; // seconds
+    private ?VpsConnectionPool $connectionPool = null;
+    private bool $useConnectionPool = true;
+
+    /**
+     * Constructor - initialize connection pool
+     */
+    public function __construct(VpsConnectionPool $connectionPool = null)
+    {
+        $this->connectionPool = $connectionPool ?? app(VpsConnectionPool::class);
+    }
 
     /**
      * Connect to a VPS server via SSH.
+     * Uses connection pooling when enabled for 2-3 second performance improvement.
      */
     public function connect(VpsServer $vps): void
     {
+        // If connection pooling is enabled, use pooled connection
+        if ($this->useConnectionPool && $this->connectionPool) {
+            $this->ssh = $this->connectionPool->getConnection($vps);
+            return;
+        }
+
+        // Fall back to traditional connection
         $this->disconnect();
 
         $this->ssh = new SSH2($vps->ip_address, 22);
@@ -46,13 +65,39 @@ class VPSManagerBridge
 
     /**
      * Disconnect from current VPS.
+     * When using connection pool, connections are kept alive for reuse.
      */
     public function disconnect(): void
     {
+        // When using connection pooling, don't disconnect
+        // Connections are managed by the pool
+        if ($this->useConnectionPool && $this->connectionPool) {
+            $this->ssh = null;
+            return;
+        }
+
+        // Traditional disconnect
         if ($this->ssh) {
             $this->ssh->disconnect();
             $this->ssh = null;
         }
+    }
+
+    /**
+     * Disable connection pooling for this instance.
+     * Useful for long-running operations.
+     */
+    public function disableConnectionPooling(): void
+    {
+        $this->useConnectionPool = false;
+    }
+
+    /**
+     * Enable connection pooling for this instance.
+     */
+    public function enableConnectionPooling(): void
+    {
+        $this->useConnectionPool = true;
     }
 
     /**

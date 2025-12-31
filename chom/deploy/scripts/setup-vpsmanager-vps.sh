@@ -225,14 +225,17 @@ MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
 
 # Use .my.cnf to avoid password in process list
-cat > /tmp/.my.cnf << EOF
+# Create secure temporary file to prevent race condition attacks
+MYSQL_CNF_FILE=$(mktemp -t mysql.XXXXXX)
+chmod 600 "$MYSQL_CNF_FILE"  # Set permissions before writing sensitive data
+
+cat > "$MYSQL_CNF_FILE" << EOF
 [client]
 user=root
 password=${MYSQL_ROOT_PASSWORD}
 EOF
-chmod 600 /tmp/.my.cnf
 
-mysql --defaults-extra-file=/tmp/.my.cnf << 'SQL'
+mysql --defaults-extra-file="$MYSQL_CNF_FILE" << 'SQL'
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
@@ -240,8 +243,8 @@ DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 SQL
 
-# Clean up temporary file
-rm -f /tmp/.my.cnf
+# Securely clean up temporary file
+shred -u "$MYSQL_CNF_FILE" 2>/dev/null || rm -f "$MYSQL_CNF_FILE"
 
 # MariaDB optimization
 cat > /etc/mysql/mariadb.conf.d/99-optimization.cnf << 'EOF'

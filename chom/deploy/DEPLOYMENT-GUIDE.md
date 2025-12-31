@@ -2,6 +2,20 @@
 
 Complete end-to-end deployment procedure for CHOM infrastructure using the auto-healing orchestrator.
 
+## Which Guide Should I Use?
+
+Choose the right guide for your situation:
+
+| Guide | When to Use | Time Required |
+|-------|-------------|---------------|
+| **QUICKSTART.md** | First deployment, want fastest path | 30 minutes |
+| **DEPLOYMENT-GUIDE.md** (this file) | First deployment, want detailed explanations | 1-2 hours |
+| **UPDATE-GUIDE.md** | Updating existing deployment | 30-60 minutes |
+
+**New to CHOM?** Start with **QUICKSTART.md** for a streamlined experience.
+
+---
+
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
@@ -13,6 +27,34 @@ Complete end-to-end deployment procedure for CHOM infrastructure using the auto-
 7. [Access and Initial Configuration](#access-and-initial-configuration)
 8. [Troubleshooting](#troubleshooting)
 9. [Rollback Procedures](#rollback-procedures)
+
+---
+
+## Quick Navigation
+
+- **Just want to get started?** → [Quick Start Checklist](#quick-start-checklist)
+- **Need to fix an error?** → [Troubleshooting](#troubleshooting)
+- **Deployment failed?** → [Recovery](#deployment-failures)
+- **Want to update?** → See UPDATE-GUIDE.md
+- **Need help with SSH?** → See SUDO-USER-SETUP.md
+
+---
+
+## Quick Start Checklist
+
+**Want the TL;DR?** Follow these steps in order:
+
+1. ✓ **Provision 2 VPS** with Debian 13
+2. ✓ **Create sudo users** on both VPS (see SUDO-USER-SETUP.md)
+3. ✓ **Clone repo:** `git clone https://github.com/calounx/mentat.git`
+4. ✓ **Configure:** Edit `configs/inventory.yaml` with VPS IPs
+5. ✓ **Validate:** `./deploy-enhanced.sh --validate`
+6. ✓ **Deploy:** `./deploy-enhanced.sh all`
+7. ✓ **Verify:** Access Grafana at http://YOUR_OBS_IP:3000
+
+**Estimated time:** 30 minutes total
+
+For detailed step-by-step instructions, continue reading below.
 
 ---
 

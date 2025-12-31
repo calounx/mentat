@@ -15,11 +15,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Seed test users with all roles
+        $this->call(TestUserSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // Seed test data (sites, backups, VPS servers)
+        if ($this->command->confirm('Would you like to seed test data (sites, VPS, backups)?', true)) {
+            $this->call(TestDataSeeder::class);
+        }
+
+        // Optional: Seed large dataset for performance testing
+        if ($this->command->confirm('Would you like to seed performance test data? (WARNING: Large dataset)', false)) {
+            $this->call(PerformanceTestSeeder::class);
+        }
     }
 }

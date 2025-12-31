@@ -1,393 +1,481 @@
 # CHOM - Cloud Hosting & Observability Manager
 
-**A modern multi-tenant SaaS platform for WordPress hosting with integrated observability.**
+[![Status](https://img.shields.io/badge/status-production%20ready-success)](https://github.com/calounx/mentat)
+[![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php)](https://php.net)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-CHOM provides a complete hosting control panel that manages customer sites, VPS servers, backups, and billing—all while integrating seamlessly with the Mentat observability stack for comprehensive monitoring.
+> A modern multi-tenant SaaS platform for WordPress hosting with integrated observability, built with Laravel 12.
 
-## 🎯 What is CHOM?
+---
 
-CHOM (Cloud Hosting & Observability Manager) is a Laravel-based hosting platform designed for:
-- **Hosting Providers** - Manage customer WordPress/Laravel sites across multiple VPS servers
-- **Agencies** - Centralized management of client websites with built-in monitoring
-- **SaaS Operators** - Multi-tenant architecture with Stripe billing integration
+## What is CHOM?
 
-## ✨ Features
+**CHOM** is a complete hosting control panel that manages customer sites, VPS servers, backups, and billing—all while integrating seamlessly with the Mentat observability stack for comprehensive monitoring.
 
-### 🏗️ Site Management
-- **WordPress Sites**: One-click deployment with automatic SSL
-- **Laravel Apps**: Full LEMP stack provisioning
-- **HTML Sites**: Static site hosting
-- **SSL Certificates**: Automatic Let's Encrypt integration
-- **Staging Environments**: Test changes before production
+**Perfect for:**
+- 🏢 **Hosting Providers** - Manage customer WordPress/Laravel sites across multiple VPS servers
+- 🎨 **Agencies** - Centralized management of client websites with built-in monitoring
+- 🚀 **SaaS Operators** - Multi-tenant architecture with Stripe billing integration
+
+---
+
+## ✨ Key Features
+
+### 🌐 Site Management
+- **One-Click Deployments** - WordPress, Laravel, and static HTML sites
+- **Automatic SSL** - Let's Encrypt integration with auto-renewal
+- **Staging Environments** - Test changes safely before production
+- **PHP Version Control** - Switch between PHP 8.2 and 8.4
 
 ### 🖥️ VPS Fleet Management
-- **Auto-Allocation**: Intelligent server selection based on capacity
-- **Health Monitoring**: Real-time server status and metrics
-- **Resource Tracking**: CPU, memory, disk usage per VPS
-- **Multi-Provider**: Support for any VPS provider (DigitalOcean, Linode, Vultr, etc.)
+- **Intelligent Auto-Allocation** - Sites distributed based on capacity
+- **Real-Time Health Monitoring** - Track CPU, memory, disk across all servers
+- **Multi-Provider Support** - Works with DigitalOcean, Linode, Vultr, and more
+- **Auto-Scaling Thresholds** - Automatic capacity management
 
-### 💾 Backup System
-- **Automated Backups**: Scheduled backups with configurable retention
-- **One-Click Restore**: Restore sites to any point in time
-- **Off-Site Storage**: Optional S3/cloud storage integration
-- **Retention Policies**: Hourly, daily, weekly, monthly retention options
+### 💾 Backup & Recovery
+- **Automated Backups** - Hourly, daily, weekly, monthly retention policies
+- **One-Click Restore** - Restore to any point in time
+- **Off-Site Storage** - Optional S3/cloud storage integration
+- **Backup Validation** - Integrity checks before restore
 
 ### 📊 Integrated Observability
-- **Metrics**: Prometheus metrics from all managed sites
-- **Logs**: Centralized log aggregation via Loki
-- **Traces**: Distributed tracing for Laravel applications
-- **Dashboards**: Pre-built Grafana dashboards per site
-- **Alerts**: Automatic alerting for site issues
+- **Metrics Dashboard** - Prometheus metrics from all managed sites
+- **Centralized Logs** - Loki log aggregation with search
+- **Distributed Tracing** - Laravel application performance tracking
+- **Custom Dashboards** - Pre-built Grafana dashboards per site
+- **Smart Alerts** - Automatic alerting for site issues
 
 ### 💳 Billing & Subscriptions
-- **Stripe Integration**: Full subscription lifecycle management
-- **Tiered Pricing**: Starter, Pro, Enterprise plans
-- **Usage Tracking**: Monitor resource consumption
-- **Invoicing**: Automatic invoice generation
-- **Webhook Handlers**: Real-time billing events
+- **Stripe Integration** - Complete subscription lifecycle management
+- **Tiered Pricing** - Starter ($29), Pro ($79), Enterprise ($249)
+- **Usage Tracking** - Monitor and bill for resource consumption
+- **Automatic Invoicing** - Transparent billing with invoice generation
+- **Webhook Handlers** - Real-time payment event processing
 
 ### 👥 Team Collaboration
-- **Organizations**: Multi-team support
-- **Role-Based Access**: Owner, Admin, Member, Viewer roles
-- **Team Invitations**: Email-based team member onboarding
-- **Audit Logs**: Track all team actions
+- **Multi-Organization** - Unlimited teams and workspaces
+- **Role-Based Access** - Owner, Admin, Member, Viewer permissions
+- **Team Invitations** - Email-based onboarding
+- **Audit Trails** - Complete activity logging
 
-## 🏛️ Architecture
+---
 
-```mermaid
-graph TB
-    subgraph "CHOM Control Plane<br/>(Laravel 12 Application)"
-        subgraph "Frontend Layer"
-            DASH[Livewire 3 Dashboard<br/>Alpine.js + Tailwind CSS]
-            API[REST API<br/>Laravel Sanctum Auth]
-        end
-
-        subgraph "Application Services"
-            SITE_SVC[Site Service<br/>WordPress/Laravel/HTML]
-            VPS_SVC[VPS Service<br/>Fleet Management]
-            BACKUP_SVC[Backup Service<br/>Automated Backups]
-            BILLING_SVC[Billing Service<br/>Cashier Integration]
-        end
-
-        subgraph "Integration Layer"
-            VPS_BRIDGE[VPS Manager Bridge<br/>SSH + Remote CLI]
-            OBS_ADAPTER[Observability Adapter<br/>Metrics/Logs/Traces]
-            STRIPE_CLIENT[Stripe Client<br/>Webhook Handler]
-        end
-
-        subgraph "Data Layer"
-            DB[(Database<br/>SQLite/MySQL/PG)]
-            CACHE[(Redis<br/>Cache/Sessions/Queue)]
-        end
-    end
-
-    subgraph "Managed Infrastructure"
-        VPS1[Managed VPS 1<br/>Customer Sites<br/>WordPress/Laravel]
-        VPS2[Managed VPS 2<br/>Customer Sites<br/>WordPress/Laravel]
-        VPS3[Managed VPS 3<br/>Customer Sites<br/>WordPress/Laravel]
-    end
-
-    subgraph "Observability Stack"
-        PROM[Prometheus<br/>Metrics]
-        LOKI[Loki<br/>Logs]
-        GRAF[Grafana<br/>Dashboards]
-    end
-
-    subgraph "External Services"
-        STRIPE[Stripe<br/>Payment Gateway]
-        EMAIL[Email<br/>SMTP]
-        STORAGE[S3/Cloud Storage<br/>Backups]
-    end
-
-    %% User interactions
-    USER([Users]) -->|HTTPS| DASH
-    USER -->|API Calls| API
-
-    %% Frontend to Services
-    DASH --> SITE_SVC
-    DASH --> VPS_SVC
-    DASH --> BACKUP_SVC
-    DASH --> BILLING_SVC
-    API --> SITE_SVC
-    API --> VPS_SVC
-    API --> BACKUP_SVC
-
-    %% Services to Integration Layer
-    SITE_SVC --> VPS_BRIDGE
-    VPS_SVC --> VPS_BRIDGE
-    BACKUP_SVC --> VPS_BRIDGE
-    SITE_SVC --> OBS_ADAPTER
-    VPS_SVC --> OBS_ADAPTER
-    BILLING_SVC --> STRIPE_CLIENT
-
-    %% Integration to External
-    VPS_BRIDGE -->|SSH Commands| VPS1
-    VPS_BRIDGE -->|SSH Commands| VPS2
-    VPS_BRIDGE -->|SSH Commands| VPS3
-    OBS_ADAPTER -->|HTTP API| PROM
-    OBS_ADAPTER -->|HTTP API| LOKI
-    OBS_ADAPTER -->|HTTP API| GRAF
-    STRIPE_CLIENT -->|API Calls| STRIPE
-    STRIPE -->|Webhooks| STRIPE_CLIENT
-    BACKUP_SVC -->|Upload| STORAGE
-
-    %% Managed VPS to Observability
-    VPS1 -->|Metrics/Logs| PROM
-    VPS2 -->|Metrics/Logs| PROM
-    VPS3 -->|Metrics/Logs| PROM
-    VPS1 -->|Logs| LOKI
-    VPS2 -->|Logs| LOKI
-    VPS3 -->|Logs| LOKI
-
-    %% Data Layer
-    SITE_SVC --> DB
-    VPS_SVC --> DB
-    BACKUP_SVC --> DB
-    BILLING_SVC --> DB
-    SITE_SVC --> CACHE
-    VPS_SVC --> CACHE
-
-    %% Notifications
-    BILLING_SVC --> EMAIL
-    BACKUP_SVC --> EMAIL
-
-    style DASH fill:#ff2d20
-    style API fill:#ff2d20
-    style PROM fill:#e85d75
-    style LOKI fill:#f4bf4f
-    style GRAF fill:#f05a28
-    style STRIPE fill:#635bff
-    style DB fill:#4479a1
-    style CACHE fill:#dc382d
-```
-
-**Architecture Layers:**
-
-1. **Frontend Layer**: Livewire dashboards and REST API with Sanctum authentication
-2. **Application Services**: Core business logic for sites, VPS, backups, and billing
-3. **Integration Layer**: Bridges to external systems (VPS via SSH, Observability via HTTP, Stripe webhooks)
-4. **Data Layer**: Database and Redis for persistence and caching
-
-**Key Data Flows:**
-
-- **Site Deployment**: User → Dashboard → Site Service → VPS Bridge → SSH to Managed VPS
-- **Metrics Viewing**: User → Dashboard → Observability Adapter → HTTP to Prometheus/Loki/Grafana
-- **Billing Events**: Stripe → Webhook → Stripe Client → Billing Service → Database
-- **Backups**: Scheduled Job → Backup Service → VPS Bridge → SSH Backup → S3 Upload
-
-## 🚀 Quick Start
+## 🚀 Quick Start (5 Minutes)
 
 ### Prerequisites
 
-- **PHP** 8.2 or higher
+- **PHP** 8.2+ with required extensions
 - **Composer** 2.x
 - **Node.js** 18+ and npm
-- **Database**: SQLite, MySQL, or PostgreSQL
-- **Observability Stack** (optional but recommended)
+- **Database** (SQLite for development, MySQL/PostgreSQL for production)
+- **Redis** (optional but recommended for caching)
 
-### Installation (~10-15 minutes)
+### Installation
 
 ```bash
-# Clone repository (~1 minute)
+# 1. Clone the repository
 git clone https://github.com/calounx/mentat.git
 cd mentat/chom
 
-# Install PHP dependencies (~3-5 minutes)
+# 2. Install dependencies (3-5 minutes)
 composer install
-
-# Install JavaScript dependencies (~2-3 minutes)
 npm install
 
-# Configure environment (~1 minute)
+# 3. Configure environment
 cp .env.example .env
 php artisan key:generate
 
-# Setup database (~1 minute)
+# 4. Setup database
+touch database/database.sqlite  # For SQLite
 php artisan migrate
 
-# Build frontend assets (~2-3 minutes)
+# 5. Build frontend assets
 npm run build
 
-# Start development server (~10 seconds)
+# 6. Start development server
 php artisan serve
 ```
 
-Access at: http://localhost:8000
+🎉 **Done!** Access CHOM at [http://localhost:8000](http://localhost:8000)
 
-**Total setup time:** 10-15 minutes depending on network speed and system performance
+### Quick Development Setup
 
-### Production Deployment
+For a full development environment with hot-reload:
 
-See [deploy/README.md](deploy/README.md) for detailed production deployment instructions.
+```bash
+composer run dev
+```
 
-## 📖 Documentation
+This starts:
+- 🌐 Web server on http://localhost:8000
+- ⚡ Vite dev server with HMR
+- 📬 Queue worker for background jobs
+- 📋 Log viewer (Laravel Pail)
 
-### Getting Started
-- [Installation Guide](deploy/README.md) - Production deployment
-- [Configuration](docs/configuration.md) - Environment variables and settings
-- [API Documentation](docs/api.md) - REST API reference
+---
 
-### Development
-- [Development Setup](docs/development.md) - Local development environment
-- [Testing](docs/testing.md) - Running tests and coverage
-- [Contributing](../CONTRIBUTING.md) - Contribution guidelines
+## 📚 Documentation
 
-### Operations
-- [Backup & Restore](docs/backups.md) - Backup procedures
-- [Monitoring](docs/monitoring.md) - Integration with observability stack
-- [Security](../SECURITY.md) - Security best practices
+### For Everyone
+- 📖 **[Getting Started Guide](docs/GETTING-STARTED.md)** - Step-by-step setup and first site
+- 👥 **[User Guide](docs/USER-GUIDE.md)** - Day-to-day operations for non-technical users
+- ❓ **[FAQ & Troubleshooting](docs/USER-GUIDE.md#faq)** - Common questions and solutions
+
+### For Developers
+- 💻 **[Developer Guide](docs/DEVELOPER-GUIDE.md)** - Local development setup and workflows
+- 🔧 **[API Documentation](docs/API-README.md)** - REST API reference and examples
+- 🧪 **[Testing Guide](docs/DEVELOPER-GUIDE.md#testing)** - Running tests and coverage
+- 🤝 **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute
+
+### For Operators
+- 🚀 **[Operator Guide](docs/OPERATOR-GUIDE.md)** - Production deployment and maintenance
+- ⚙️ **[Configuration Reference](docs/OPERATOR-GUIDE.md#configuration)** - Environment variables
+- 📊 **[Monitoring Setup](docs/OPERATOR-GUIDE.md#monitoring)** - Observability stack integration
+- 🔐 **[Security Guide](docs/security/application-security.md)** - Security best practices
+
+### Quick Links
+| Document | Description | Time |
+|----------|-------------|------|
+| [Quick Start](#quick-start-5-minutes) | Get running locally | 5 min |
+| [Getting Started](docs/GETTING-STARTED.md) | Complete walkthrough | 20 min |
+| [Deploy Guide](deploy/QUICKSTART.md) | Production deployment | 30 min |
+| [API Guide](docs/API-QUICKSTART.md) | API integration | 15 min |
+
+---
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CHOM Control Plane                      │
+│                    (Laravel 12 Application)                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Frontend: Livewire 3 + Alpine.js + Tailwind CSS            │
+│  Backend:  Laravel Services + Jobs + Events                  │
+│  Auth:     Laravel Sanctum + 2FA                             │
+│  Billing:  Laravel Cashier (Stripe)                          │
+│  Data:     SQLite/MySQL/PostgreSQL + Redis                   │
+│                                                               │
+└────────────┬────────────┬────────────┬───────────────────────┘
+             │            │            │
+      ┌──────▼──┐  ┌─────▼────┐  ┌───▼────────┐
+      │ Managed │  │ Managed  │  │ Managed    │
+      │ VPS 1   │  │ VPS 2    │  │ VPS 3      │
+      └──────┬──┘  └─────┬────┘  └───┬────────┘
+             │            │            │
+             └────────────┴────────────┘
+                          │
+              ┌───────────▼───────────┐
+              │ Observability Stack    │
+              │ Prometheus + Loki +    │
+              │ Grafana                │
+              └────────────────────────┘
+```
+
+**Data Flow:**
+1. **User** → Dashboard → **Site Service** → VPS Bridge → **SSH to Managed VPS**
+2. **Managed VPS** → Metrics/Logs → **Observability Stack** → Dashboard
+3. **Stripe** → Webhook → Billing Service → **Database** → User Notifications
+
+For detailed architecture diagrams, see [ARCHITECTURE-PATTERNS.md](docs/ARCHITECTURE-PATTERNS.md).
+
+---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| **Backend** | Laravel 12, PHP 8.2+ |
+| Category | Technology |
+|----------|-----------|
+| **Backend Framework** | Laravel 12 (PHP 8.2+) |
 | **Frontend** | Livewire 3, Alpine.js 3, Tailwind CSS 4 |
-| **Build** | Vite 7 |
-| **Database** | SQLite / MySQL / PostgreSQL |
+| **Build Tool** | Vite 7 |
+| **Database** | SQLite / MySQL 8+ / PostgreSQL 13+ |
+| **Cache/Queue** | Redis 7+ |
 | **API Auth** | Laravel Sanctum 4.2 |
-| **Billing** | Stripe (Laravel Cashier 16.1) |
+| **Payments** | Stripe (Laravel Cashier 16.1) |
 | **SSH/CLI** | phpseclib 3.0 |
-| **Observability** | Prometheus, Loki, Grafana (via Mentat) |
+| **Observability** | Prometheus, Loki, Grafana |
+| **Testing** | PHPUnit 11, Pest (optional) |
+
+---
+
+## 💡 Use Cases
+
+### Hosting Provider
+```
+→ Register VPS servers in CHOM
+→ Configure pricing tiers
+→ Customers sign up and create sites
+→ Automatic billing via Stripe
+→ Monitor all sites from single dashboard
+```
+
+### Web Agency
+```
+→ Add client sites to CHOM
+→ Invite team members with roles
+→ Create staging environments for testing
+→ Automated backups before deployments
+→ Share Grafana dashboards with clients
+```
+
+### SaaS Platform
+```
+→ Multi-tenant WordPress hosting
+→ Usage-based billing integration
+→ Centralized log aggregation
+→ Performance monitoring per tenant
+→ Automated scaling and backups
+```
+
+---
 
 ## 📊 Pricing Tiers
 
-| Tier | Price | Sites | Storage | Backups | Support |
-|------|-------|-------|---------|---------|---------|
-| **Starter** | $29/mo | 5 | 10GB | Daily | Email |
-| **Pro** | $79/mo | 25 | 100GB | Hourly | Priority |
-| **Enterprise** | $249/mo | Unlimited | Unlimited | Real-time | Dedicated |
+| Tier | Price/mo | Sites | Storage | Backups | Support |
+|------|----------|-------|---------|---------|---------|
+| **Starter** | $29 | 5 | 10GB | Daily | Email |
+| **Pro** | $79 | 25 | 100GB | Hourly | Priority |
+| **Enterprise** | $249 | Unlimited | Unlimited | Real-time | Dedicated |
 
-## 🔌 API Overview
+Configure tiers in `config/chom.php` or override with environment variables.
+
+---
+
+## 🔌 API Quick Reference
 
 ### Authentication
-
 ```bash
-# Register organization
-POST /api/v1/auth/register
-{
-  "name": "Acme Corp",
-  "email": "admin@acme.com",
-  "password": "secure123"
-}
+# Register
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Acme Corp","email":"admin@acme.com","password":"secure123"}'
 
 # Login
-POST /api/v1/auth/login
-{
-  "email": "admin@acme.com",
-  "password": "secure123"
-}
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@acme.com","password":"secure123"}'
 ```
 
 ### Site Management
-
 ```bash
-# Create site
-POST /api/v1/sites
-{
-  "domain": "example.com",
-  "type": "wordpress",
-  "php_version": "8.2"
-}
-
-# Get site details
-GET /api/v1/sites/{id}
+# Create WordPress site
+curl -X POST http://localhost:8000/api/v1/sites \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"domain":"example.com","type":"wordpress","php_version":"8.2"}'
 
 # Issue SSL certificate
-POST /api/v1/sites/{id}/ssl
+curl -X POST http://localhost:8000/api/v1/sites/{id}/ssl \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Backups
-
 ```bash
 # Create backup
-POST /api/v1/sites/{id}/backups
-{
-  "type": "full",
-  "description": "Pre-update backup"
-}
+curl -X POST http://localhost:8000/api/v1/sites/{id}/backups \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"full","description":"Pre-update backup"}'
 
 # Restore backup
-POST /api/v1/backups/{id}/restore
+curl -X POST http://localhost:8000/api/v1/backups/{id}/restore \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-Full API documentation: [docs/api.md](docs/api.md)
+📘 **Full API Documentation:** [docs/API-README.md](docs/API-README.md)
+
+---
 
 ## 🧪 Development
 
 ### Running Tests
-
 ```bash
 # All tests
 php artisan test
 
 # With coverage
-php artisan test --coverage
+php artisan test --coverage --min=80
+
+# Specific suite
+php artisan test --testsuite=Feature
 
 # Specific test
 php artisan test --filter=SiteControllerTest
 ```
 
-### Watch Frontend Assets
+### Code Quality
+```bash
+# Format code (Laravel Pint)
+./vendor/bin/pint
 
+# Static analysis (PHPStan)
+./vendor/bin/phpstan analyse
+
+# All checks
+composer test && ./vendor/bin/pint && ./vendor/bin/phpstan analyse
+```
+
+### Watch Assets
 ```bash
 # Development mode (hot reload)
 npm run dev
 
 # Build for production
 npm run build
+
+# Build and watch
+npm run build -- --watch
 ```
 
-### Code Quality
-
-```bash
-# Run Laravel Pint (code style)
-./vendor/bin/pint
-
-# Static analysis
-./vendor/bin/phpstan analyse
-```
+---
 
 ## 🔐 Security
 
-### Key Security Features
-- **API Authentication**: Laravel Sanctum token-based auth
-- **Rate Limiting**: 5 req/min (auth), 60 req/min (API)
-- **SSH Key Management**: Secure key storage with proper permissions
-- **Tenant Isolation**: Data segregation by organization
-- **CSRF Protection**: Enabled for all web routes
+### Security Features
+- ✅ **API Authentication** - Laravel Sanctum token-based auth with rotation
+- ✅ **Two-Factor Authentication** - TOTP-based 2FA for privileged accounts
+- ✅ **Rate Limiting** - 5 req/min (auth), 60 req/min (API)
+- ✅ **SSH Key Management** - Encrypted key storage with proper permissions
+- ✅ **Tenant Isolation** - Complete data segregation by organization
+- ✅ **CSRF Protection** - Enabled for all web routes
+- ✅ **Content Security Policy** - XSS protection headers
+- ✅ **Audit Logging** - Hash-chained tamper-proof logs
 
 ### Reporting Vulnerabilities
+Found a security issue? Please **do not** open a public issue. Email security reports to:
 
-See [SECURITY.md](../SECURITY.md) for security policy and reporting instructions.
+📧 **security@chom.io**
+
+See [SECURITY.md](SECURITY.md) for our security policy and response timeline.
+
+---
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
-- Development setup
-- Code style guidelines
-- Pull request process
-- Testing requirements
+We welcome contributions! Here's how to get started:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Contribution Guidelines
+- Follow PSR-12 coding standards
+- Write tests for new features
+- Update documentation as needed
+- Ensure all tests pass before submitting
+
+📖 **Full Guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
 
 ## 📝 Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
-## 📄 License
-
-MIT License - see [LICENSE](../LICENSE) for details.
-
-## 🆘 Support
-
-- **Documentation**: https://github.com/calounx/mentat/tree/master/chom
-- **Issues**: https://github.com/calounx/mentat/issues
-- **Email**: support@chom.io
-
-## 🙏 Acknowledgments
-
-CHOM integrates with the **Mentat Observability Stack** - a production-ready monitoring platform providing Prometheus, Loki, Grafana, and more. See [../observability-stack/README.md](../observability-stack/README.md) for details.
+**Latest Release:** v1.1.0 (November 2025)
 
 ---
 
-**Version**: 1.1.0 (November 2025)
-**Status**: Production Ready ✅
+## 📄 License
+
+CHOM is open-source software licensed under the [MIT License](LICENSE).
+
+---
+
+## 🆘 Support & Community
+
+### Get Help
+- 📖 **Documentation** - [Complete guides](docs/)
+- 💬 **GitHub Discussions** - [Ask questions](https://github.com/calounx/mentat/discussions)
+- 🐛 **Bug Reports** - [Open an issue](https://github.com/calounx/mentat/issues)
+- 📧 **Email Support** - support@chom.io
+
+### Stay Updated
+- ⭐ **Star this repo** - Get notified of updates
+- 🔔 **Watch releases** - Stay informed of new versions
+- 🐦 **Follow on Twitter** - @chom_io (coming soon)
+
+---
+
+## 🙏 Acknowledgments
+
+CHOM integrates with the **Mentat Observability Stack** - a production-ready monitoring platform providing Prometheus, Loki, Grafana, and more.
+
+📊 **Learn more:** [observability-stack/README.md](../observability-stack/README.md)
+
+---
+
+## 📂 Project Structure
+
+```
+chom/
+├── app/
+│   ├── Http/Controllers/     # API and Web Controllers
+│   ├── Livewire/             # Livewire Components
+│   ├── Models/               # Eloquent Models
+│   ├── Services/             # Business Logic Services
+│   ├── Jobs/                 # Background Jobs
+│   └── Policies/             # Authorization Policies
+├── config/
+│   └── chom.php              # CHOM Configuration
+├── database/
+│   ├── migrations/           # Database Migrations
+│   └── factories/            # Model Factories
+├── deploy/                   # Deployment Scripts
+│   ├── QUICKSTART.md         # Quick deploy guide
+│   └── deploy-enhanced.sh    # Automated deployment
+├── docs/                     # Documentation
+│   ├── GETTING-STARTED.md    # Beginner guide
+│   ├── DEVELOPER-GUIDE.md    # Developer guide
+│   ├── USER-GUIDE.md         # User guide
+│   └── OPERATOR-GUIDE.md     # Operations guide
+├── resources/
+│   ├── views/                # Blade Templates
+│   ├── css/                  # Styles
+│   └── js/                   # JavaScript
+├── routes/
+│   ├── web.php               # Web Routes
+│   └── api.php               # API Routes (v1)
+└── tests/
+    ├── Feature/              # Feature Tests
+    └── Unit/                 # Unit Tests
+```
+
+---
+
+## 🎯 Roadmap
+
+### Version 1.2 (Q1 2025)
+- [ ] WordPress auto-update management
+- [ ] Multi-region VPS support
+- [ ] Advanced caching (Redis/Memcached)
+- [ ] Custom domain routing
+
+### Version 1.3 (Q2 2025)
+- [ ] Container-based site isolation
+- [ ] Kubernetes support
+- [ ] Advanced analytics dashboard
+- [ ] Mobile app (iOS/Android)
+
+### Version 2.0 (Q3 2025)
+- [ ] Multi-cloud support (AWS, GCP, Azure)
+- [ ] CDN integration
+- [ ] Advanced backup strategies
+- [ ] GraphQL API
+
+Vote on features and suggest ideas in [GitHub Discussions](https://github.com/calounx/mentat/discussions).
+
+---
+
+<div align="center">
+
+**Made with ❤️ by the CHOM Team**
+
+[Documentation](docs/) • [API Reference](docs/API-README.md) • [Support](https://github.com/calounx/mentat/issues) • [Contributing](CONTRIBUTING.md)
+
+</div>

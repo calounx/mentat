@@ -218,11 +218,60 @@ class BackupList extends Component
     }
 
     /**
-     * Invalidate the total size cache for tenant.
+     * Get cached backup count for tenant.
+     * Cache is invalidated when backups are created or deleted.
+     */
+    private function getCachedBackupCount(int $tenantId): int
+    {
+        $cacheKey = "tenant_{$tenantId}_backup_count";
+
+        return Cache::remember($cacheKey, self::TOTAL_SIZE_CACHE_TTL, function () use ($tenantId) {
+            return (int) DB::table('site_backups')
+                ->join('sites', 'site_backups.site_id', '=', 'sites.id')
+                ->where('sites.tenant_id', $tenantId)
+                ->count();
+        });
+    }
+
+    /**
+     * Get cached backup statistics for tenant.
+     * Combines multiple metrics into one query for efficiency.
+     */
+    private function getCachedBackupStats(int $tenantId): array
+    {
+        $cacheKey = "tenant_{$tenantId}_backup_stats";
+
+        return Cache::remember($cacheKey, self::TOTAL_SIZE_CACHE_TTL, function () use ($tenantId) {
+            $stats = DB::table('site_backups')
+                ->join('sites', 'site_backups.site_id', '=', 'sites.id')
+                ->where('sites.tenant_id', $tenantId)
+                ->selectRaw('
+                    COUNT(*) as total_count,
+                    SUM(size_bytes) as total_size,
+                    COUNT(CASE WHEN backup_type = ? THEN 1 END) as full_backups,
+                    COUNT(CASE WHEN backup_type = ? THEN 1 END) as database_backups,
+                    COUNT(CASE WHEN backup_type = ? THEN 1 END) as files_backups
+                ', ['full', 'database', 'files'])
+                ->first();
+
+            return [
+                'total_count' => (int) ($stats->total_count ?? 0),
+                'total_size' => (int) ($stats->total_size ?? 0),
+                'full_backups' => (int) ($stats->full_backups ?? 0),
+                'database_backups' => (int) ($stats->database_backups ?? 0),
+                'files_backups' => (int) ($stats->files_backups ?? 0),
+            ];
+        });
+    }
+
+    /**
+     * Invalidate all backup caches for tenant.
      */
     private function invalidateTotalSizeCache(int $tenantId): void
     {
         Cache::forget("tenant_{$tenantId}_backup_total_size");
+        Cache::forget("tenant_{$tenantId}_backup_count");
+        Cache::forget("tenant_{$tenantId}_backup_stats");
     }
 
     public function render()

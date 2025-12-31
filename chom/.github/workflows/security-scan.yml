@@ -1,0 +1,215 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, bcmath, curl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run Composer Audit
+        id: composer-audit
+        run: |
+          composer audit --format=json > composer-audit.json || true
+          cat composer-audit.json
+        continue-on-error: true
+
+      - name: Check for vulnerabilities
+        run: |
+          if [ -s composer-audit.json ]; then
+            VULNERABILITIES=$(jq '.advisories | length' composer-audit.json)
+            if [ "$VULNERABILITIES" -gt 0 ]; then
+              echo "::error::Found $VULNERABILITIES vulnerable package(s)"
+              exit 1
+            fi
+          fi
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: composer-audit-results
+          path: composer-audit.json
+
+  npm-audit:
+    name: NPM Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Run NPM Audit
+        id: npm-audit
+        run: |
+          npm audit --json > npm-audit.json || true
+          cat npm-audit.json
+        continue-on-error: true
+
+      - name: Check for high/critical vulnerabilities
+        run: |
+          if [ -s npm-audit.json ]; then
+            HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
+            CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
+
+            if [ "$HIGH" -gt 0 ] || [ "$CRITICAL" -gt 0 ]; then
+              echo "::warning::Found $HIGH high and $CRITICAL critical vulnerabilities"
+              # Don't fail on NPM audit for now, just warn
+              # exit 1
+            fi
+          fi
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: npm-audit-results
+          path: npm-audit.json
+
+  code-security:
+    name: Code Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Security Checker
+        uses: symfonycorp/security-checker-action@v5
+        with:
+          lock: composer.lock
+
+  sast-scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: php, javascript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  secrets-scan:
+    name: Secrets Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for better detection
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  security-headers:
+    name: Security Headers Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Security Headers
+        run: |
+          # This would check production URL if configured
+          if [ -n "${{ secrets.PRODUCTION_URL }}" ]; then
+            curl -I "${{ secrets.PRODUCTION_URL }}" > headers.txt
+
+            # Check for required security headers
+            grep -q "X-Frame-Options" headers.txt || echo "::warning::Missing X-Frame-Options header"
+            grep -q "X-Content-Type-Options" headers.txt || echo "::warning::Missing X-Content-Type-Options header"
+            grep -q "X-XSS-Protection" headers.txt || echo "::warning::Missing X-XSS-Protection header"
+            grep -q "Strict-Transport-Security" headers.txt || echo "::warning::Missing HSTS header"
+          fi
+
+  dependency-updates:
+    name: Create Dependency Update PRs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Check for outdated packages
+        run: |
+          composer outdated --direct --strict > outdated.txt || true
+          if [ -s outdated.txt ]; then
+            echo "::notice::Outdated packages found"
+            cat outdated.txt
+          fi
+
+      - name: Upload outdated packages list
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: outdated-packages
+          path: outdated.txt
+
+  notification:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, npm-audit, code-security, sast-scan]
+    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"Security scan failed! Check GitHub Actions for details."}' \
+            "$SLACK_WEBHOOK_URL"

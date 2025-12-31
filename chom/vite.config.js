@@ -6,13 +6,59 @@ export default defineConfig({
     plugins: [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.js'],
-            refresh: true,
+            refresh: [
+                // Livewire components
+                'app/Http/Livewire/**',
+                'app/Livewire/**',
+                // Blade templates
+                'resources/views/**',
+                // Routes
+                'routes/**',
+            ],
         }),
         tailwindcss(),
     ],
     server: {
-        watch: {
-            ignored: ['**/storage/framework/views/**'],
+        host: '0.0.0.0',
+        port: 5173,
+        strictPort: false,
+        hmr: {
+            host: 'localhost',
+            protocol: 'ws',
         },
+        watch: {
+            usePolling: false,
+            interval: 100,
+            ignored: [
+                '**/storage/framework/views/**',
+                '**/storage/logs/**',
+                '**/vendor/**',
+                '**/node_modules/**',
+            ],
+        },
+    },
+    build: {
+        manifest: true,
+        outDir: 'public/build',
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    // Split vendor chunks for better caching
+                    'vendor': [
+                        'alpinejs',
+                        '@alpinejs/persist',
+                        '@alpinejs/focus',
+                    ],
+                },
+            },
+        },
+        chunkSizeWarningLimit: 1000,
+    },
+    optimizeDeps: {
+        include: [
+            'alpinejs',
+            '@alpinejs/persist',
+            '@alpinejs/focus',
+        ],
     },
 });

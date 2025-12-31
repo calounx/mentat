@@ -34,7 +34,19 @@ return [
 
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
 
-    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
+    /*
+    |--------------------------------------------------------------------------
+    | SECURITY: Expire Session on Browser Close
+    |--------------------------------------------------------------------------
+    |
+    | When true, session expires when browser closes, preventing session hijacking
+    | from unattended computers. This is a critical security control.
+    |
+    | OWASP Reference: A07:2021 – Identification and Authentication Failures
+    |
+    */
+
+    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -163,13 +175,16 @@ return [
     | HTTPS Only Cookies
     |--------------------------------------------------------------------------
     |
-    | By setting this option to true, session cookies will only be sent back
-    | to the server if the browser has a HTTPS connection. This will keep
-    | the cookie from being sent to you when it can't be done securely.
+    | SECURITY: Session cookies MUST only be sent over HTTPS in production.
+    | This prevents session hijacking via man-in-the-middle attacks.
+    |
+    | Set to true in production, false in local development.
+    |
+    | OWASP Reference: A02:2021 – Cryptographic Failures
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE', app()->environment('production')),
 
     /*
     |--------------------------------------------------------------------------
@@ -189,9 +204,13 @@ return [
     | Same-Site Cookies
     |--------------------------------------------------------------------------
     |
-    | This option determines how your cookies behave when cross-site requests
-    | take place, and can be used to mitigate CSRF attacks. By default, we
-    | will set this value to "lax" to permit secure cross-site requests.
+    | SECURITY: 'strict' provides maximum CSRF protection by preventing cookies
+    | from being sent with cross-site requests. This is the most secure option.
+    |
+    | Use 'strict' unless you have legitimate cross-site scenarios requiring 'lax'.
+    | NEVER use 'none' unless absolutely necessary and only with secure=true.
+    |
+    | OWASP Reference: A01:2021 – Broken Access Control (CSRF is a form of this)
     |
     | See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value
     |
@@ -199,7 +218,7 @@ return [
     |
     */
 
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
+    'same_site' => env('SESSION_SAME_SITE', 'strict'),
 
     /*
     |--------------------------------------------------------------------------

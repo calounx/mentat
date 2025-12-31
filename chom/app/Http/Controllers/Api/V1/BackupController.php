@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HasTenantScoping;
 use App\Models\Site;
 use App\Models\SiteBackup;
-use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 class BackupController extends Controller
 {
+    use HasTenantScoping;
     /**
      * List all backups for the current tenant.
      */
@@ -289,17 +290,6 @@ class BackupController extends Controller
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
-
-    private function getTenant(Request $request): Tenant
-    {
-        $tenant = $request->user()->currentTenant();
-
-        if (!$tenant || !$tenant->isActive()) {
-            abort(403, 'No active tenant found.');
-        }
-
-        return $tenant;
-    }
 
     private function formatBackup(SiteBackup $backup, bool $detailed = false): array
     {
