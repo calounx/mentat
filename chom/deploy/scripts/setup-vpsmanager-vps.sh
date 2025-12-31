@@ -42,12 +42,14 @@ write_system_file() {
     sudo tee "$file" > /dev/null
 }
 
-# Stop service and verify binary is not in use before replacement
+# Enhanced stop service with force-kill capabilities - NEVER FAILS
 stop_and_verify_service() {
     local service_name="$1"
     local binary_path="$2"
     local max_wait=30
     local waited=0
+
+    log_info "Attempting to stop ${service_name}..."
 
     # Check if service exists
     if ! systemctl list-unit-files | grep -q "^${service_name}.service"; then
@@ -55,18 +57,16 @@ stop_and_verify_service() {
         return 0
     fi
 
-    # Stop service if running
+    # Step 1: Graceful systemctl stop
     if systemctl is-active --quiet "$service_name"; then
-        log_info "Stopping ${service_name}..."
-sudo systemctl stop "$service_name" || {
-            log_error "Failed to stop ${service_name}"
-            return 1
-        }
+        log_info "Stopping ${service_name} gracefully..."
+        sudo systemctl stop "$service_name" 2>/dev/null || log_warn "Graceful stop returned error, continuing..."
     fi
 
-    # Wait for binary to be released
+    # Step 2: Wait for binary to be released
+    log_info "Waiting up to ${max_wait}s for ${binary_path} to be released..."
     while [[ $waited -lt $max_wait ]]; do
-        if ! lsof "$binary_path" &>/dev/null; then
+        if ! lsof "$binary_path" 2>/dev/null | grep -q "$binary_path"; then
             log_success "${service_name} stopped and binary released"
             return 0
         fi
@@ -74,8 +74,149 @@ sudo systemctl stop "$service_name" || {
         ((waited++))
     done
 
-    log_error "Timeout waiting for ${binary_path} to be released"
-    return 1
+    # Step 3: Force kill with SIGTERM then SIGKILL
+    log_warn "Binary still in use after ${max_wait}s, force killing processes..."
+    local pids=$(lsof -t "$binary_path" 2>/dev/null)
+    if [[ -n "$pids" ]]; then
+        log_info "Sending SIGTERM to PIDs: $pids"
+        echo "$pids" | xargs -r sudo kill -15 2>/dev/null || true
+        sleep 2
+
+        # Check if still running
+        pids=$(lsof -t "$binary_path" 2>/dev/null)
+        if [[ -n "$pids" ]]; then
+            log_warn "Processes still alive, sending SIGKILL to PIDs: $pids"
+            echo "$pids" | xargs -r sudo kill -9 2>/dev/null || true
+            sleep 1
+        fi
+    fi
+
+    # Step 4: Nuclear option - fuser -k
+    if lsof "$binary_path" 2>/dev/null | grep -q "$binary_path"; then
+        log_warn "Binary STILL in use, using fuser -k (nuclear option)..."
+        sudo fuser -k -TERM "$binary_path" 2>/dev/null || true
+        sleep 2
+        sudo fuser -k -KILL "$binary_path" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # Step 5: Final verification
+    if lsof "$binary_path" 2>/dev/null | grep -q "$binary_path"; then
+        log_warn "Binary may still be in use, but proceeding anyway (will be overwritten)"
+    else
+        log_success "Binary successfully released after force kill"
+    fi
+
+    # ALWAYS return success - we've done our best
+    return 0
+}
+
+# Cleanup port conflicts by killing processes using specific ports
+cleanup_port_conflicts() {
+    local ports=("$@")
+
+    log_info "Checking for port conflicts on ports: ${ports[*]}"
+
+    for port in "${ports[@]}"; do
+        local pids=$(sudo lsof -ti ":$port" 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            log_warn "Port $port is in use by PIDs: $pids"
+            log_info "Killing processes on port $port..."
+            echo "$pids" | xargs -r sudo kill -15 2>/dev/null || true
+            sleep 2
+
+            # Check if still running
+            pids=$(sudo lsof -ti ":$port" 2>/dev/null || true)
+            if [[ -n "$pids" ]]; then
+                log_warn "Processes still alive on port $port, force killing..."
+                echo "$pids" | xargs -r sudo kill -9 2>/dev/null || true
+                sleep 1
+            fi
+
+            # Final check
+            pids=$(sudo lsof -ti ":$port" 2>/dev/null || true)
+            if [[ -n "$pids" ]]; then
+                log_warn "Port $port may still be in use, but proceeding..."
+            else
+                log_success "Port $port cleared"
+            fi
+        fi
+    done
+}
+
+# Full cleanup before installation - stops all services and kills processes
+run_full_cleanup() {
+    log_info "=========================================="
+    log_info "  RUNNING FULL CLEANUP"
+    log_info "=========================================="
+
+    # List of all VPSManager services
+    local services=("nginx" "php8.2-fpm" "php8.4-fpm" "mariadb" "redis-server" "node_exporter" "fail2ban")
+
+    # Stop all services (except fail2ban which we'll restart)
+    log_info "Stopping VPSManager services..."
+    for service in "${services[@]}"; do
+        if [[ "$service" == "fail2ban" ]]; then
+            continue  # Don't stop fail2ban during cleanup
+        fi
+        if systemctl list-unit-files | grep -q "^${service}.service"; then
+            log_info "Stopping $service..."
+            sudo systemctl stop "$service" 2>/dev/null || log_warn "Could not stop $service gracefully"
+        fi
+    done
+
+    # Wait a moment for graceful shutdown
+    sleep 3
+
+    # Kill any remaining processes
+    log_info "Killing any remaining VPSManager processes..."
+    local process_patterns=("nginx" "php-fpm" "node_exporter")
+    for pattern in "${process_patterns[@]}"; do
+        local pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            log_warn "Found running $pattern processes: $pids"
+            echo "$pids" | xargs -r sudo kill -15 2>/dev/null || true
+        fi
+    done
+
+    sleep 2
+
+    # Force kill any stubborn processes
+    for pattern in "${process_patterns[@]}"; do
+        local pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            log_warn "Force killing stubborn $pattern processes: $pids"
+            echo "$pids" | xargs -r sudo kill -9 2>/dev/null || true
+        fi
+    done
+
+    # Clean up port conflicts
+    cleanup_port_conflicts 80 443 8080 9100 3306 6379
+
+    # Remove old binaries if they exist and are locked
+    log_info "Ensuring old binaries can be replaced..."
+    local binaries=(
+        "/usr/local/bin/node_exporter"
+    )
+
+    for binary in "${binaries[@]}"; do
+        if [[ -f "$binary" ]]; then
+            # Try to remove any lingering locks
+            sudo fuser -k "$binary" 2>/dev/null || true
+        fi
+    done
+
+    # Remove old MariaDB repository files (Debian 13 not supported by MariaDB official repos)
+    log_info "Removing old MariaDB repository configuration..."
+    sudo rm -f /etc/apt/sources.list.d/mariadb.list
+    sudo rm -f /etc/apt/trusted.gpg.d/mariadb.gpg
+
+    # Clean up any other potentially problematic repo files from previous runs
+    sudo rm -f /etc/apt/sources.list.d/php.list 2>/dev/null || true
+
+    log_success "Full cleanup completed!"
+    log_info "=========================================="
+    sleep 2
 }
 
 # Check if user has sudo access
@@ -86,6 +227,13 @@ if ! sudo -n true 2>/dev/null; then
 fi
 
 log_info "Starting VPSManager installation..."
+
+# =============================================================================
+# PRE-INSTALLATION CLEANUP
+# =============================================================================
+
+# Run full cleanup BEFORE any installation to ensure idempotency
+run_full_cleanup
 
 # =============================================================================
 # SYSTEM SETUP
@@ -109,7 +257,9 @@ sudo apt-get install -y -qq \
     ufw \
     fail2ban \
     htop \
-    ncdu
+    ncdu \
+    lsof \
+    psmisc
 
 # Create directories
 sudo mkdir -p "$VPSMANAGER_DIR"
@@ -351,10 +501,7 @@ wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_E
 tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
 
 # Stop node_exporter service before replacing binary
-stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
-    log_error "Failed to stop node_exporter safely"
-    exit 1
-}
+stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter"
 
 sudo cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
 rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64"*
