@@ -4,12 +4,19 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Concerns\HasTenantScoping;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\V1\Backups\CreateBackupRequest;
+use App\Http\Requests\V1\Backups\RestoreBackupRequest;
+use App\Http\Resources\V1\BackupCollection;
+use App\Http\Resources\V1\BackupResource;
+use App\Jobs\CreateBackupJob;
+use App\Jobs\RestoreBackupJob;
 use App\Models\Site;
 use App\Models\SiteBackup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BackupController extends Controller
 {
@@ -17,6 +24,9 @@ class BackupController extends Controller
 
     /**
      * List all backups for the current tenant.
+     *
+     * Supports filtering by site_id, type, and status.
+     * Returns paginated collection with metadata.
      */
     public function index(Request $request): JsonResponse
     {
@@ -24,33 +34,27 @@ class BackupController extends Controller
 
         $query = SiteBackup::query()
             ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
-            ->with('site:id,domain')
+            ->with('site:id,domain,site_type')
             ->orderBy('created_at', 'desc');
 
         // Filter by site
-        if ($request->has('site_id')) {
+        if ($request->filled('site_id')) {
             $query->where('site_id', $request->input('site_id'));
         }
 
         // Filter by backup type
-        if ($request->has('type')) {
+        if ($request->filled('type')) {
             $query->where('backup_type', $request->input('type'));
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
         }
 
         $backups = $query->paginate($request->input('per_page', 20));
 
-        return response()->json([
-            'success' => true,
-            'data' => collect($backups->items())->map(fn ($backup) => $this->formatBackup($backup)),
-            'meta' => [
-                'pagination' => [
-                    'current_page' => $backups->currentPage(),
-                    'per_page' => $backups->perPage(),
-                    'total' => $backups->total(),
-                    'total_pages' => $backups->lastPage(),
-                ],
-            ],
-        ]);
+        return (new BackupCollection($backups))->response()->setStatusCode(200);
     }
 
     /**
@@ -81,60 +85,59 @@ class BackupController extends Controller
 
     /**
      * Get backup details.
+     *
+     * Returns a single backup with full site relationship.
+     * Checks tenant authorization via global scope.
      */
-    public function show(Request $request, string $id): JsonResponse
+    public function show(Request $request, SiteBackup $backup): JsonResponse
     {
         $tenant = $this->getTenant($request);
 
-        $backup = SiteBackup::query()
-            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
-            ->with('site:id,domain,site_type')
-            ->findOrFail($id);
+        // Verify backup belongs to tenant
+        if ($backup->site->tenant_id !== $tenant->id) {
+            abort(403, 'Unauthorized access to this backup.');
+        }
 
-        return response()->json([
-            'success' => true,
-            'data' => $this->formatBackup($backup, detailed: true),
-        ]);
+        // Load site relationship if not already loaded
+        $backup->loadMissing('site:id,domain,site_type,status');
+
+        return (new BackupResource($backup))->response()->setStatusCode(200);
     }
 
     /**
      * Create a new backup.
+     *
+     * Validates input, dispatches CreateBackupJob, and returns pending backup.
+     * Returns 202 Accepted status to indicate async processing.
      */
-    public function store(Request $request): JsonResponse
+    public function store(CreateBackupRequest $request): JsonResponse
     {
-        $tenant = $this->getTenant($request);
-
-        $validated = $request->validate([
-            'site_id' => ['required', 'uuid'],
-            'backup_type' => ['sometimes', 'in:full,database,files'],
-            'retention_days' => ['sometimes', 'integer', 'min:1', 'max:365'],
-        ]);
-
-        // Verify site belongs to tenant
-        $site = $tenant->sites()->findOrFail($validated['site_id']);
-
-        // Check backup quota
-        // TODO: Implement quota checking based on subscription tier
+        $site = $request->site();
+        $validated = $request->validated();
 
         try {
-            // Create backup record (actual backup will be handled by job/service)
-            $backup = SiteBackup::create([
-                'site_id' => $site->id,
-                'backup_type' => $validated['backup_type'] ?? 'full',
-                'storage_path' => null, // Will be set when backup completes
-                'size_bytes' => 0,
-                'retention_days' => $validated['retention_days'] ?? 30,
-                'expires_at' => now()->addDays($validated['retention_days'] ?? 30),
-            ]);
+            // Dispatch backup job (job creates the backup record)
+            CreateBackupJob::dispatch(
+                $site,
+                $validated['backup_type'] ?? 'full',
+                $validated['retention_days'] ?? null
+            );
 
-            // TODO: Dispatch backup job
-            // BackupSiteJob::dispatch($backup);
+            Log::info('Backup job dispatched', [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'backup_type' => $validated['backup_type'] ?? 'full',
+            ]);
 
             return response()->json([
                 'success' => true,
-                'data' => $this->formatBackup($backup),
                 'message' => 'Backup has been queued for processing.',
-            ], 201);
+                'data' => [
+                    'site_id' => $site->id,
+                    'backup_type' => $validated['backup_type'] ?? 'full',
+                    'status' => 'pending',
+                ],
+            ], 202);
 
         } catch (\Exception $e) {
             Log::error('Backup creation failed', [
@@ -154,31 +157,41 @@ class BackupController extends Controller
 
     /**
      * Delete a backup.
+     *
+     * Removes backup record and optionally deletes backup file from storage.
+     * Returns 204 No Content on success.
      */
-    public function destroy(Request $request, string $id): JsonResponse
+    public function destroy(Request $request, SiteBackup $backup): JsonResponse
     {
         $tenant = $this->getTenant($request);
 
-        $backup = SiteBackup::query()
-            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
-            ->findOrFail($id);
+        // Verify backup belongs to tenant
+        if ($backup->site->tenant_id !== $tenant->id) {
+            abort(403, 'Unauthorized access to this backup.');
+        }
 
         try {
             // Delete from storage if exists
             if ($backup->storage_path && Storage::exists($backup->storage_path)) {
                 Storage::delete($backup->storage_path);
+                Log::info('Backup file deleted from storage', [
+                    'backup_id' => $backup->id,
+                    'storage_path' => $backup->storage_path,
+                ]);
             }
 
+            $backupId = $backup->id;
             $backup->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Backup deleted successfully.',
+            Log::info('Backup deleted successfully', [
+                'backup_id' => $backupId,
             ]);
+
+            return response()->json(null, 204);
 
         } catch (\Exception $e) {
             Log::error('Backup deletion failed', [
-                'backup_id' => $id,
+                'backup_id' => $backup->id,
                 'error' => $e->getMessage(),
             ]);
 
@@ -193,52 +206,85 @@ class BackupController extends Controller
     }
 
     /**
-     * Download a backup.
+     * Download a backup file.
+     *
+     * CRITICAL: Production-ready streaming download for large backup files.
+     * Checks authorization, file existence, and returns efficient streaming response.
      */
-    public function download(Request $request, string $id): JsonResponse
+    public function download(Request $request, SiteBackup $backup): BinaryFileResponse
     {
         $tenant = $this->getTenant($request);
 
-        $backup = SiteBackup::query()
-            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
-            ->findOrFail($id);
-
-        if (! $backup->storage_path) {
-            return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'BACKUP_NOT_READY',
-                    'message' => 'Backup is not yet available for download.',
-                ],
-            ], 400);
+        // Verify backup belongs to tenant
+        if ($backup->site->tenant_id !== $tenant->id) {
+            abort(403, 'Unauthorized access to this backup.');
         }
 
-        // Generate temporary download URL
-        // TODO: Implement secure download URL generation
-        $downloadUrl = Storage::temporaryUrl($backup->storage_path, now()->addMinutes(15));
+        // Check backup is ready for download
+        if (! $backup->storage_path || $backup->status !== 'completed') {
+            abort(400, 'Backup is not yet available for download.');
+        }
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'download_url' => $downloadUrl,
-                'expires_at' => now()->addMinutes(15)->toIso8601String(),
-            ],
+        // Check if file exists
+        if (! Storage::exists($backup->storage_path)) {
+            Log::error('Backup file not found', [
+                'backup_id' => $backup->id,
+                'storage_path' => $backup->storage_path,
+            ]);
+            abort(404, 'Backup file not found.');
+        }
+
+        // Get absolute path for streaming
+        $filePath = Storage::path($backup->storage_path);
+
+        // Generate safe filename
+        $filename = $backup->filename ?? sprintf(
+            '%s_%s_%s.tar.gz',
+            $backup->site->domain,
+            $backup->backup_type,
+            $backup->created_at->format('Y-m-d_His')
+        );
+
+        Log::info('Backup download initiated', [
+            'backup_id' => $backup->id,
+            'site_id' => $backup->site_id,
+            'user_id' => auth()->id(),
+            'filename' => $filename,
+        ]);
+
+        // Return streaming download response with proper headers
+        return response()->download($filePath, $filename, [
+            'Content-Type' => 'application/gzip',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ]);
     }
 
     /**
      * Restore from a backup.
+     *
+     * CRITICAL: Production-ready restore functionality.
+     * Validates backup state, dispatches RestoreBackupJob, updates site status.
+     * Returns 202 Accepted to indicate async processing.
      */
-    public function restore(Request $request, string $id): JsonResponse
+    public function restore(RestoreBackupRequest $request, SiteBackup $backup): JsonResponse
     {
         $tenant = $this->getTenant($request);
+        $validated = $request->validated();
 
-        $backup = SiteBackup::query()
-            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
-            ->with('site')
-            ->findOrFail($id);
+        // Load site relationship
+        $backup->loadMissing('site');
+        $site = $backup->site;
 
-        if (! $backup->storage_path) {
+        // Verify backup belongs to tenant
+        if ($site->tenant_id !== $tenant->id) {
+            abort(403, 'Unauthorized access to this backup.');
+        }
+
+        // Check backup is ready for restore
+        if (! $backup->storage_path || $backup->status !== 'completed') {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -248,33 +294,64 @@ class BackupController extends Controller
             ], 400);
         }
 
-        if ($backup->isExpired()) {
+        // Check backup has not expired (unless force flag is set)
+        if (! $validated['force'] && $backup->isExpired()) {
             return response()->json([
                 'success' => false,
                 'error' => [
                     'code' => 'BACKUP_EXPIRED',
-                    'message' => 'This backup has expired and cannot be restored.',
+                    'message' => 'This backup has expired and cannot be restored. Use force=true to override.',
                 ],
             ], 400);
         }
 
+        // Check site is not already in a transitional state
+        if (in_array($site->status, ['restoring', 'provisioning', 'deleting'])) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'SITE_BUSY',
+                    'message' => "Site is currently {$site->status}. Please wait for the current operation to complete.",
+                ],
+            ], 409);
+        }
+
         try {
-            // TODO: Dispatch restore job
-            // RestoreSiteJob::dispatch($backup);
+            // Dispatch restore job
+            RestoreBackupJob::dispatch(
+                $backup,
+                $validated['restore_type'] ?? 'full',
+                $validated['force'] ?? false,
+                $validated['skip_verify'] ?? false,
+                auth()->id()
+            );
+
+            // Update site status to restoring
+            $site->update(['status' => 'restoring']);
+
+            Log::info('Restore job dispatched', [
+                'backup_id' => $backup->id,
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'restore_type' => $validated['restore_type'] ?? 'full',
+                'user_id' => auth()->id(),
+            ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Site restore has been queued. This may take several minutes.',
                 'data' => [
                     'backup_id' => $backup->id,
-                    'site_id' => $backup->site_id,
-                    'site_domain' => $backup->site->domain,
+                    'site_id' => $site->id,
+                    'site_domain' => $site->domain,
+                    'restore_type' => $validated['restore_type'] ?? 'full',
+                    'status' => 'restoring',
                 ],
-            ]);
+            ], 202);
 
         } catch (\Exception $e) {
             Log::error('Backup restore failed', [
-                'backup_id' => $id,
+                'backup_id' => $backup->id,
                 'error' => $e->getMessage(),
             ]);
 
@@ -288,37 +365,4 @@ class BackupController extends Controller
         }
     }
 
-    // =========================================================================
-    // PRIVATE HELPERS
-    // =========================================================================
-
-    private function formatBackup(SiteBackup $backup, bool $detailed = false): array
-    {
-        $data = [
-            'id' => $backup->id,
-            'site_id' => $backup->site_id,
-            'backup_type' => $backup->backup_type,
-            'size' => $backup->getSizeFormatted(),
-            'size_bytes' => $backup->size_bytes,
-            'is_ready' => ! empty($backup->storage_path),
-            'is_expired' => $backup->isExpired(),
-            'expires_at' => $backup->expires_at?->toIso8601String(),
-            'created_at' => $backup->created_at->toIso8601String(),
-        ];
-
-        if ($backup->relationLoaded('site') && $backup->site) {
-            $data['site'] = [
-                'id' => $backup->site->id,
-                'domain' => $backup->site->domain,
-            ];
-        }
-
-        if ($detailed) {
-            $data['storage_path'] = $backup->storage_path;
-            $data['checksum'] = $backup->checksum;
-            $data['retention_days'] = $backup->retention_days;
-        }
-
-        return $data;
-    }
 }

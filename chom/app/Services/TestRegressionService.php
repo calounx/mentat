@@ -1,0 +1,28 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Log;
+
+class TestRegressionService
+{
+    /**
+     * Create a new service instance.
+     */
+    public function __construct()
+    {
+        //
+    }
+
+    /**
+     * Execute the service logic.
+     *
+     * @return mixed
+     */
+    public function execute(): mixed
+    {
+        // Service implementation here
+
+        return null;
+    }
+}

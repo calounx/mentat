@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\V1\LoginRequest;
+use App\Http\Requests\V1\RegisterRequest;
 use App\Models\Organization;
 use App\Models\Tenant;
 use App\Models\User;
@@ -28,15 +30,18 @@ class AuthController extends Controller
         ]);
 
         try {
-            $result = DB::transaction(function () use ($validated) {
-                // Create organization
+            DB::beginTransaction();
+
+            try {
+                // Create organization first (without default_tenant_id to avoid circular dependency)
                 $organization = Organization::create([
                     'name' => $validated['organization_name'],
                     'slug' => Str::slug($validated['organization_name']).'-'.Str::random(6),
                     'billing_email' => $validated['email'],
+                    'default_tenant_id' => null,
                 ]);
 
-                // Create default tenant
+                // Now create the tenant with the organization_id
                 $tenant = Tenant::create([
                     'organization_id' => $organization->id,
                     'name' => 'Default',
@@ -44,6 +49,9 @@ class AuthController extends Controller
                     'tier' => 'starter',
                     'status' => 'active',
                 ]);
+
+                // Update organization with the default tenant
+                $organization->update(['default_tenant_id' => $tenant->id]);
 
                 // Create user as owner
                 $user = User::create([
@@ -54,40 +62,37 @@ class AuthController extends Controller
                     'role' => 'owner',
                 ]);
 
-                return compact('user', 'organization', 'tenant');
-            });
+                DB::commit();
+
+                $result = compact('user', 'organization', 'tenant');
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
 
             // Create API token
             $token = $result['user']->createToken('api-token')->plainTextToken;
 
             return response()->json([
-                'success' => true,
-                'data' => [
-                    'user' => [
-                        'id' => $result['user']->id,
-                        'name' => $result['user']->name,
-                        'email' => $result['user']->email,
-                        'role' => $result['user']->role,
-                    ],
-                    'organization' => [
-                        'id' => $result['organization']->id,
-                        'name' => $result['organization']->name,
-                        'slug' => $result['organization']->slug,
-                    ],
-                    'tenant' => [
-                        'id' => $result['tenant']->id,
-                        'name' => $result['tenant']->name,
-                        'tier' => $result['tenant']->tier,
-                    ],
-                    'token' => $token,
+                'user' => [
+                    'id' => $result['user']->id,
+                    'name' => $result['user']->name,
+                    'email' => $result['user']->email,
+                    'role' => $result['user']->role,
                 ],
+                'token' => $token,
             ], 201);
         } catch (\Exception $e) {
+            // Log the actual error for debugging
+            \Log::error('Registration failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'REGISTRATION_FAILED',
-                    'message' => 'Failed to create account. Please try again.',
+                'message' => 'Registration failed',
+                'errors' => [
+                    'server' => ['Failed to create account. Please try again.'],
                 ],
             ], 500);
         }
@@ -101,51 +106,38 @@ class AuthController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'remember' => ['sometimes', 'boolean'],
         ]);
 
-        if (! Auth::attempt($validated)) {
+        if (! Auth::attempt(['email' => $validated['email'], 'password' => $validated['password']], $validated['remember'] ?? false)) {
             return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'INVALID_CREDENTIALS',
-                    'message' => 'The provided credentials are incorrect.',
-                ],
+                'message' => 'Invalid credentials',
             ], 401);
         }
 
         $user = Auth::user();
 
-        // Check if organization is active
+        // Check if organization exists
         if (! $user->organization) {
             return response()->json([
-                'success' => false,
-                'error' => [
-                    'code' => 'NO_ORGANIZATION',
-                    'message' => 'User is not associated with an organization.',
-                ],
+                'message' => 'User is not associated with an organization.',
             ], 403);
         }
 
-        // Create new token
-        $token = $user->createToken('api-token')->plainTextToken;
+        // Create new token with appropriate expiration
+        $tokenName = 'api-token';
+        $expiresAt = ($validated['remember'] ?? false) ? now()->addDays(30) : now()->addDay();
+
+        $token = $user->createToken($tokenName, ['*'], $expiresAt)->plainTextToken;
 
         return response()->json([
-            'success' => true,
-            'data' => [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'role' => $user->role,
-                ],
-                'organization' => [
-                    'id' => $user->organization->id,
-                    'name' => $user->organization->name,
-                    'slug' => $user->organization->slug,
-                ],
-                'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
             ],
-        ]);
+            'token' => $token,
+        ], 200);
     }
 
     /**
@@ -156,9 +148,8 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
-            'success' => true,
-            'message' => 'Successfully logged out.',
-        ]);
+            'message' => 'Logged out successfully',
+        ], 200);
     }
 
     /**
@@ -169,31 +160,11 @@ class AuthController extends Controller
         $user = $request->user();
         $user->load('organization');
 
-        $tenant = $user->currentTenant();
-
         return response()->json([
-            'success' => true,
-            'data' => [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'role' => $user->role,
-                    'email_verified_at' => $user->email_verified_at,
-                ],
-                'organization' => $user->organization ? [
-                    'id' => $user->organization->id,
-                    'name' => $user->organization->name,
-                    'slug' => $user->organization->slug,
-                ] : null,
-                'tenant' => $tenant ? [
-                    'id' => $tenant->id,
-                    'name' => $tenant->name,
-                    'tier' => $tenant->tier,
-                    'status' => $tenant->status,
-                ] : null,
-            ],
-        ]);
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+        ], 200);
     }
 
     /**
@@ -206,14 +177,11 @@ class AuthController extends Controller
         // Delete current token
         $user->currentAccessToken()->delete();
 
-        // Create new token
-        $token = $user->createToken('api-token')->plainTextToken;
+        // Create new token with 1 day expiration
+        $token = $user->createToken('api-token', ['*'], now()->addDay())->plainTextToken;
 
         return response()->json([
-            'success' => true,
-            'data' => [
-                'token' => $token,
-            ],
-        ]);
+            'token' => $token,
+        ], 200);
     }
 }

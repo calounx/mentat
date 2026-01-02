@@ -202,4 +202,156 @@ class User extends Authenticatable implements MustVerifyEmail
 
         return $this->ssh_key_rotated_at->addDays(90)->isPast();
     }
+
+    /**
+     * SECURITY: Enable two-factor authentication for this user.
+     *
+     * Generates a new 2FA secret using Google2FA.
+     * Secret is encrypted at rest via model cast.
+     * Does not confirm 2FA - user must verify with code first.
+     *
+     * @return array Contains 'secret' and 'qr_code'
+     */
+    public function enableTwoFactorAuthentication(): array
+    {
+        $google2fa = new \PragmaRX\Google2FA\Google2FA;
+
+        // Generate cryptographically secure secret (160-bit)
+        $secret = $google2fa->generateSecretKey(32);
+
+        // Generate QR code URL for authenticator apps
+        $qrCodeUrl = $google2fa->getQRCodeUrl(
+            config('app.name'),
+            $this->email,
+            $secret
+        );
+
+        // Generate SVG QR code
+        $qrCode = $this->generateQrCodeSvg($qrCodeUrl);
+
+        // Generate recovery codes (8 codes, 10 characters each)
+        $recoveryCodes = $this->generateRecoveryCodes();
+
+        // Store secret (but don't enable yet - wait for confirmation)
+        $this->two_factor_secret = $secret;
+        $this->two_factor_backup_codes = array_map(
+            fn($code) => \Illuminate\Support\Facades\Hash::make($code),
+            $recoveryCodes
+        );
+        $this->save();
+
+        return [
+            'secret' => $secret,
+            'qr_code' => $qrCode,
+            'recovery_codes' => $recoveryCodes, // Plain text - show only once!
+        ];
+    }
+
+    /**
+     * SECURITY: Confirm two-factor authentication setup.
+     *
+     * Called after user successfully verifies their first TOTP code.
+     * Marks 2FA as enabled and confirmed.
+     */
+    public function confirmTwoFactorAuthentication(): void
+    {
+        $this->update([
+            'two_factor_enabled' => true,
+            'two_factor_confirmed_at' => now(),
+        ]);
+    }
+
+    /**
+     * SECURITY: Disable two-factor authentication.
+     *
+     * Clears all 2FA data from user account.
+     * Should only be called after password confirmation.
+     */
+    public function disableTwoFactorAuthentication(): void
+    {
+        $this->update([
+            'two_factor_enabled' => false,
+            'two_factor_secret' => null,
+            'two_factor_backup_codes' => null,
+            'two_factor_confirmed_at' => null,
+        ]);
+    }
+
+    /**
+     * SECURITY: Generate new recovery codes.
+     *
+     * Returns plain text codes - must be shown to user immediately.
+     * Codes are hashed before storage.
+     *
+     * @return array Plain text recovery codes
+     */
+    public function generateRecoveryCodes(int $count = 8): array
+    {
+        $codes = [];
+        for ($i = 0; $i < $count; $i++) {
+            // Generate 10-character alphanumeric code
+            $codes[] = strtoupper(\Illuminate\Support\Str::random(10));
+        }
+
+        // Hash and store the codes
+        $hashedCodes = array_map(
+            fn($code) => \Illuminate\Support\Facades\Hash::make($code),
+            $codes
+        );
+
+        $this->update(['two_factor_backup_codes' => $hashedCodes]);
+
+        return $codes; // Return plain text for user
+    }
+
+    /**
+     * SECURITY: Verify a TOTP or recovery code.
+     *
+     * @param string $code TOTP code (6 digits) or recovery code (10 chars)
+     * @return bool True if code is valid
+     */
+    public function verifyTwoFactorCode(string $code): bool
+    {
+        if (! $this->two_factor_enabled || ! $this->two_factor_secret) {
+            return false;
+        }
+
+        $google2fa = new \PragmaRX\Google2FA\Google2FA;
+
+        // Try TOTP code first (6 digits)
+        if (strlen($code) === 6 && ctype_digit($code)) {
+            return $google2fa->verifyKey($this->two_factor_secret, $code, 1);
+        }
+
+        // Try recovery codes (10 characters)
+        if (strlen($code) === 10) {
+            $backupCodes = $this->two_factor_backup_codes ?? [];
+
+            foreach ($backupCodes as $index => $hashedCode) {
+                if (\Illuminate\Support\Facades\Hash::check($code, $hashedCode)) {
+                    // Remove used recovery code (single-use)
+                    unset($backupCodes[$index]);
+                    $this->update(['two_factor_backup_codes' => array_values($backupCodes)]);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Generate SVG QR code for 2FA setup.
+     */
+    protected function generateQrCodeSvg(string $url): string
+    {
+        $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+            new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200),
+            new \BaconQrCode\Renderer\Image\SvgImageBackEnd
+        );
+
+        $writer = new \BaconQrCode\Writer($renderer);
+
+        return $writer->writeString($url);
+    }
 }

@@ -91,6 +91,24 @@ class Organization extends Model
     }
 
     /**
+     * Get all team invitations for this organization.
+     */
+    public function teamInvitations(): HasMany
+    {
+        return $this->hasMany(TeamInvitation::class);
+    }
+
+    /**
+     * Get pending team invitations for this organization.
+     */
+    public function pendingInvitations(): HasMany
+    {
+        return $this->hasMany(TeamInvitation::class)
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now());
+    }
+
+    /**
      * Check if organization has an active subscription.
      */
     public function hasActiveSubscription(): bool

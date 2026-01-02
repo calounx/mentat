@@ -33,14 +33,31 @@ class OrganizationFactory extends Factory
 
     /**
      * Configure the model factory.
+     *
+     * Note: We don't auto-create tenants here due to circular foreign key constraints.
+     * Use withDefaultTenant() state method when you need a tenant created.
      */
     public function configure(): static
+    {
+        return $this;
+    }
+
+    /**
+     * Create organization with a default tenant.
+     */
+    public function withDefaultTenant(): static
     {
         return $this->afterCreating(function (Organization $organization) {
             // Create default tenant for the organization if it doesn't exist
             if ($organization->tenants()->count() === 0) {
-                $tenant = Tenant::factory()->create([
+                $tenant = Tenant::create([
                     'organization_id' => $organization->id,
+                    'name' => 'Default',
+                    'slug' => 'default',
+                    'tier' => 'starter',
+                    'status' => 'active',
+                    'settings' => [],
+                    'metrics_retention_days' => 30,
                 ]);
 
                 // Set the default tenant

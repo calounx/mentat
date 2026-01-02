@@ -5,10 +5,11 @@ namespace Tests\Unit\Domain\ValueObjects;
 use App\Domain\ValueObjects\Domain;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 class DomainTest extends TestCase
 {
-    /** @test */
+    #[Test]
     public function it_creates_valid_domain_from_string(): void
     {
         $domain = Domain::fromString('my-site.com');
@@ -17,7 +18,7 @@ class DomainTest extends TestCase
         $this->assertEquals('my-site.com', (string) $domain);
     }
 
-    /** @test */
+    #[Test]
     public function it_converts_domain_to_lowercase(): void
     {
         $domain = Domain::fromString('MY-SITE.COM');
@@ -25,7 +26,7 @@ class DomainTest extends TestCase
         $this->assertEquals('my-site.com', $domain->toString());
     }
 
-    /** @test */
+    #[Test]
     public function it_extracts_tld(): void
     {
         $domain = Domain::fromString('my-site.com');
@@ -33,7 +34,7 @@ class DomainTest extends TestCase
         $this->assertEquals('com', $domain->getTld());
     }
 
-    /** @test */
+    #[Test]
     public function it_extracts_domain_without_tld(): void
     {
         $domain = Domain::fromString('my-site.com');
@@ -41,7 +42,7 @@ class DomainTest extends TestCase
         $this->assertEquals('my-site', $domain->getWithoutTld());
     }
 
-    /** @test */
+    #[Test]
     public function it_detects_subdomain(): void
     {
         $domain = Domain::fromString('blog.my-site.com');
@@ -50,7 +51,7 @@ class DomainTest extends TestCase
         $this->assertEquals('blog', $domain->getSubdomain());
     }
 
-    /** @test */
+    #[Test]
     public function it_detects_non_subdomain(): void
     {
         $domain = Domain::fromString('my-site.com');
@@ -59,7 +60,7 @@ class DomainTest extends TestCase
         $this->assertNull($domain->getSubdomain());
     }
 
-    /** @test */
+    #[Test]
     public function it_compares_domains_for_equality(): void
     {
         $domain1 = Domain::fromString('my-site.com');
@@ -70,7 +71,7 @@ class DomainTest extends TestCase
         $this->assertFalse($domain1->equals($domain3));
     }
 
-    /** @test */
+    #[Test]
     public function it_rejects_too_long_domain(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -79,7 +80,7 @@ class DomainTest extends TestCase
         Domain::fromString(str_repeat('a', 254).'.com');
     }
 
-    /** @test */
+    #[Test]
     public function it_rejects_too_short_domain(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -88,7 +89,7 @@ class DomainTest extends TestCase
         Domain::fromString('a');
     }
 
-    /** @test */
+    #[Test]
     public function it_rejects_invalid_format(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -97,7 +98,7 @@ class DomainTest extends TestCase
         Domain::fromString('not a domain');
     }
 
-    /** @test */
+    #[Test]
     public function it_rejects_sql_injection_attempts(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -106,7 +107,7 @@ class DomainTest extends TestCase
         Domain::fromString("my-site.com'; DROP TABLE users--");
     }
 
-    /** @test */
+    #[Test]
     public function it_rejects_reserved_domains(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -115,7 +116,7 @@ class DomainTest extends TestCase
         Domain::fromString('localhost');
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_domain_without_exception(): void
     {
         $this->assertTrue(Domain::isValid('my-site.com'));

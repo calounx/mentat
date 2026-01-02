@@ -3,6 +3,7 @@
 namespace Tests\Architecture;
 
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * SOLID Principles Compliance Tests
@@ -28,10 +29,14 @@ class SolidComplianceTest extends TestCase
         $this->appPath = __DIR__.'/../../app';
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify controllers don't contain business logic
      * Controllers should only orchestrate, not implement business rules
+
+
      */
     public function controllers_should_not_contain_business_logic(): void
     {
@@ -70,9 +75,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify services implement interfaces (Dependency Inversion)
+
+
      */
     public function critical_services_should_implement_interfaces(): void
     {
@@ -109,9 +118,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify no circular dependencies between major modules
+
+
      */
     public function no_circular_dependencies_between_modules(): void
     {
@@ -166,9 +179,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify models don't contain complex query logic (should use repositories/services)
+
+
      */
     public function models_should_not_contain_complex_queries(): void
     {
@@ -195,9 +212,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify value objects are immutable
+
+
      */
     public function value_objects_should_be_immutable(): void
     {
@@ -230,9 +251,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify services don't depend on controllers (correct dependency direction)
+
+
      */
     public function services_should_not_depend_on_controllers(): void
     {
@@ -254,9 +279,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify middleware classes follow single responsibility
+
+
      */
     public function middleware_should_follow_single_responsibility(): void
     {
@@ -301,9 +330,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify API controllers follow consistent response patterns
+
+
      */
     public function api_controllers_should_follow_consistent_patterns(): void
     {
@@ -337,9 +370,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify proper separation between domain and infrastructure
+
+
      */
     public function domain_logic_should_not_depend_on_infrastructure(): void
     {
@@ -383,9 +420,13 @@ class SolidComplianceTest extends TestCase
         );
     }
 
+    #[Test]
+
+
     /**
-     * @test
      * Verify policies are properly defined for authorization
+
+
      */
     public function policies_should_be_defined_for_major_resources(): void
     {

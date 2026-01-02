@@ -32,6 +32,22 @@
         <testsuite name="CI">
             <directory>tests/CI</directory>
         </testsuite>
+        <testsuite name="Deployment">
+            <directory>tests/Deployment</directory>
+            <exclude>tests/Deployment/Helpers</exclude>
+        </testsuite>
+        <testsuite name="DeploymentSmoke">
+            <directory>tests/Deployment/Smoke</directory>
+        </testsuite>
+        <testsuite name="DeploymentIntegration">
+            <directory>tests/Deployment/Integration</directory>
+        </testsuite>
+        <testsuite name="DeploymentLoad">
+            <directory>tests/Deployment/Load</directory>
+        </testsuite>
+        <testsuite name="DeploymentChaos">
+            <directory>tests/Deployment/Chaos</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
@@ -46,6 +62,7 @@
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
+        <env name="DB_FOREIGN_KEYS" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

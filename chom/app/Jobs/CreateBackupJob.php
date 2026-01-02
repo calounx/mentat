@@ -65,7 +65,8 @@ class CreateBackupJob implements ShouldQueue
         $backup = SiteBackup::create([
             'site_id' => $site->id,
             'backup_type' => $this->backupType,
-            'storage_path' => '/var/backups/'.$site->domain.'/'.now()->format('Y-m-d-His'),
+            'status' => 'pending',
+            'storage_path' => null,
             'size_bytes' => 0,
             'checksum' => null,
             'retention_days' => $this->retentionDays ?? $site->tenant?->tierLimits?->backup_retention_days ?? 7,
@@ -91,9 +92,11 @@ class CreateBackupJob implements ShouldQueue
 
                 // Update backup record with actual data
                 $backup->update([
+                    'status' => 'completed',
                     'storage_path' => $result['data']['path'] ?? $backup->storage_path,
                     'size_bytes' => $result['data']['size'] ?? 0,
                     'checksum' => $result['data']['checksum'] ?? null,
+                    'completed_at' => now(),
                 ]);
 
                 // Emit BackupCompleted event

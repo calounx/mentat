@@ -8,6 +8,7 @@ use App\Services\Sites\Provisioners\ProvisionerFactory;
 use App\Services\Sites\Provisioners\WordPressSiteProvisioner;
 use InvalidArgumentException;
 use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 class ProvisionerFactoryTest extends TestCase
 {
@@ -19,7 +20,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->factory = new ProvisionerFactory;
     }
 
-    /** @test */
+    #[Test]
     public function it_creates_wordpress_provisioner(): void
     {
         $provisioner = $this->factory->make('wordpress');
@@ -28,7 +29,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->assertEquals('wordpress', $provisioner->getSiteType());
     }
 
-    /** @test */
+    #[Test]
     public function it_creates_html_provisioner(): void
     {
         $provisioner = $this->factory->make('html');
@@ -37,7 +38,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->assertEquals('html', $provisioner->getSiteType());
     }
 
-    /** @test */
+    #[Test]
     public function it_creates_laravel_provisioner(): void
     {
         $provisioner = $this->factory->make('laravel');
@@ -46,7 +47,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->assertEquals('laravel', $provisioner->getSiteType());
     }
 
-    /** @test */
+    #[Test]
     public function it_throws_exception_for_unsupported_type(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -55,7 +56,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->factory->make('unknown');
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_supported_types(): void
     {
         $types = $this->factory->getSupportedTypes();
@@ -66,7 +67,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->assertContains('laravel', $types);
     }
 
-    /** @test */
+    #[Test]
     public function it_checks_if_type_is_supported(): void
     {
         $this->assertTrue($this->factory->supports('wordpress'));
@@ -75,7 +76,7 @@ class ProvisionerFactoryTest extends TestCase
         $this->assertFalse($this->factory->supports('unknown'));
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_all_provisioners(): void
     {
         $provisioners = $this->factory->all();

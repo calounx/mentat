@@ -2,6 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Events\Backup\RestoreCompleted;
+use App\Events\Backup\RestoreFailed;
+use App\Events\Backup\RestoreStarted;
 use App\Models\SiteBackup;
 use App\Services\Integration\VPSManagerBridge;
 use Illuminate\Bus\Queueable;
@@ -23,13 +26,22 @@ class RestoreBackupJob implements ShouldQueue
     /**
      * The number of seconds to wait before retrying the job.
      */
-    public int $backoff = 60;
+    public int $backoff = 180;
+
+    /**
+     * The number of seconds the job can run before timing out.
+     */
+    public int $timeout = 1800; // 30 minutes for large restores
 
     /**
      * Create a new job instance.
      */
     public function __construct(
-        public SiteBackup $backup
+        public SiteBackup $backup,
+        public string $restoreType = 'full',
+        public bool $force = false,
+        public bool $skipVerify = false,
+        public ?string $actorId = null
     ) {}
 
     /**
@@ -60,46 +72,86 @@ class RestoreBackupJob implements ShouldQueue
             return;
         }
 
-        Log::info('RestoreBackupJob: Starting backup restore', [
+        // Emit RestoreStarted event
+        RestoreStarted::dispatch($backup, $site, $this->restoreType, $this->actorId);
+
+        Log::info('RestoreBackupJob: Starting restore operation', [
             'backup_id' => $backup->id,
             'site_id' => $site->id,
             'domain' => $site->domain,
-            'backup_type' => $backup->backup_type,
-            'storage_path' => $backup->storage_path,
+            'restore_type' => $this->restoreType,
+            'force' => $this->force,
         ]);
 
+        // Track restore duration for metrics
+        $startTime = microtime(true);
+
         try {
-            // Set site to maintenance mode during restore
+            // Update site status to 'restoring'
             $previousStatus = $site->status;
             $site->update(['status' => 'restoring']);
 
-            $result = $vpsManager->restoreBackup($vps, $backup->storage_path);
+            // Verify backup is valid and ready
+            if (! $this->skipVerify) {
+                if (! $backup->storage_path) {
+                    throw new \RuntimeException('Backup storage path is not available');
+                }
+
+                if ($backup->isExpired()) {
+                    throw new \RuntimeException('Backup has expired and cannot be restored');
+                }
+
+                if ($backup->status !== 'completed') {
+                    throw new \RuntimeException('Backup is not in completed state');
+                }
+            }
+
+            // Execute restore via VPS Manager Bridge
+            $result = $vpsManager->restoreBackup($vps, $site, $backup->storage_path);
 
             if ($result['success']) {
-                // Restore site to previous status
-                $site->update(['status' => $previousStatus]);
+                $duration = (int) round(microtime(true) - $startTime);
 
-                Log::info('RestoreBackupJob: Backup restored successfully', [
+                // Restore site to previous status (or active if it was restoring)
+                $site->update([
+                    'status' => $previousStatus === 'restoring' ? 'active' : $previousStatus,
+                ]);
+
+                // Emit RestoreCompleted event
+                RestoreCompleted::dispatch($backup, $site, $duration, $this->actorId);
+
+                Log::info('RestoreBackupJob: Restore completed successfully', [
                     'backup_id' => $backup->id,
                     'site_id' => $site->id,
                     'domain' => $site->domain,
+                    'duration_seconds' => $duration,
                 ]);
             } else {
-                // Restore site to previous status even on failure
-                $site->update(['status' => $previousStatus]);
+                $errorMessage = $result['output'] ?? 'Restore failed with no output';
 
-                Log::error('RestoreBackupJob: Backup restore failed', [
+                // Set site status to failed
+                $site->update(['status' => 'failed']);
+
+                // Emit RestoreFailed event
+                RestoreFailed::dispatch($site->id, $backup->id, $errorMessage, $this->actorId);
+
+                Log::error('RestoreBackupJob: Restore failed', [
                     'backup_id' => $backup->id,
                     'site_id' => $site->id,
                     'domain' => $site->domain,
                     'output' => $result['output'] ?? 'No output',
                 ]);
+
+                throw new \RuntimeException($errorMessage);
             }
         } catch (\Exception $e) {
-            // Attempt to restore site status
-            $site->update(['status' => 'active']);
+            // Set site status to failed
+            $site->update(['status' => 'failed']);
 
-            Log::error('RestoreBackupJob: Exception during backup restore', [
+            // Emit RestoreFailed event
+            RestoreFailed::dispatch($site->id, $backup->id, $e->getMessage(), $this->actorId);
+
+            Log::error('RestoreBackupJob: Exception during restore', [
                 'backup_id' => $backup->id,
                 'site_id' => $site->id,
                 'domain' => $site->domain,
@@ -119,12 +171,36 @@ class RestoreBackupJob implements ShouldQueue
         Log::error('RestoreBackupJob: Job failed after all retries', [
             'backup_id' => $this->backup->id,
             'site_id' => $this->backup->site_id,
+            'restore_type' => $this->restoreType,
             'error' => $exception?->getMessage(),
         ]);
 
-        // Ensure site is not left in 'restoring' status
-        if ($this->backup->site && $this->backup->site->status === 'restoring') {
-            $this->backup->site->update(['status' => 'active']);
+        // Ensure site is marked as failed
+        $site = $this->backup->site;
+        if ($site) {
+            $site->update(['status' => 'failed']);
         }
+
+        // Emit RestoreFailed event (if not already emitted)
+        RestoreFailed::dispatch(
+            $this->backup->site_id,
+            $this->backup->id,
+            $exception?->getMessage() ?? 'Job failed after all retries',
+            $this->actorId
+        );
+    }
+
+    /**
+     * Get tags for queue monitoring.
+     *
+     * @return array<string>
+     */
+    public function tags(): array
+    {
+        return [
+            'restore',
+            'backup:'.$this->backup->id,
+            'site:'.$this->backup->site_id,
+        ];
     }
 }

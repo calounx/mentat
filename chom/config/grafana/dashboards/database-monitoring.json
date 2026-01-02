@@ -1,0 +1,358 @@
+{
+  "dashboard": {
+    "title": "CHOM Database Performance Monitor",
+    "tags": ["database", "mysql", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Database Size Growth",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "chom_database_size_bytes{type=\"total\"}",
+            "legendFormat": "Total Size",
+            "refId": "A"
+          },
+          {
+            "expr": "chom_database_size_bytes{type=\"data\"}",
+            "legendFormat": "Data Size",
+            "refId": "B"
+          },
+          {
+            "expr": "chom_database_size_bytes{type=\"index\"}",
+            "legendFormat": "Index Size",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "bytes",
+            "label": "Size"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Query Performance (QPS)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(chom_database_queries_total[5m])",
+            "legendFormat": "Queries/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(chom_database_slow_queries_total[5m])",
+            "legendFormat": "Slow Queries/sec",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Queries/sec"
+          }
+        ],
+        "alert": {
+          "name": "High Slow Query Rate",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [10],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "title": "Database Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "chom_database_connections{state=\"active\"}",
+            "legendFormat": "Active Connections",
+            "refId": "A"
+          },
+          {
+            "expr": "chom_database_connections{state=\"idle\"}",
+            "legendFormat": "Idle Connections",
+            "refId": "B"
+          },
+          {
+            "expr": "chom_database_connections{state=\"total\"}",
+            "legendFormat": "Total Connections",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Connections"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Table Sizes (Top 10)",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "topk(10, chom_database_table_size_bytes)",
+            "legendFormat": "{{table}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "displayMode": "gradient",
+          "orientation": "horizontal"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Backup Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "time() - chom_backup_last_success_timestamp",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "textMode": "value_and_name",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 86400, "color": "yellow"},
+                {"value": 172800, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Backup Size",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
+        "targets": [
+          {
+            "expr": "chom_backup_size_bytes",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Backup Duration",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "chom_backup_duration_seconds",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Migration Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 16},
+        "targets": [
+          {
+            "expr": "chom_migrations_pending",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "InnoDB Buffer Pool Hit Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "100 * (chom_database_innodb_buffer_pool_reads / (chom_database_innodb_buffer_pool_reads + chom_database_innodb_buffer_pool_read_requests))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Table Lock Waits",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 20},
+        "targets": [
+          {
+            "expr": "rate(chom_database_table_locks_waited[5m])",
+            "legendFormat": "Lock Waits/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Locks/sec"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Index Usage Efficiency",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 20},
+        "targets": [
+          {
+            "expr": "chom_database_index_used_count",
+            "legendFormat": "Used Indexes",
+            "refId": "A"
+          },
+          {
+            "expr": "chom_database_index_unused_count",
+            "legendFormat": "Unused Indexes",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Row Operations Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(chom_database_rows_read[5m])",
+            "legendFormat": "Rows Read/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(chom_database_rows_inserted[5m])",
+            "legendFormat": "Rows Inserted/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(chom_database_rows_updated[5m])",
+            "legendFormat": "Rows Updated/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(chom_database_rows_deleted[5m])",
+            "legendFormat": "Rows Deleted/sec",
+            "refId": "D"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Rows/sec"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Query Execution Time (P95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, chom_query_duration_seconds_bucket)",
+            "legendFormat": "P95 Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, chom_query_duration_seconds_bucket)",
+            "legendFormat": "P99 Latency",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Duration"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -142,31 +142,39 @@ Route::prefix('v1')->group(function () {
         // =====================================================================
         Route::prefix('team')->group(function () {
             // List team members
-            Route::get('/members', [TeamController::class, 'index']);
+            Route::get('/', [TeamController::class, 'index'])->name('team.index');
 
             // Invite a new team member
-            Route::post('/invitations', [TeamController::class, 'invite']);
+            Route::post('/invite', [TeamController::class, 'invite'])->name('team.invite');
 
             // List pending invitations
-            Route::get('/invitations', [TeamController::class, 'invitations']);
-
-            // Cancel/revoke an invitation
-            Route::delete('/invitations/{id}', [TeamController::class, 'cancelInvitation']);
+            Route::get('/pending', [TeamController::class, 'pending'])->name('team.pending');
 
             // Get specific team member details
-            Route::get('/members/{id}', [TeamController::class, 'show']);
+            Route::get('/{member}', [TeamController::class, 'show'])->name('team.show');
 
             // Update team member role
-            Route::patch('/members/{id}', [TeamController::class, 'update']);
+            Route::patch('/{member}', [TeamController::class, 'update'])->name('team.update');
 
             // Remove team member (sensitive operation)
-            Route::delete('/members/{id}', [TeamController::class, 'destroy'])
-                ->middleware('throttle:sensitive');
+            Route::delete('/{member}', [TeamController::class, 'destroy'])
+                ->middleware('throttle:sensitive')
+                ->name('team.destroy');
+
+            // Cancel/revoke an invitation
+            Route::delete('/invitations/{invitation}', [TeamController::class, 'cancelInvitation'])
+                ->name('team.invitation.cancel');
 
             // Transfer ownership (highly sensitive)
             Route::post('/transfer-ownership', [TeamController::class, 'transferOwnership'])
-                ->middleware('throttle:sensitive');
+                ->middleware('throttle:sensitive')
+                ->name('team.transfer-ownership');
         });
+
+        // Team invitation acceptance (public route with optional auth)
+        Route::post('/team/accept/{token}', [TeamController::class, 'accept'])
+            ->middleware('throttle:api')
+            ->name('team.accept');
 
         // =====================================================================
         // ORGANIZATION SETTINGS

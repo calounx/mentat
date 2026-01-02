@@ -10,6 +10,7 @@ use App\Models\VpsServer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * API Contract Validation Tests
@@ -50,8 +51,8 @@ class ContractValidationTest extends TestCase
         Sanctum::actingAs($this->user);
     }
 
+    #[Test]
     /**
-     * @test
      * Authentication endpoints should return consistent token structure
      */
     public function auth_login_returns_expected_structure(): void
@@ -79,8 +80,8 @@ class ContractValidationTest extends TestCase
         $this->assertIsInt($response->json('data.user.id'));
     }
 
+    #[Test]
     /**
-     * @test
      * Index endpoints should return paginated collection structure
      */
     public function site_index_returns_paginated_structure(): void
@@ -116,8 +117,8 @@ class ContractValidationTest extends TestCase
             ]);
     }
 
+    #[Test]
     /**
-     * @test
      * Show endpoints should return single resource structure
      */
     public function site_show_returns_single_resource_structure(): void
@@ -147,8 +148,8 @@ class ContractValidationTest extends TestCase
         $this->assertIsString($response->json('data.status'));
     }
 
+    #[Test]
     /**
-     * @test
      * Create endpoints should return 201 with created resource
      */
     public function site_create_returns_201_with_resource(): void
@@ -174,8 +175,8 @@ class ContractValidationTest extends TestCase
         $this->assertEquals('test.example.com', $response->json('data.domain'));
     }
 
+    #[Test]
     /**
-     * @test
      * Update endpoints should return 200 with updated resource
      */
     public function site_update_returns_200_with_resource(): void
@@ -200,8 +201,8 @@ class ContractValidationTest extends TestCase
         $this->assertEquals('updated.example.com', $response->json('data.domain'));
     }
 
+    #[Test]
     /**
-     * @test
      * Delete endpoints should return 204 no content
      */
     public function site_delete_returns_204(): void
@@ -216,8 +217,8 @@ class ContractValidationTest extends TestCase
         $response->assertNoContent();
     }
 
+    #[Test]
     /**
-     * @test
      * Validation errors should return 422 with consistent error structure
      */
     public function validation_errors_return_422_with_error_structure(): void
@@ -240,8 +241,8 @@ class ContractValidationTest extends TestCase
         $this->assertIsString($response->json('errors.domain.0'));
     }
 
+    #[Test]
     /**
-     * @test
      * Unauthorized access should return 401
      */
     public function unauthorized_access_returns_401(): void
@@ -257,8 +258,8 @@ class ContractValidationTest extends TestCase
             ]);
     }
 
+    #[Test]
     /**
-     * @test
      * Forbidden access should return 403
      */
     public function forbidden_access_returns_403(): void
@@ -277,8 +278,8 @@ class ContractValidationTest extends TestCase
             ]);
     }
 
+    #[Test]
     /**
-     * @test
      * Not found resources should return 404
      */
     public function not_found_returns_404(): void
@@ -291,8 +292,8 @@ class ContractValidationTest extends TestCase
             ]);
     }
 
+    #[Test]
     /**
-     * @test
      * Error responses should have consistent structure
      */
     public function error_responses_have_consistent_structure(): void
@@ -316,8 +317,8 @@ class ContractValidationTest extends TestCase
         }
     }
 
+    #[Test]
     /**
-     * @test
      * Timestamp fields should be in ISO 8601 format
      */
     public function timestamps_are_in_iso8601_format(): void
@@ -342,8 +343,8 @@ class ContractValidationTest extends TestCase
         );
     }
 
+    #[Test]
     /**
-     * @test
      * Numeric IDs should be integers not strings
      */
     public function numeric_ids_are_integers(): void
@@ -362,8 +363,8 @@ class ContractValidationTest extends TestCase
         $this->assertTrue(is_null($vpsServerId) || is_int($vpsServerId));
     }
 
+    #[Test]
     /**
-     * @test
      * Boolean fields should be actual booleans
      */
     public function boolean_fields_are_booleans(): void
@@ -373,8 +374,8 @@ class ContractValidationTest extends TestCase
         $this->markTestSkipped('Implement when boolean fields are added to API responses');
     }
 
+    #[Test]
     /**
-     * @test
      * Null values should be explicit null not empty strings
      */
     public function null_values_are_explicit_null(): void
@@ -392,8 +393,8 @@ class ContractValidationTest extends TestCase
         }
     }
 
+    #[Test]
     /**
-     * @test
      * Enum values should match defined constants
      */
     public function enum_values_match_defined_constants(): void
@@ -412,8 +413,8 @@ class ContractValidationTest extends TestCase
         $this->assertContains($status, $allowedStatuses);
     }
 
+    #[Test]
     /**
-     * @test
      * Include relationships should work consistently
      */
     public function include_relationships_works_consistently(): void
@@ -444,8 +445,8 @@ class ContractValidationTest extends TestCase
         }
     }
 
+    #[Test]
     /**
-     * @test
      * Sorting query parameters should work consistently
      */
     public function sorting_works_consistently(): void
@@ -471,8 +472,8 @@ class ContractValidationTest extends TestCase
         }
     }
 
+    #[Test]
     /**
-     * @test
      * Filtering query parameters should work consistently
      */
     public function filtering_works_consistently(): void
@@ -497,8 +498,8 @@ class ContractValidationTest extends TestCase
         }
     }
 
+    #[Test]
     /**
-     * @test
      * Pagination metadata should be accurate
      */
     public function pagination_metadata_is_accurate(): void
@@ -524,8 +525,8 @@ class ContractValidationTest extends TestCase
         $this->assertEquals(3, $response->json('meta.last_page'));
     }
 
+    #[Test]
     /**
-     * @test
      * Rate limiting headers should be present
      */
     public function rate_limiting_headers_are_present(): void
@@ -536,8 +537,8 @@ class ContractValidationTest extends TestCase
         $response->assertHeader('X-RateLimit-Remaining');
     }
 
+    #[Test]
     /**
-     * @test
      * CORS headers should be present (if configured)
      */
     public function cors_headers_are_present(): void
@@ -549,8 +550,8 @@ class ContractValidationTest extends TestCase
         $this->assertTrue(true); // Placeholder - implement based on CORS config
     }
 
+    #[Test]
     /**
-     * @test
      * Content-Type header should be application/json
      */
     public function content_type_is_json(): void
@@ -560,8 +561,8 @@ class ContractValidationTest extends TestCase
         $response->assertHeader('Content-Type', 'application/json');
     }
 
+    #[Test]
     /**
-     * @test
      * API versioning in URL works correctly
      */
     public function api_versioning_works(): void
