@@ -1,0 +1,356 @@
+# =============================================================================
+# CHOM Production Docker Compose
+# =============================================================================
+#
+# This configuration deploys CHOM with full observability stack integration.
+# Designed for production deployment on landsraad_tst (10.10.100.20).
+#
+# Features:
+#   - Proper log driver configuration for Loki/Alloy collection
+#   - Health check endpoints for monitoring
+#   - PHP-FPM status page for phpfpm_exporter
+#   - Nginx stub_status for nginx_exporter
+#   - Prometheus metrics exposure
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#
+# =============================================================================
+
+version: '3.8'
+
+x-logging: &loki-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "10"
+    tag: "{{.Name}}"
+    labels: "app,environment"
+
+services:
+  # ===========================================================================
+  # CHOM Application (PHP-FPM)
+  # ===========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: docker/production/Dockerfile
+    container_name: chom-app
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - LOG_CHANNEL=stack
+      - OBSERVABILITY_ENABLED=true
+      - PROMETHEUS_ENABLED=true
+      - PROMETHEUS_NAMESPACE=chom
+      - LOKI_ENABLED=true
+    volumes:
+      - ./:/var/www/chom:cached
+      - ./storage/logs:/var/www/chom/storage/logs
+      - php-fpm-socket:/var/run/php
+    networks:
+      - chom-network
+    healthcheck:
+      test: ["CMD", "php-fpm", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===========================================================================
+  # Nginx Web Server
+  # ===========================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: chom-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Metrics/status port
+    volumes:
+      - ./:/var/www/chom:ro
+      - ./docker/production/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/production/nginx/chom.conf:/etc/nginx/conf.d/chom.conf:ro
+      - ./docker/production/nginx/status.conf:/etc/nginx/conf.d/status.conf:ro
+      - php-fpm-socket:/var/run/php
+      - ssl-certs:/etc/ssl/chom
+      - ./storage/logs/nginx:/var/log/nginx
+    networks:
+      - chom-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - app
+
+  # ===========================================================================
+  # MySQL Database
+  # ===========================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: chom-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_DATABASE: chom
+      MYSQL_USER: chom
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/production/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+    networks:
+      - chom-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    secrets:
+      - mysql_root_password
+      - mysql_password
+
+  # ===========================================================================
+  # Redis Cache & Queue Backend
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: chom-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - chom-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+
+  # ===========================================================================
+  # Queue Worker
+  # ===========================================================================
+  queue:
+    build:
+      context: .
+      dockerfile: docker/production/Dockerfile
+    container_name: chom-queue
+    restart: unless-stopped
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - QUEUE_CONNECTION=redis
+    volumes:
+      - ./:/var/www/chom:cached
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - app
+      - redis
+
+  # ===========================================================================
+  # Scheduler (Cron)
+  # ===========================================================================
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/production/Dockerfile
+    container_name: chom-scheduler
+    restart: unless-stopped
+    command: |
+      sh -c "while true; do php /var/www/chom/artisan schedule:run --no-interaction; sleep 60; done"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+    volumes:
+      - ./:/var/www/chom:cached
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - app
+      - redis
+
+  # ===========================================================================
+  # OBSERVABILITY EXPORTERS
+  # ===========================================================================
+
+  # Node Exporter - System Metrics
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: chom-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+
+  # PHP-FPM Exporter
+  phpfpm-exporter:
+    image: hipages/php-fpm_exporter:2.2.0
+    container_name: chom-phpfpm-exporter
+    restart: unless-stopped
+    command:
+      - '--phpfpm.scrape-uri=tcp://app:9000/status'
+      - '--phpfpm.fix-process-count'
+    ports:
+      - "9253:9253"
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - app
+
+  # Nginx Exporter
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: chom-nginx-exporter
+    restart: unless-stopped
+    command:
+      - '--nginx.scrape-uri=http://nginx:8080/stub_status'
+    ports:
+      - "9113:9113"
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - nginx
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    container_name: chom-redis-exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - redis
+
+  # MySQL Exporter
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.16.0
+    container_name: chom-mysql-exporter
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=exporter:${MYSQL_EXPORTER_PASSWORD:-exporter}@(mysql:3306)/
+    ports:
+      - "9104:9104"
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - mysql
+
+  # ===========================================================================
+  # Grafana Alloy (Log & Metric Collection)
+  # ===========================================================================
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: chom-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./docker/production/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./storage/logs:/var/log/chom:ro
+      - /var/log:/var/log/host:ro
+    ports:
+      - "12345:12345"  # Alloy UI/metrics
+    networks:
+      - chom-network
+    labels:
+      app: "chom"
+      environment: "production"
+    logging: *loki-logging
+    depends_on:
+      - app
+      - nginx
+
+networks:
+  chom-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  php-fpm-socket:
+    driver: local
+  ssl-certs:
+    driver: local
+
+secrets:
+  mysql_root_password:
+    file: ./docker/production/secrets/mysql_root_password
+  mysql_password:
+    file: ./docker/production/secrets/mysql_password

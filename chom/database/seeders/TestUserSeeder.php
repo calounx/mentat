@@ -31,7 +31,7 @@ class TestUserSeeder extends Seeder
         $tenant = Tenant::firstOrCreate(
             [
                 'organization_id' => $org->id,
-                'name' => 'Test Tenant'
+                'name' => 'Test Tenant',
             ],
             [
                 'slug' => 'test-tenant',
@@ -49,25 +49,25 @@ class TestUserSeeder extends Seeder
                 'name' => 'Owner User',
                 'email' => 'owner@chom.test',
                 'role' => 'owner',
-                'description' => 'Full system access, billing management'
+                'description' => 'Full system access, billing management',
             ],
             [
                 'name' => 'Admin User',
                 'email' => 'admin@chom.test',
                 'role' => 'admin',
-                'description' => 'Site management, user management, no billing'
+                'description' => 'Site management, user management, no billing',
             ],
             [
                 'name' => 'Member User',
                 'email' => 'member@chom.test',
                 'role' => 'member',
-                'description' => 'Site management, deployment, backups'
+                'description' => 'Site management, deployment, backups',
             ],
             [
                 'name' => 'Viewer User',
                 'email' => 'viewer@chom.test',
                 'role' => 'viewer',
-                'description' => 'Read-only access to sites and stats'
+                'description' => 'Read-only access to sites and stats',
             ],
         ];
 
@@ -99,7 +99,7 @@ class TestUserSeeder extends Seeder
         $tenant2 = Tenant::firstOrCreate(
             [
                 'organization_id' => $org2->id,
-                'name' => 'Acme Tenant'
+                'name' => 'Acme Tenant',
             ],
             [
                 'slug' => 'acme-tenant',

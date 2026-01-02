@@ -23,8 +23,9 @@ class DebugTenantCommand extends Command
             ->orWhere('slug', $identifier)
             ->first();
 
-        if (!$tenant) {
+        if (! $tenant) {
             $this->components->error("Tenant not found: {$identifier}");
+
             return self::FAILURE;
         }
 
@@ -66,8 +67,8 @@ class DebugTenantCommand extends Command
         if ($users->count() > 0) {
             $this->table(
                 ['ID', 'Name', 'Email', 'Role'],
-                $users->map(fn($user) => [
-                    substr($user->id, 0, 8) . '...',
+                $users->map(fn ($user) => [
+                    substr($user->id, 0, 8).'...',
                     $user->name,
                     $user->email,
                     $user->role,
@@ -83,8 +84,8 @@ class DebugTenantCommand extends Command
         if ($vpsServers->count() > 0) {
             $this->table(
                 ['ID', 'Name', 'IP Address', 'Status', 'Sites'],
-                $vpsServers->map(fn($vps) => [
-                    substr($vps->id, 0, 8) . '...',
+                $vpsServers->map(fn ($vps) => [
+                    substr($vps->id, 0, 8).'...',
                     $vps->name,
                     $vps->ip_address,
                     $vps->status,
@@ -101,8 +102,8 @@ class DebugTenantCommand extends Command
         if ($sites->count() > 0) {
             $this->table(
                 ['ID', 'Domain', 'Type', 'Status', 'VPS'],
-                $sites->take(10)->map(fn($site) => [
-                    substr($site->id, 0, 8) . '...',
+                $sites->take(10)->map(fn ($site) => [
+                    substr($site->id, 0, 8).'...',
                     $site->domain,
                     $site->type,
                     $site->status,
@@ -111,7 +112,7 @@ class DebugTenantCommand extends Command
             );
 
             if ($sites->count() > 10) {
-                $this->line("... and " . ($sites->count() - 10) . " more");
+                $this->line('... and '.($sites->count() - 10).' more');
             }
         }
 

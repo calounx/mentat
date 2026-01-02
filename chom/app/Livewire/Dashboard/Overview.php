@@ -12,14 +12,16 @@ use Livewire\Component;
 class Overview extends Component
 {
     public ?Tenant $tenant = null;
+
     public array $stats = [];
+
     public array $recentSites = [];
 
     public function mount(): void
     {
         $user = auth()->user();
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -33,13 +35,14 @@ class Overview extends Component
 
     public function loadStats(): void
     {
-        if (!$this->tenant) {
+        if (! $this->tenant) {
             $this->stats = [
                 'total_sites' => 0,
                 'active_sites' => 0,
                 'storage_used_mb' => 0,
                 'ssl_expiring_soon' => 0,
             ];
+
             return;
         }
 
@@ -99,8 +102,9 @@ class Overview extends Component
 
     public function loadRecentSites(): void
     {
-        if (!$this->tenant) {
+        if (! $this->tenant) {
             $this->recentSites = [];
+
             return;
         }
 
@@ -110,7 +114,7 @@ class Overview extends Component
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get()
-                ->map(fn($site) => [
+                ->map(fn ($site) => [
                     'id' => $site->id,
                     'domain' => $site->domain,
                     'status' => $site->status,

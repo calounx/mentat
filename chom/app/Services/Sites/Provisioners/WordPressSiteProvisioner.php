@@ -60,18 +60,20 @@ class WordPressSiteProvisioner implements SiteProvisionerInterface
                 'site_id' => $site->id,
                 'domain' => $site->domain,
             ]);
+
             return false;
         }
 
         // Validate PHP version is supported
         $supportedVersions = ['8.2', '8.4'];
-        if (!in_array($site->php_version, $supportedVersions, true)) {
+        if (! in_array($site->php_version, $supportedVersions, true)) {
             Log::warning('WordPress site has unsupported PHP version', [
                 'site_id' => $site->id,
                 'domain' => $site->domain,
                 'php_version' => $site->php_version,
                 'supported' => $supportedVersions,
             ]);
+
             return false;
         }
 
@@ -80,9 +82,6 @@ class WordPressSiteProvisioner implements SiteProvisionerInterface
 
     /**
      * Build provisioning options from site configuration.
-     *
-     * @param Site $site
-     * @return array
      */
     private function buildProvisioningOptions(Site $site): array
     {
@@ -93,11 +92,11 @@ class WordPressSiteProvisioner implements SiteProvisionerInterface
         // Extract WordPress-specific settings from site settings
         $settings = $site->settings ?? [];
 
-        if (!empty($settings['admin_email'])) {
+        if (! empty($settings['admin_email'])) {
             $options['admin_email'] = $settings['admin_email'];
         }
 
-        if (!empty($settings['admin_user'])) {
+        if (! empty($settings['admin_user'])) {
             $options['admin_user'] = $settings['admin_user'];
         }
 

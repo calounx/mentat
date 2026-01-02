@@ -16,13 +16,21 @@ class SiteControllerAuthorizationTest extends TestCase
     use RefreshDatabase;
 
     private User $ownerUserTenant1;
+
     private User $adminUserTenant1;
+
     private User $memberUserTenant1;
+
     private User $viewerUserTenant1;
+
     private User $ownerUserTenant2;
+
     private Tenant $tenant1;
+
     private Tenant $tenant2;
+
     private Organization $org1;
+
     private Organization $org2;
 
     protected function setUp(): void
@@ -167,7 +175,7 @@ class SiteControllerAuthorizationTest extends TestCase
      */
     public function test_viewers_cannot_create_sites(): void
     {
-        VpsServer::factory()->create(['status' => 'active', 'allocation_mode' => 'shared']);
+        VpsServer::factory()->create(['status' => 'active', 'allocation_type' => 'shared']);
 
         Sanctum::actingAs($this->viewerUserTenant1);
         $response = $this->postJson('/api/v1/sites', [
@@ -183,7 +191,7 @@ class SiteControllerAuthorizationTest extends TestCase
      */
     public function test_members_can_create_sites(): void
     {
-        VpsServer::factory()->create(['status' => 'active', 'allocation_mode' => 'shared']);
+        VpsServer::factory()->create(['status' => 'active', 'allocation_type' => 'shared']);
 
         Sanctum::actingAs($this->memberUserTenant1);
         $response = $this->postJson('/api/v1/sites', [
@@ -203,7 +211,7 @@ class SiteControllerAuthorizationTest extends TestCase
      */
     public function test_admins_can_create_sites(): void
     {
-        VpsServer::factory()->create(['status' => 'active', 'allocation_mode' => 'shared']);
+        VpsServer::factory()->create(['status' => 'active', 'allocation_type' => 'shared']);
 
         Sanctum::actingAs($this->adminUserTenant1);
         $response = $this->postJson('/api/v1/sites', [
@@ -223,7 +231,7 @@ class SiteControllerAuthorizationTest extends TestCase
      */
     public function test_owners_can_create_sites(): void
     {
-        VpsServer::factory()->create(['status' => 'active', 'allocation_mode' => 'shared']);
+        VpsServer::factory()->create(['status' => 'active', 'allocation_type' => 'shared']);
 
         Sanctum::actingAs($this->ownerUserTenant1);
         $response = $this->postJson('/api/v1/sites', [
@@ -493,7 +501,7 @@ class SiteControllerAuthorizationTest extends TestCase
         ];
 
         foreach ($endpoints as $endpoint) {
-            $response = match($endpoint['method']) {
+            $response = match ($endpoint['method']) {
                 'get' => $this->getJson($endpoint['uri']),
                 'post' => $this->postJson($endpoint['uri']),
                 'put' => $this->putJson($endpoint['uri']),

@@ -34,8 +34,8 @@ class ProvisionerFactory
     /**
      * Create a provisioner for the given site type.
      *
-     * @param string $siteType The type of site (wordpress, html, laravel, etc.)
-     * @return SiteProvisionerInterface
+     * @param  string  $siteType  The type of site (wordpress, html, laravel, etc.)
+     *
      * @throws InvalidArgumentException If site type is not supported
      */
     public function make(string $siteType): SiteProvisionerInterface
@@ -44,7 +44,7 @@ class ProvisionerFactory
 
         if ($provisionerClass === null) {
             throw new InvalidArgumentException(
-                "Unsupported site type: {$siteType}. Supported types: " .
+                "Unsupported site type: {$siteType}. Supported types: ".
                 implode(', ', $this->getSupportedTypes())
             );
         }
@@ -65,9 +65,6 @@ class ProvisionerFactory
 
     /**
      * Check if a site type is supported.
-     *
-     * @param string $siteType
-     * @return bool
      */
     public function supports(string $siteType): bool
     {

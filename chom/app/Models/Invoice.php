@@ -77,9 +77,9 @@ class Invoice extends Model
             'usd' => '$',
             'eur' => '€',
             'gbp' => '£',
-            default => strtoupper($this->currency) . ' ',
+            default => strtoupper($this->currency).' ',
         };
 
-        return $symbol . number_format($this->getAmountInDollars(), 2);
+        return $symbol.number_format($this->getAmountInDollars(), 2);
     }
 }

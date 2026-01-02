@@ -19,10 +19,7 @@ class VpsSiteManager
     /**
      * Create a WordPress site.
      *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @param array $options Configuration options
-     * @return array
+     * @param  array  $options  Configuration options
      */
     public function createWordPressSite(VpsServer $vps, string $domain, array $options = []): array
     {
@@ -32,11 +29,11 @@ class VpsSiteManager
             'php-version' => $options['php_version'] ?? '8.2',
         ];
 
-        if (!empty($options['admin_email'])) {
+        if (! empty($options['admin_email'])) {
             $args['admin-email'] = $options['admin_email'];
         }
 
-        if (!empty($options['admin_user'])) {
+        if (! empty($options['admin_user'])) {
             $args['admin-user'] = $options['admin_user'];
         }
 
@@ -45,10 +42,6 @@ class VpsSiteManager
 
     /**
      * Create an HTML site.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function createHtmlSite(VpsServer $vps, string $domain): array
     {
@@ -61,10 +54,7 @@ class VpsSiteManager
     /**
      * Create a Laravel site.
      *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @param array $options Configuration options
-     * @return array
+     * @param  array  $options  Configuration options
      */
     public function createLaravelSite(VpsServer $vps, string $domain, array $options = []): array
     {
@@ -78,10 +68,7 @@ class VpsSiteManager
     /**
      * Delete a site.
      *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @param bool $force Force deletion without confirmation
-     * @return array
+     * @param  bool  $force  Force deletion without confirmation
      */
     public function deleteSite(VpsServer $vps, string $domain, bool $force = false): array
     {
@@ -95,10 +82,6 @@ class VpsSiteManager
 
     /**
      * Enable a site.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function enableSite(VpsServer $vps, string $domain): array
     {
@@ -107,10 +90,6 @@ class VpsSiteManager
 
     /**
      * Disable a site.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function disableSite(VpsServer $vps, string $domain): array
     {
@@ -119,9 +98,6 @@ class VpsSiteManager
 
     /**
      * List all sites on a VPS.
-     *
-     * @param VpsServer $vps
-     * @return array
      */
     public function listSites(VpsServer $vps): array
     {
@@ -130,10 +106,6 @@ class VpsSiteManager
 
     /**
      * Get site info.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function getSiteInfo(VpsServer $vps, string $domain): array
     {
@@ -142,10 +114,6 @@ class VpsSiteManager
 
     /**
      * Clear cache for a site.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function clearCache(VpsServer $vps, string $domain): array
     {

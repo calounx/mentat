@@ -35,8 +35,8 @@ class DebugCacheCommand extends Command
         $this->components->info('Testing Cache Connection:');
 
         try {
-            $testKey = 'cache_debug_test_' . time();
-            $testValue = 'test_value_' . rand(1000, 9999);
+            $testKey = 'cache_debug_test_'.time();
+            $testValue = 'test_value_'.rand(1000, 9999);
 
             Cache::put($testKey, $testValue, 60);
             $retrieved = Cache::get($testKey);
@@ -108,7 +108,7 @@ class DebugCacheCommand extends Command
                     }
 
                     if (count($keys) > 10) {
-                        $this->line("  ... and " . (count($keys) - 10) . " more keys");
+                        $this->line('  ... and '.(count($keys) - 10).' more keys');
                     }
                 } else {
                     $this->line('  No keys found');
@@ -138,7 +138,7 @@ class DebugCacheCommand extends Command
             $issues[] = 'Using file cache driver - consider Redis for better performance';
         }
 
-        if (config('cache.default') === 'redis' && !extension_loaded('redis')) {
+        if (config('cache.default') === 'redis' && ! extension_loaded('redis')) {
             $issues[] = 'Redis driver selected but phpredis extension not loaded';
         }
 
@@ -170,6 +170,6 @@ class DebugCacheCommand extends Command
             $i++;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 }

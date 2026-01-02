@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\HasTenantScoping;
+use App\Http\Controllers\Controller;
 use App\Jobs\IssueSslCertificateJob;
 use App\Jobs\ProvisionSiteJob;
 use App\Models\Site;
@@ -48,7 +48,7 @@ class SiteController extends Controller
 
         // Search by domain
         if ($request->has('search')) {
-            $query->where('domain', 'like', '%' . $request->input('search') . '%');
+            $query->where('domain', 'like', '%'.$request->input('search').'%');
         }
 
         $sites = $query->paginate($request->input('per_page', 20));
@@ -77,7 +77,7 @@ class SiteController extends Controller
         $tenant = $this->getTenant($request);
 
         // Check quota
-        if (!$tenant->canCreateSite()) {
+        if (! $tenant->canCreateSite()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -109,7 +109,7 @@ class SiteController extends Controller
                 // Find available VPS
                 $vps = $this->findAvailableVps($tenant);
 
-                if (!$vps) {
+                if (! $vps) {
                     throw new \RuntimeException('No available VPS server found');
                 }
 
@@ -160,7 +160,7 @@ class SiteController extends Controller
         $tenant = $this->getTenant($request);
 
         $site = $tenant->sites()
-            ->with(['vpsServer', 'backups' => fn($q) => $q->latest()->limit(5)])
+            ->with(['vpsServer', 'backups' => fn ($q) => $q->latest()->limit(5)])
             ->findOrFail($id);
 
         $this->authorize('view', $site);
@@ -210,7 +210,7 @@ class SiteController extends Controller
             if ($site->vpsServer && $site->status === 'active') {
                 $result = $this->vpsManager->deleteSite($site->vpsServer, $site->domain, force: true);
 
-                if (!$result['success']) {
+                if (! $result['success']) {
                     Log::warning('VPS site deletion failed', [
                         'site' => $site->domain,
                         'output' => $result['output'],
@@ -336,7 +336,7 @@ class SiteController extends Controller
 
         $this->authorize('issueSSL', $site);
 
-        if (!$site->vpsServer) {
+        if (! $site->vpsServer) {
             return response()->json([
                 'success' => false,
                 'error' => ['code' => 'NO_VPS', 'message' => 'Site has no associated VPS server.'],
@@ -402,7 +402,7 @@ class SiteController extends Controller
      * - Eager loads VPS relationship to reduce total queries
      * - Prioritizes existing tenant allocations before searching shared pool
      *
-     * @param mixed $tenant The tenant requiring VPS allocation
+     * @param  mixed  $tenant  The tenant requiring VPS allocation
      * @return VpsServer|null Available VPS server or null if none found
      */
     private function findAvailableVps($tenant): ?VpsServer
@@ -454,7 +454,7 @@ class SiteController extends Controller
             $data['settings'] = $site->settings;
 
             if ($site->relationLoaded('backups')) {
-                $data['recent_backups'] = $site->backups->map(fn($b) => [
+                $data['recent_backups'] = $site->backups->map(fn ($b) => [
                     'id' => $b->id,
                     'type' => $b->backup_type,
                     'size' => $b->getSizeFormatted(),

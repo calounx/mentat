@@ -15,8 +15,6 @@ use Mockery\MockInterface;
  *
  * This trait provides pre-configured mocks for Prometheus, Loki, and Grafana,
  * allowing tests to simulate observability operations without actual service connections.
- *
- * @package Tests\Concerns
  */
 trait WithMockObservability
 {
@@ -37,8 +35,6 @@ trait WithMockObservability
 
     /**
      * Set up observability mocks
-     *
-     * @return void
      */
     protected function setUpObservabilityMocks(): void
     {
@@ -53,10 +49,6 @@ trait WithMockObservability
 
     /**
      * Mock successful Prometheus query
-     *
-     * @param string $query
-     * @param array $result
-     * @return void
      */
     protected function mockPrometheusQuery(string $query, array $result = []): void
     {
@@ -81,9 +73,6 @@ trait WithMockObservability
 
     /**
      * Mock Prometheus query with sanitization check
-     *
-     * @param string $expectedSanitizedQuery
-     * @return void
      */
     protected function mockPrometheusQueryWithSanitization(string $expectedSanitizedQuery): void
     {
@@ -102,11 +91,6 @@ trait WithMockObservability
 
     /**
      * Mock Prometheus metric recording
-     *
-     * @param string $metric
-     * @param float $value
-     * @param array $labels
-     * @return void
      */
     protected function mockPrometheusMetric(string $metric, float $value, array $labels = []): void
     {
@@ -118,11 +102,6 @@ trait WithMockObservability
 
     /**
      * Mock Loki log push
-     *
-     * @param string $stream
-     * @param string $message
-     * @param array $labels
-     * @return void
      */
     protected function mockLokiLogPush(string $stream, string $message, array $labels = []): void
     {
@@ -138,10 +117,6 @@ trait WithMockObservability
 
     /**
      * Mock Loki query with sanitization
-     *
-     * @param string $expectedSanitizedQuery
-     * @param array $results
-     * @return void
      */
     protected function mockLokiQuery(string $expectedSanitizedQuery, array $results = []): void
     {
@@ -172,10 +147,6 @@ trait WithMockObservability
 
     /**
      * Mock Grafana dashboard creation
-     *
-     * @param string $dashboardTitle
-     * @param int $dashboardId
-     * @return void
      */
     protected function mockGrafanaDashboardCreation(
         string $dashboardTitle = 'Test Dashboard',
@@ -183,10 +154,10 @@ trait WithMockObservability
     ): void {
         $this->mockGrafana
             ->shouldReceive('createDashboard')
-            ->with(Mockery::on(fn($config) => $config['title'] === $dashboardTitle))
+            ->with(Mockery::on(fn ($config) => $config['title'] === $dashboardTitle))
             ->andReturn([
                 'id' => $dashboardId,
-                'uid' => 'test-' . uniqid(),
+                'uid' => 'test-'.uniqid(),
                 'url' => "/d/test-{$dashboardId}/{$dashboardTitle}",
                 'status' => 'success',
             ]);
@@ -194,30 +165,22 @@ trait WithMockObservability
 
     /**
      * Mock Grafana user provisioning
-     *
-     * @param string $email
-     * @param int $userId
-     * @return void
      */
     protected function mockGrafanaUserProvisioning(string $email, int $userId = 1): void
     {
         $this->mockGrafana
             ->shouldReceive('createUser')
-            ->with(Mockery::on(fn($data) => $data['email'] === $email))
+            ->with(Mockery::on(fn ($data) => $data['email'] === $email))
             ->andReturn([
                 'id' => $userId,
                 'email' => $email,
                 'login' => explode('@', $email)[0],
-                'apiKey' => 'grafana-api-' . bin2hex(random_bytes(16)),
+                'apiKey' => 'grafana-api-'.bin2hex(random_bytes(16)),
             ]);
     }
 
     /**
      * Mock Grafana organization creation
-     *
-     * @param string $orgName
-     * @param int $orgId
-     * @return void
      */
     protected function mockGrafanaOrgCreation(string $orgName, int $orgId = 1): void
     {
@@ -235,10 +198,6 @@ trait WithMockObservability
      * Mock PromQL injection prevention
      *
      * Ensures that malicious queries are sanitized
-     *
-     * @param string $maliciousQuery
-     * @param string $sanitizedQuery
-     * @return void
      */
     protected function mockPromQLInjectionPrevention(
         string $maliciousQuery,
@@ -257,10 +216,6 @@ trait WithMockObservability
 
     /**
      * Mock LogQL injection prevention
-     *
-     * @param string $maliciousQuery
-     * @param string $sanitizedQuery
-     * @return void
      */
     protected function mockLogQLInjectionPrevention(
         string $maliciousQuery,
@@ -279,9 +234,6 @@ trait WithMockObservability
 
     /**
      * Assert Prometheus metric was recorded
-     *
-     * @param string $metric
-     * @return void
      */
     protected function assertPrometheusMetricRecorded(string $metric): void
     {
@@ -294,23 +246,18 @@ trait WithMockObservability
 
     /**
      * Assert Loki log was pushed
-     *
-     * @param string $stream
-     * @return void
      */
     protected function assertLokiLogPushed(string $stream): void
     {
         $this->mockLoki
             ->shouldHaveReceived('push')
-            ->with(Mockery::on(fn($arg) => $arg['stream'] === $stream))
+            ->with(Mockery::on(fn ($arg) => $arg['stream'] === $stream))
             ->atLeast()
             ->once();
     }
 
     /**
      * Assert Grafana dashboard was created
-     *
-     * @return void
      */
     protected function assertGrafanaDashboardCreated(): void
     {
@@ -322,8 +269,7 @@ trait WithMockObservability
     /**
      * Assert query was sanitized before execution
      *
-     * @param string $service Either 'prometheus' or 'loki'
-     * @return void
+     * @param  string  $service  Either 'prometheus' or 'loki'
      */
     protected function assertQueryWasSanitized(string $service = 'prometheus'): void
     {

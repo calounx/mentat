@@ -1,0 +1,456 @@
+// ============================================================================
+// Grafana Alloy Configuration - Observability Stack
+// ============================================================================
+// Central telemetry collector for the observability infrastructure
+// Role: Receives telemetry from all monitored nodes, scrapes local stack
+// ============================================================================
+//
+// Template Variables (substituted by install.sh):
+//   ${HOST_NAME}       - Hostname for labels
+//   ${ENVIRONMENT}     - Environment (production, staging, etc.)
+//   ${MODULE_PORT}     - Alloy HTTP listen port (default: 12345)
+//   ${OTLP_GRPC_PORT}  - OTLP gRPC port (default: 4317)
+//   ${OTLP_HTTP_PORT}  - OTLP HTTP port (default: 4318)
+//   ${PROMETHEUS_URL}  - Prometheus URL (default: http://localhost:9090)
+//   ${LOKI_URL}        - Loki URL (default: http://localhost:3100)
+//   ${TEMPO_URL}       - Tempo OTLP endpoint (default: localhost:4317)
+// ============================================================================
+
+// Logging configuration
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// ============================================================================
+// Self-Monitoring
+// ============================================================================
+
+// Export Alloy's own metrics
+prometheus.exporter.self "alloy" { }
+
+prometheus.scrape "alloy_self" {
+  targets         = prometheus.exporter.self.alloy.targets
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+
+  clustering {
+    enabled = false
+  }
+}
+
+// ============================================================================
+// Observability Stack Component Scraping
+// ============================================================================
+
+// Prometheus
+prometheus.scrape "prometheus" {
+  targets = [{
+    __address__ = "localhost:9090",
+    job         = "prometheus",
+    tier        = "observability",
+    component   = "tsdb",
+    host        = "${HOST_NAME}",
+    environment = "${ENVIRONMENT}",
+  }]
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Loki
+prometheus.scrape "loki" {
+  targets = [{
+    __address__ = "localhost:3100",
+    job         = "loki",
+    tier        = "observability",
+    component   = "log-storage",
+    host        = "${HOST_NAME}",
+    environment = "${ENVIRONMENT}",
+  }]
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Tempo
+prometheus.scrape "tempo" {
+  targets = [{
+    __address__ = "localhost:3200",
+    job         = "tempo",
+    tier        = "observability",
+    component   = "trace-storage",
+    host        = "${HOST_NAME}",
+    environment = "${ENVIRONMENT}",
+  }]
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Grafana
+prometheus.scrape "grafana" {
+  targets = [{
+    __address__ = "localhost:3000",
+    job         = "grafana",
+    tier        = "observability",
+    component   = "visualization",
+    host        = "${HOST_NAME}",
+    environment = "${ENVIRONMENT}",
+  }]
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Node Exporter (local system metrics)
+prometheus.scrape "node_exporter" {
+  targets = [{
+    __address__ = "localhost:9100",
+    job         = "node-exporter",
+    tier        = "observability",
+    component   = "system",
+    host        = "${HOST_NAME}",
+    environment = "${ENVIRONMENT}",
+  }]
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Alertmanager (if running)
+prometheus.scrape "alertmanager" {
+  targets = [{
+    __address__ = "localhost:9093",
+    job         = "alertmanager",
+    tier        = "observability",
+    component   = "alerting",
+    host        = "${HOST_NAME}",
+    environment = "${ENVIRONMENT}",
+  }]
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// ============================================================================
+// Prometheus Remote Write (Local)
+// ============================================================================
+
+prometheus.remote_write "local" {
+  endpoint {
+    url = "${PROMETHEUS_URL}/api/v1/write"
+
+    // Retry configuration for local writes
+    queue_config {
+      capacity             = 2500
+      max_shards           = 200
+      min_shards           = 1
+      max_samples_per_send = 500
+      batch_send_deadline  = "5s"
+      min_backoff          = "30ms"
+      max_backoff          = "5s"
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - Systemd Journal
+// ============================================================================
+
+loki.source.journal "system_journal" {
+  forward_to    = [loki.process.journal.receiver]
+  relabel_rules = loki.relabel.journal_relabel.rules
+  labels        = {
+    job  = "systemd-journal",
+    tier = "observability",
+    host = "${HOST_NAME}",
+  }
+  max_age       = "12h"
+  path          = "/var/log/journal"
+}
+
+loki.relabel "journal_relabel" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.process "journal" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.static_labels {
+    values = {
+      environment = "${ENVIRONMENT}",
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - Observability Stack Log Files
+// ============================================================================
+
+// Prometheus logs
+local.file_match "prometheus_logs" {
+  path_targets = [{
+    __path__ = "/var/log/prometheus/*.log",
+    job      = "prometheus",
+    tier     = "observability",
+    component = "tsdb",
+  }]
+}
+
+loki.source.file "prometheus_logs" {
+  targets    = local.file_match.prometheus_logs.targets
+  forward_to = [loki.process.observability_stack.receiver]
+}
+
+// Loki logs
+local.file_match "loki_logs" {
+  path_targets = [{
+    __path__ = "/var/log/loki/*.log",
+    job      = "loki",
+    tier     = "observability",
+    component = "log-storage",
+  }]
+}
+
+loki.source.file "loki_logs" {
+  targets    = local.file_match.loki_logs.targets
+  forward_to = [loki.process.observability_stack.receiver]
+}
+
+// Tempo logs
+local.file_match "tempo_logs" {
+  path_targets = [{
+    __path__ = "/var/log/tempo/*.log",
+    job      = "tempo",
+    tier     = "observability",
+    component = "trace-storage",
+  }]
+}
+
+loki.source.file "tempo_logs" {
+  targets    = local.file_match.tempo_logs.targets
+  forward_to = [loki.process.observability_stack.receiver]
+}
+
+// Grafana logs
+local.file_match "grafana_logs" {
+  path_targets = [{
+    __path__ = "/var/log/grafana/*.log",
+    job      = "grafana",
+    tier     = "observability",
+    component = "visualization",
+  }]
+}
+
+loki.source.file "grafana_logs" {
+  targets    = local.file_match.grafana_logs.targets
+  forward_to = [loki.process.observability_stack.receiver]
+}
+
+// Alertmanager logs
+local.file_match "alertmanager_logs" {
+  path_targets = [{
+    __path__ = "/var/log/alertmanager/*.log",
+    job      = "alertmanager",
+    tier     = "observability",
+    component = "alerting",
+  }]
+}
+
+loki.source.file "alertmanager_logs" {
+  targets    = local.file_match.alertmanager_logs.targets
+  forward_to = [loki.process.observability_stack.receiver]
+}
+
+// Process observability stack logs
+loki.process "observability_stack" {
+  forward_to = [loki.write.local.receiver]
+
+  // Add common labels
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+    }
+  }
+
+  // Try to extract level from JSON logs
+  stage.json {
+    expressions = {
+      level   = "level",
+      msg     = "msg",
+      caller  = "caller",
+      ts      = "ts",
+    }
+  }
+
+  // Also try logfmt format (used by many Go services)
+  stage.logfmt {
+    mapping = {
+      level  = "level",
+      msg    = "msg",
+      caller = "caller",
+    }
+  }
+
+  // Extract level as label
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  // Normalize level names
+  stage.replace {
+    expression = "(?i)(warn|warning)"
+    replace    = "warn"
+    source     = "level"
+  }
+
+  stage.replace {
+    expression = "(?i)(err|error)"
+    replace    = "error"
+    source     = "level"
+  }
+}
+
+// ============================================================================
+// Loki Writer (Local)
+// ============================================================================
+
+loki.write "local" {
+  endpoint {
+    url = "${LOKI_URL}/loki/api/v1/push"
+
+    // Batching configuration
+    batchwait  = "1s"
+    batchsize  = 1048576
+
+    // Retry configuration
+    min_backoff = "500ms"
+    max_backoff = "5m"
+    max_retries = 10
+  }
+  external_labels = {
+    cluster = "observability",
+  }
+}
+
+// ============================================================================
+// OpenTelemetry Receivers (Central Collection Point)
+// ============================================================================
+
+// OTLP Receiver - accepts traces, metrics, and logs from remote nodes
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:${OTLP_GRPC_PORT}"
+
+    // TLS disabled for internal network (use VPN/security groups)
+    // Enable TLS in production with proper certificates
+  }
+
+  http {
+    endpoint = "0.0.0.0:${OTLP_HTTP_PORT}"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+// Batch processor for performance
+otelcol.processor.batch "default" {
+  timeout             = "5s"
+  send_batch_size     = 8192
+  send_batch_max_size = 0
+
+  output {
+    metrics = [otelcol.processor.attributes.add_metadata.input]
+    logs    = [otelcol.processor.attributes.add_metadata.input]
+    traces  = [otelcol.processor.attributes.add_metadata.input]
+  }
+}
+
+// Add metadata attributes
+otelcol.processor.attributes "add_metadata" {
+  action {
+    key    = "collector.hostname"
+    value  = "${HOST_NAME}"
+    action = "upsert"
+  }
+
+  action {
+    key    = "deployment.environment"
+    value  = "${ENVIRONMENT}"
+    action = "upsert"
+  }
+
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// ============================================================================
+// OpenTelemetry Exporters
+// ============================================================================
+
+// Export OTLP metrics to Prometheus
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// Export OTLP logs to Loki
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.local.receiver]
+}
+
+// Export traces to Tempo
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "${TEMPO_URL}"
+
+    tls {
+      insecure             = true
+      insecure_skip_verify = true
+    }
+
+    // Compression for efficiency
+    compression = "gzip"
+  }
+
+  // Queue settings
+  sending_queue {
+    enabled   = true
+    num_consumers = 10
+    queue_size    = 5000
+  }
+
+  // Retry settings
+  retry_on_failure {
+    enabled          = true
+    initial_interval = "5s"
+    max_interval     = "30s"
+    max_elapsed_time = "5m"
+  }
+}
+
+// ============================================================================
+// Debug/Discovery Exports (for Alloy UI)
+// ============================================================================
+
+// These exports make targets visible in the Alloy UI at http://localhost:12345

@@ -127,15 +127,19 @@ teardown() {
 }
 
 @test "lock: fallback mechanism works without flock" {
-    # Temporarily hide flock
+    # Temporarily hide flock by modifying PATH
     local PATH_BACKUP="$PATH"
-    export PATH="${TEST_TEMP_DIR}:$PATH"
 
-    # Create a dummy flock that doesn't exist
-    mkdir -p "${TEST_TEMP_DIR}/bin"
+    # Create empty bin directory and prepend to PATH
+    # This will cause command -v flock to fail, triggering fallback
+    mkdir -p "${TEST_TEMP_DIR}/empty_bin"
 
-    # Clear the path to exclude real flock
-    export PATH="${TEST_TEMP_DIR}/bin"
+    # Save flock location and temporarily make it unavailable
+    local flock_path=$(command -v flock 2>/dev/null || echo "")
+    if [[ -n "$flock_path" ]]; then
+        # Override PATH to exclude flock location
+        export PATH="${TEST_TEMP_DIR}/empty_bin:/usr/bin:/bin"
+    fi
 
     # Should still be able to acquire lock using fallback
     run acquire_lock

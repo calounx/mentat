@@ -23,8 +23,7 @@ class VpsAllocationService
      * 2. If allocated VPS is available, use it
      * 3. Otherwise, find a shared VPS with capacity
      *
-     * @param Tenant $tenant The tenant needing VPS allocation
-     * @return VpsServer|null
+     * @param  Tenant  $tenant  The tenant needing VPS allocation
      */
     public function findAvailableVps(Tenant $tenant): ?VpsServer
     {
@@ -62,8 +61,6 @@ class VpsAllocationService
 
     /**
      * Find a shared VPS server with available capacity.
-     *
-     * @return VpsServer|null
      */
     public function findSharedVpsWithCapacity(): ?VpsServer
     {
@@ -77,8 +74,7 @@ class VpsAllocationService
     /**
      * Check if a VPS server is available for new sites.
      *
-     * @param VpsServer $vps The VPS to check
-     * @return bool
+     * @param  VpsServer  $vps  The VPS to check
      */
     public function isVpsAvailable(VpsServer $vps): bool
     {
@@ -88,7 +84,7 @@ class VpsAllocationService
     /**
      * Get VPS allocation information for a tenant.
      *
-     * @param Tenant $tenant The tenant
+     * @param  Tenant  $tenant  The tenant
      * @return array{has_allocation: bool, vps?: array, shared_vps_available: int}
      */
     public function getAllocationInfo(Tenant $tenant): array
@@ -118,8 +114,6 @@ class VpsAllocationService
 
     /**
      * Get the count of available shared VPS servers.
-     *
-     * @return int
      */
     public function getAvailableSharedVpsCount(): int
     {
@@ -135,9 +129,8 @@ class VpsAllocationService
      * This method can be extended to include more sophisticated
      * allocation logic based on tenant tier, expected load, etc.
      *
-     * @param Tenant $tenant The tenant
-     * @param array<string, mixed> $requirements Optional requirements
-     * @return VpsServer|null
+     * @param  Tenant  $tenant  The tenant
+     * @param  array<string, mixed>  $requirements  Optional requirements
      */
     public function recommendVps(Tenant $tenant, array $requirements = []): ?VpsServer
     {
@@ -154,13 +147,12 @@ class VpsAllocationService
     /**
      * Check if VPS server has capacity for additional sites.
      *
-     * @param VpsServer $vps The VPS server
-     * @param int $additionalSites Number of additional sites
-     * @return bool
+     * @param  VpsServer  $vps  The VPS server
+     * @param  int  $additionalSites  Number of additional sites
      */
     public function hasCapacity(VpsServer $vps, int $additionalSites = 1): bool
     {
-        if (!$vps->isAvailable()) {
+        if (! $vps->isAvailable()) {
             return false;
         }
 

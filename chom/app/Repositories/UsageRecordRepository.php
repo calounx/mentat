@@ -4,9 +4,9 @@ namespace App\Repositories;
 
 use App\Models\Tenant;
 use App\Models\UsageRecord;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 /**
  * Usage Record Repository.
@@ -18,11 +18,6 @@ class UsageRecordRepository
 {
     /**
      * Get usage records for tenant in a specific period.
-     *
-     * @param Tenant $tenant
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return Collection
      */
     public function getByTenantAndPeriod(
         Tenant $tenant,
@@ -37,11 +32,6 @@ class UsageRecordRepository
 
     /**
      * Calculate billing totals for a tenant in a period.
-     *
-     * @param Tenant $tenant
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return array
      */
     public function calculateBillingTotals(
         Tenant $tenant,
@@ -76,11 +66,6 @@ class UsageRecordRepository
 
     /**
      * Get usage summary by resource type for tenant.
-     *
-     * @param Tenant $tenant
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return array
      */
     public function getUsageSummaryByType(
         Tenant $tenant,
@@ -110,11 +95,6 @@ class UsageRecordRepository
 
     /**
      * Get daily usage aggregates for a tenant.
-     *
-     * @param Tenant $tenant
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return Collection
      */
     public function getDailyAggregates(
         Tenant $tenant,
@@ -137,9 +117,6 @@ class UsageRecordRepository
 
     /**
      * Get current month usage for tenant.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function getCurrentMonthUsage(Tenant $tenant): array
     {
@@ -151,9 +128,6 @@ class UsageRecordRepository
 
     /**
      * Get previous month usage for tenant.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function getPreviousMonthUsage(Tenant $tenant): array
     {
@@ -165,9 +139,6 @@ class UsageRecordRepository
 
     /**
      * Record new usage.
-     *
-     * @param array $data
-     * @return UsageRecord
      */
     public function record(array $data): UsageRecord
     {
@@ -176,11 +147,6 @@ class UsageRecordRepository
 
     /**
      * Get usage trend (comparing current to previous period).
-     *
-     * @param Tenant $tenant
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return array
      */
     public function getUsageTrend(
         Tenant $tenant,
@@ -217,10 +183,6 @@ class UsageRecordRepository
 
     /**
      * Calculate percent change between two values.
-     *
-     * @param float $old
-     * @param float $new
-     * @return float
      */
     private function calculatePercentChange(float $old, float $new): float
     {
@@ -234,11 +196,7 @@ class UsageRecordRepository
     /**
      * Get top resource consumers.
      *
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @param string $resourceType (bandwidth, storage, compute)
-     * @param int $limit
-     * @return Collection
+     * @param  string  $resourceType  (bandwidth, storage, compute)
      */
     public function getTopConsumers(
         Carbon $startDate,
@@ -267,12 +225,6 @@ class UsageRecordRepository
 
     /**
      * Check if tenant exceeds quota.
-     *
-     * @param Tenant $tenant
-     * @param string $resourceType
-     * @param float $quota
-     * @param Carbon|null $startDate
-     * @return bool
      */
     public function exceedsQuota(
         Tenant $tenant,

@@ -13,12 +13,12 @@ use InvalidArgumentException;
 final class IpAddress
 {
     private string $value;
+
     private string $version; // 'ipv4' or 'ipv6'
 
     /**
      * Create a new IpAddress value object.
      *
-     * @param string $value
      * @throws InvalidArgumentException
      */
     private function __construct(string $value)
@@ -31,8 +31,6 @@ final class IpAddress
     /**
      * Create IP address from string.
      *
-     * @param string $value
-     * @return self
      * @throws InvalidArgumentException
      */
     public static function fromString(string $value): self
@@ -42,8 +40,6 @@ final class IpAddress
 
     /**
      * Get the IP address as a string.
-     *
-     * @return string
      */
     public function toString(): string
     {
@@ -52,8 +48,6 @@ final class IpAddress
 
     /**
      * Get the IP address as a string (magic method).
-     *
-     * @return string
      */
     public function __toString(): string
     {
@@ -72,8 +66,6 @@ final class IpAddress
 
     /**
      * Check if this is an IPv4 address.
-     *
-     * @return bool
      */
     public function isIpv4(): bool
     {
@@ -82,8 +74,6 @@ final class IpAddress
 
     /**
      * Check if this is an IPv6 address.
-     *
-     * @return bool
      */
     public function isIpv6(): bool
     {
@@ -92,12 +82,10 @@ final class IpAddress
 
     /**
      * Check if IP address is private.
-     *
-     * @return bool
      */
     public function isPrivate(): bool
     {
-        return !filter_var(
+        return ! filter_var(
             $this->value,
             FILTER_VALIDATE_IP,
             FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
@@ -106,19 +94,16 @@ final class IpAddress
 
     /**
      * Check if IP address is public.
-     *
-     * @return bool
      */
     public function isPublic(): bool
     {
-        return !$this->isPrivate();
+        return ! $this->isPrivate();
     }
 
     /**
      * Check if IP address is in a specific subnet.
      *
-     * @param string $subnet (e.g., '192.168.0.0/24')
-     * @return bool
+     * @param  string  $subnet  (e.g., '192.168.0.0/24')
      */
     public function isInSubnet(string $subnet): bool
     {
@@ -131,16 +116,13 @@ final class IpAddress
 
         $ip = ip2long($this->value);
         $subnet = ip2long($subnetIp);
-        $mask = -1 << (32 - (int)$maskBits);
+        $mask = -1 << (32 - (int) $maskBits);
 
         return ($ip & $mask) === ($subnet & $mask);
     }
 
     /**
      * Check if IP equals another IP.
-     *
-     * @param IpAddress $other
-     * @return bool
      */
     public function equals(IpAddress $other): bool
     {
@@ -150,7 +132,6 @@ final class IpAddress
     /**
      * Validate IP address format.
      *
-     * @param string $value
      * @throws InvalidArgumentException
      */
     private function validate(string $value): void
@@ -160,8 +141,8 @@ final class IpAddress
         }
 
         // Validate using PHP's built-in filter
-        if (!filter_var($value, FILTER_VALIDATE_IP)) {
-            throw new InvalidArgumentException('Invalid IP address format: ' . $value);
+        if (! filter_var($value, FILTER_VALIDATE_IP)) {
+            throw new InvalidArgumentException('Invalid IP address format: '.$value);
         }
 
         // Check for localhost (usually not allowed for VPS servers)
@@ -173,9 +154,6 @@ final class IpAddress
 
     /**
      * Detect IP version.
-     *
-     * @param string $value
-     * @return string
      */
     private function detectVersion(string $value): string
     {
@@ -192,14 +170,12 @@ final class IpAddress
 
     /**
      * Check if IP address passes basic validation without throwing exception.
-     *
-     * @param string $value
-     * @return bool
      */
     public static function isValid(string $value): bool
     {
         try {
             new self($value);
+
             return true;
         } catch (InvalidArgumentException $e) {
             return false;
@@ -208,23 +184,20 @@ final class IpAddress
 
     /**
      * Get reverse DNS lookup format (for IPv4).
-     *
-     * @return string|null
      */
     public function getReverseDnsFormat(): ?string
     {
-        if (!$this->isIpv4()) {
+        if (! $this->isIpv4()) {
             return null;
         }
 
         $parts = array_reverse(explode('.', $this->value));
-        return implode('.', $parts) . '.in-addr.arpa';
+
+        return implode('.', $parts).'.in-addr.arpa';
     }
 
     /**
      * Serialize for JSON.
-     *
-     * @return string
      */
     public function jsonSerialize(): string
     {

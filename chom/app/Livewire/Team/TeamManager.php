@@ -21,15 +21,22 @@ class TeamManager extends Component
 
     // Invite modal
     public bool $showInviteModal = false;
+
     public string $inviteEmail = '';
+
     public string $inviteName = '';
+
     public string $inviteRole = 'member';
 
     // Edit modal
     public bool $showEditModal = false;
+
     public ?string $editingUserId = null;
+
     public string $editName = '';
+
     public string $editEmail = '';
+
     public string $editRole = '';
 
     // Delete confirmation
@@ -68,13 +75,15 @@ class TeamManager extends Component
         $response = Gate::inspect('team.invite');
         if ($response->denied()) {
             session()->flash('error', $response->message() ?: 'You do not have permission to invite members.');
+
             return;
         }
 
         $organization = $this->getOrganization();
 
-        if (!$organization) {
+        if (! $organization) {
             session()->flash('error', 'Organization not found.');
+
             return;
         }
 
@@ -118,16 +127,18 @@ class TeamManager extends Component
     {
         $organization = $this->getOrganization();
 
-        if (!$organization) {
+        if (! $organization) {
             session()->flash('error', 'Organization not found.');
+
             return;
         }
 
         try {
             $user = $organization->users()->find($userId);
 
-            if (!$user) {
+            if (! $user) {
                 session()->flash('error', 'User not found.');
+
                 return;
             }
 
@@ -135,6 +146,7 @@ class TeamManager extends Component
             $response = Gate::inspect('team.update', $user);
             if ($response->denied()) {
                 session()->flash('error', $response->message() ?: 'You do not have permission to edit this member.');
+
                 return;
             }
 
@@ -163,8 +175,9 @@ class TeamManager extends Component
     {
         $organization = $this->getOrganization();
 
-        if (!$organization) {
+        if (! $organization) {
             session()->flash('error', 'Organization not found.');
+
             return;
         }
 
@@ -177,8 +190,9 @@ class TeamManager extends Component
         try {
             $user = $organization->users()->find($this->editingUserId);
 
-            if (!$user) {
+            if (! $user) {
                 session()->flash('error', 'User not found.');
+
                 return;
             }
 
@@ -186,6 +200,7 @@ class TeamManager extends Component
             $response = Gate::inspect('team.update', $user);
             if ($response->denied()) {
                 session()->flash('error', $response->message() ?: 'You do not have permission to update this member.');
+
                 return;
             }
 
@@ -194,6 +209,7 @@ class TeamManager extends Component
                 $ownerCount = $organization->users()->where('role', 'owner')->count();
                 if ($ownerCount <= 1) {
                     session()->flash('error', 'Organization must have at least one owner.');
+
                     return;
                 }
             }
@@ -222,15 +238,17 @@ class TeamManager extends Component
     {
         $organization = $this->getOrganization();
 
-        if (!$organization) {
+        if (! $organization) {
             session()->flash('error', 'Organization not found.');
+
             return;
         }
 
         $user = $organization->users()->find($userId);
 
-        if (!$user) {
+        if (! $user) {
             session()->flash('error', 'User not found.');
+
             return;
         }
 
@@ -238,6 +256,7 @@ class TeamManager extends Component
         $response = Gate::inspect('team.remove', $user);
         if ($response->denied()) {
             session()->flash('error', $response->message() ?: 'You do not have permission to remove members.');
+
             return;
         }
 
@@ -251,24 +270,26 @@ class TeamManager extends Component
 
     public function deleteMember(): void
     {
-        if (!$this->deletingUserId) {
+        if (! $this->deletingUserId) {
             return;
         }
 
         $organization = $this->getOrganization();
 
-        if (!$organization) {
+        if (! $organization) {
             session()->flash('error', 'Organization not found.');
             $this->cancelDelete();
+
             return;
         }
 
         try {
             $user = $organization->users()->find($this->deletingUserId);
 
-            if (!$user) {
+            if (! $user) {
                 session()->flash('error', 'User not found.');
                 $this->cancelDelete();
+
                 return;
             }
 
@@ -277,6 +298,7 @@ class TeamManager extends Component
             if ($response->denied()) {
                 session()->flash('error', $response->message() ?: 'You do not have permission to remove this member.');
                 $this->cancelDelete();
+
                 return;
             }
 
@@ -286,6 +308,7 @@ class TeamManager extends Component
                 if ($ownerCount <= 1) {
                     session()->flash('error', 'Cannot remove the only owner. Transfer ownership first.');
                     $this->cancelDelete();
+
                     return;
                 }
             }
@@ -320,7 +343,7 @@ class TeamManager extends Component
         try {
             $organization = $this->getOrganization();
 
-            if (!$organization) {
+            if (! $organization) {
                 return view('livewire.team.team-manager', [
                     'members' => collect(),
                     'roleStats' => [],
@@ -348,8 +371,8 @@ class TeamManager extends Component
 
             if ($this->search) {
                 $query->where(function ($q) {
-                    $q->where('name', 'like', '%' . $this->search . '%')
-                        ->orWhere('email', 'like', '%' . $this->search . '%');
+                    $q->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('email', 'like', '%'.$this->search.'%');
                 });
             }
 

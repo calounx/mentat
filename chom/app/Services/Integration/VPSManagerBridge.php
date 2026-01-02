@@ -2,26 +2,30 @@
 
 namespace App\Services\Integration;
 
-use App\Models\VpsServer;
+use App\Contracts\VpsManagerInterface;
 use App\Models\Site;
+use App\Models\VpsServer;
 use App\Services\VPS\VpsConnectionPool;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Crypt;
-use phpseclib3\Net\SSH2;
 use phpseclib3\Crypt\PublicKeyLoader;
+use phpseclib3\Net\SSH2;
 
-class VPSManagerBridge
+class VPSManagerBridge implements VpsManagerInterface
 {
     private ?SSH2 $ssh = null;
+
     private string $vpsmanagerPath = '/opt/vpsmanager/bin/vpsmanager';
+
     private int $timeout = 120; // seconds
+
     private ?VpsConnectionPool $connectionPool = null;
+
     private bool $useConnectionPool = true;
 
     /**
      * Constructor - initialize connection pool
      */
-    public function __construct(VpsConnectionPool $connectionPool = null)
+    public function __construct(?VpsConnectionPool $connectionPool = null)
     {
         $this->connectionPool = $connectionPool ?? app(VpsConnectionPool::class);
     }
@@ -35,6 +39,7 @@ class VPSManagerBridge
         // If connection pooling is enabled, use pooled connection
         if ($this->useConnectionPool && $this->connectionPool) {
             $this->ssh = $this->connectionPool->getConnection($vps);
+
             return;
         }
 
@@ -47,7 +52,7 @@ class VPSManagerBridge
         // Load SSH key
         $keyPath = config('chom.ssh_key_path', storage_path('app/ssh/chom_deploy_key'));
 
-        if (!file_exists($keyPath)) {
+        if (! file_exists($keyPath)) {
             throw new \RuntimeException("SSH key not found at: {$keyPath}");
         }
 
@@ -56,7 +61,7 @@ class VPSManagerBridge
 
         $key = PublicKeyLoader::load(file_get_contents($keyPath));
 
-        if (!$this->ssh->login('root', $key)) {
+        if (! $this->ssh->login('root', $key)) {
             throw new \RuntimeException("SSH authentication failed for VPS: {$vps->hostname}");
         }
 
@@ -73,6 +78,7 @@ class VPSManagerBridge
         // Connections are managed by the pool
         if ($this->useConnectionPool && $this->connectionPool) {
             $this->ssh = null;
+
             return;
         }
 
@@ -108,7 +114,7 @@ class VPSManagerBridge
         $this->connect($vps);
 
         // Build command with arguments
-        $fullCommand = $this->vpsmanagerPath . ' ' . $command;
+        $fullCommand = $this->vpsmanagerPath.' '.$command;
 
         foreach ($args as $key => $value) {
             if (is_bool($value)) {
@@ -117,9 +123,9 @@ class VPSManagerBridge
                 }
             } elseif (is_numeric($key)) {
                 // Positional argument
-                $fullCommand .= ' ' . escapeshellarg($value);
+                $fullCommand .= ' '.escapeshellarg($value);
             } else {
-                $fullCommand .= " --{$key}=" . escapeshellarg($value);
+                $fullCommand .= " --{$key}=".escapeshellarg($value);
             }
         }
 
@@ -145,7 +151,7 @@ class VPSManagerBridge
         ];
 
         // Try to parse JSON output
-        if (!empty($output)) {
+        if (! empty($output)) {
             $jsonData = $this->parseJsonOutput($output);
             if ($jsonData !== null) {
                 $result['data'] = $jsonData;
@@ -174,6 +180,7 @@ class VPSManagerBridge
                 return $json;
             }
         }
+
         return null;
     }
 
@@ -188,11 +195,11 @@ class VPSManagerBridge
             'php-version' => $options['php_version'] ?? '8.2',
         ];
 
-        if (!empty($options['admin_email'])) {
+        if (! empty($options['admin_email'])) {
             $args['admin-email'] = $options['admin_email'];
         }
 
-        if (!empty($options['admin_user'])) {
+        if (! empty($options['admin_user'])) {
             $args['admin-user'] = $options['admin_user'];
         }
 
@@ -285,13 +292,50 @@ class VPSManagerBridge
     }
 
     /**
-     * Create a backup.
+     * Create a backup (interface-compatible version).
      */
-    public function createBackup(VpsServer $vps, string $domain, array $components = []): array
+    public function createBackup(VpsServer $vps, Site $site, string $backupType = 'full'): array
+    {
+        $args = ['site' => $site->domain];
+
+        // Map backup type to components
+        $components = match ($backupType) {
+            'database' => ['database'],
+            'files' => ['files'],
+            'full' => ['database', 'files'],
+            default => ['database', 'files'],
+        };
+
+        if (! empty($components)) {
+            $args['components'] = implode(',', $components);
+        }
+
+        $result = $this->execute($vps, 'backup:create', $args);
+
+        // Transform result to match interface
+        if ($result['success']) {
+            return [
+                'success' => true,
+                'path' => $result['data']['path'] ?? '',
+                'size' => $result['data']['size'] ?? 0,
+                'output' => $result['output'] ?? '',
+            ];
+        }
+
+        return [
+            'success' => false,
+            'error' => $result['error'] ?? 'Backup creation failed',
+        ];
+    }
+
+    /**
+     * Create a backup by domain (legacy method).
+     */
+    public function createBackupByDomain(VpsServer $vps, string $domain, array $components = []): array
     {
         $args = ['site' => $domain];
 
-        if (!empty($components)) {
+        if (! empty($components)) {
             $args['components'] = implode(',', $components);
         }
 
@@ -307,9 +351,20 @@ class VPSManagerBridge
     }
 
     /**
-     * Restore a backup.
+     * Restore a backup (interface-compatible version).
      */
-    public function restoreBackup(VpsServer $vps, string $backupId): array
+    public function restoreBackup(VpsServer $vps, Site $site, string $backupPath): array
+    {
+        // Extract backup ID from path or use path directly
+        $backupId = basename($backupPath);
+
+        return $this->execute($vps, 'backup:restore', [$backupId]);
+    }
+
+    /**
+     * Restore a backup by ID (legacy method).
+     */
+    public function restoreBackupById(VpsServer $vps, string $backupId): array
     {
         return $this->execute($vps, 'backup:restore', [$backupId]);
     }
@@ -377,12 +432,14 @@ class VPSManagerBridge
     {
         try {
             $result = $this->getVersion($vps);
+
             return $result['success'];
         } catch (\Exception $e) {
             Log::warning('VPSManager check failed', [
                 'vps' => $vps->hostname,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -412,7 +469,7 @@ class VPSManagerBridge
         // Strict command whitelist validation
         $normalizedCommand = trim($command);
 
-        if (!in_array($normalizedCommand, self::ALLOWED_RAW_COMMANDS, true)) {
+        if (! in_array($normalizedCommand, self::ALLOWED_RAW_COMMANDS, true)) {
             Log::warning('Blocked unauthorized raw SSH command attempt', [
                 'vps' => $vps->hostname,
                 'command' => $command,
@@ -427,7 +484,7 @@ class VPSManagerBridge
 
         Log::info('Raw SSH command (whitelisted)', ['vps' => $vps->hostname, 'command' => $normalizedCommand]);
 
-        $output = $this->ssh->exec($normalizedCommand . ' 2>&1');
+        $output = $this->ssh->exec($normalizedCommand.' 2>&1');
         $exitCode = $this->ssh->getExitStatus() ?? 0;
 
         $this->disconnect();
@@ -458,7 +515,7 @@ class VPSManagerBridge
             ]);
 
             throw new \RuntimeException(
-                "SSH key at {$keyPath} has insecure permissions (" . sprintf('0%o', $perms) . "). " .
+                "SSH key at {$keyPath} has insecure permissions (".sprintf('0%o', $perms).'). '.
                 "Expected 0600 or 0400. Run: chmod 600 {$keyPath}"
             );
         }
@@ -472,13 +529,77 @@ class VPSManagerBridge
         try {
             $this->connect($vps);
             $this->disconnect();
+
             return true;
         } catch (\Exception $e) {
             Log::warning('SSH connection test failed', [
                 'vps' => $vps->hostname,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
+    }
+
+    /**
+     * Interface method: Provision a site (adapts to type-specific methods).
+     */
+    public function provisionSite(VpsServer $vps, Site $site): array
+    {
+        // Determine site type and call appropriate method
+        return match ($site->site_type) {
+            'wordpress' => $this->createWordPressSite($vps, $site->domain),
+            'html' => $this->createHtmlSite($vps, $site->domain),
+            default => ['success' => false, 'error' => 'Unsupported site type: '.$site->site_type],
+        };
+    }
+
+    /**
+     * Interface method: Issue SSL certificate (adapter).
+     */
+    public function issueSslCertificate(VpsServer $vps, string $domain): array
+    {
+        return $this->issueSSL($vps, $domain);
+    }
+
+    /**
+     * Interface method: Check health (adapter).
+     */
+    public function checkHealth(VpsServer $vps): array
+    {
+        $result = $this->healthCheck($vps);
+
+        // Transform to expected format
+        if ($result['success']) {
+            return [
+                'healthy' => true,
+                'load' => $result['data']['load_average'] ?? 0.0,
+                'memory_used' => $result['data']['memory_used_mb'] ?? 0,
+                'disk_used' => $result['data']['disk_used_gb'] ?? 0,
+            ];
+        }
+
+        return [
+            'healthy' => false,
+            'error' => $result['error'] ?? 'Health check failed',
+        ];
+    }
+
+    /**
+     * Interface method: Get site metrics (adapter).
+     */
+    public function getSiteMetrics(VpsServer $vps, Site $site): array
+    {
+        $info = $this->getSiteInfo($vps, $site->domain);
+
+        if (! $info['success']) {
+            return ['error' => $info['error'] ?? 'Failed to get site metrics'];
+        }
+
+        return [
+            'storage_mb' => $info['data']['storage_mb'] ?? 0,
+            'bandwidth_mb' => $info['data']['bandwidth_mb'] ?? 0,
+            'requests' => $info['data']['requests'] ?? 0,
+        ];
     }
 }

@@ -11,8 +11,6 @@ use Illuminate\Support\Facades\DB;
  *
  * This trait provides methods for benchmarking operations, asserting performance
  * thresholds, and detecting N+1 query problems.
- *
- * @package Tests\Concerns
  */
 trait WithPerformanceTesting
 {
@@ -37,7 +35,6 @@ trait WithPerformanceTesting
     /**
      * Measure execution time of a callback
      *
-     * @param callable $callback
      * @return array{time: float, result: mixed}
      */
     protected function measureExecutionTime(callable $callback): array
@@ -57,9 +54,8 @@ trait WithPerformanceTesting
     /**
      * Assert operation completes within time threshold
      *
-     * @param callable $callback
-     * @param float $maxTimeMs Maximum allowed time in milliseconds
-     * @param string $operationName Name for error messages
+     * @param  float  $maxTimeMs  Maximum allowed time in milliseconds
+     * @param  string  $operationName  Name for error messages
      * @return mixed The result of the callback
      */
     protected function assertPerformance(
@@ -86,13 +82,11 @@ trait WithPerformanceTesting
     /**
      * Assert operation meets standard benchmark
      *
-     * @param callable $callback
-     * @param string $benchmarkKey Key from $performanceBenchmarks
-     * @return mixed
+     * @param  string  $benchmarkKey  Key from $performanceBenchmarks
      */
     protected function assertBenchmark(callable $callback, string $benchmarkKey): mixed
     {
-        if (!isset($this->performanceBenchmarks[$benchmarkKey])) {
+        if (! isset($this->performanceBenchmarks[$benchmarkKey])) {
             throw new \InvalidArgumentException("Unknown benchmark: {$benchmarkKey}");
         }
 
@@ -105,8 +99,6 @@ trait WithPerformanceTesting
 
     /**
      * Start tracking database queries
-     *
-     * @return void
      */
     protected function startQueryTracking(): void
     {
@@ -116,8 +108,6 @@ trait WithPerformanceTesting
 
     /**
      * Get query count since tracking started
-     *
-     * @return int
      */
     protected function getQueryCount(): int
     {
@@ -126,10 +116,6 @@ trait WithPerformanceTesting
 
     /**
      * Assert maximum number of queries
-     *
-     * @param int $maxQueries
-     * @param string $message
-     * @return void
      */
     protected function assertMaxQueries(int $maxQueries, string $message = ''): void
     {
@@ -149,11 +135,10 @@ trait WithPerformanceTesting
     /**
      * Assert no N+1 queries by comparing query counts for different dataset sizes
      *
-     * @param callable $setupCallback Callback that accepts count and returns test data
-     * @param callable $testCallback Callback that processes the data
-     * @param int $smallSize Small dataset size
-     * @param int $largeSize Large dataset size
-     * @return void
+     * @param  callable  $setupCallback  Callback that accepts count and returns test data
+     * @param  callable  $testCallback  Callback that processes the data
+     * @param  int  $smallSize  Small dataset size
+     * @param  int  $largeSize  Large dataset size
      */
     protected function assertNoN1Queries(
         callable $setupCallback,
@@ -191,8 +176,8 @@ trait WithPerformanceTesting
     /**
      * Benchmark and compare multiple approaches
      *
-     * @param array $approaches Array of ['name' => callable]
-     * @param int $iterations Number of iterations
+     * @param  array  $approaches  Array of ['name' => callable]
+     * @param  int  $iterations  Number of iterations
      * @return array Performance comparison results
      */
     protected function benchmarkApproaches(array $approaches, int $iterations = 100): array
@@ -220,9 +205,6 @@ trait WithPerformanceTesting
 
     /**
      * Calculate median from array of numbers
-     *
-     * @param array $numbers
-     * @return float
      */
     private function calculateMedian(array $numbers): float
     {
@@ -240,9 +222,7 @@ trait WithPerformanceTesting
     /**
      * Assert cache hit rate
      *
-     * @param callable $callback
-     * @param float $minHitRate Minimum expected hit rate (0-1)
-     * @return void
+     * @param  float  $minHitRate  Minimum expected hit rate (0-1)
      */
     protected function assertCacheHitRate(callable $callback, float $minHitRate = 0.8): void
     {
@@ -271,14 +251,12 @@ trait WithPerformanceTesting
 
     /**
      * Get detailed query log
-     *
-     * @return array
      */
     protected function getDetailedQueryLog(): array
     {
         return collect(DB::getQueryLog())
             ->skip($this->queryCountStart)
-            ->map(fn($query) => [
+            ->map(fn ($query) => [
                 'query' => $query['query'],
                 'bindings' => $query['bindings'],
                 'time' => $query['time'],
@@ -288,10 +266,6 @@ trait WithPerformanceTesting
 
     /**
      * Assert query uses index
-     *
-     * @param string $query
-     * @param array $bindings
-     * @return void
      */
     protected function assertQueryUsesIndex(string $query, array $bindings = []): void
     {
@@ -299,6 +273,7 @@ trait WithPerformanceTesting
 
         $usesIndex = collect($explain)->contains(function ($row) {
             $possibleKey = $row->possible_keys ?? $row->POSSIBLE_KEYS ?? null;
+
             return $possibleKey !== null && $possibleKey !== '';
         });
 
@@ -311,7 +286,6 @@ trait WithPerformanceTesting
     /**
      * Profile memory usage
      *
-     * @param callable $callback
      * @return array{memory_peak: int, memory_used: int, result: mixed}
      */
     protected function profileMemory(callable $callback): array
@@ -333,10 +307,6 @@ trait WithPerformanceTesting
 
     /**
      * Assert memory usage is below threshold
-     *
-     * @param callable $callback
-     * @param int $maxMemoryBytes
-     * @return mixed
      */
     protected function assertMemoryUsage(callable $callback, int $maxMemoryBytes): mixed
     {
@@ -357,9 +327,6 @@ trait WithPerformanceTesting
 
     /**
      * Format bytes to human-readable string
-     *
-     * @param int $bytes
-     * @return string
      */
     private function formatBytes(int $bytes): string
     {
@@ -371,6 +338,6 @@ trait WithPerformanceTesting
             $i++;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Sites;
 
-use App\Models\Site;
 use App\Models\Tenant;
 use App\Services\Integration\VPSManagerBridge;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -11,10 +10,12 @@ use Livewire\WithPagination;
 
 class SiteList extends Component
 {
-    use WithPagination, AuthorizesRequests;
+    use AuthorizesRequests, WithPagination;
 
     public string $search = '';
+
     public string $statusFilter = '';
+
     public ?string $deletingSiteId = null;
 
     protected $queryString = [
@@ -44,15 +45,16 @@ class SiteList extends Component
 
     public function deleteSite(): void
     {
-        if (!$this->deletingSiteId) {
+        if (! $this->deletingSiteId) {
             return;
         }
 
         $tenant = $this->getTenant();
         $site = $tenant->sites()->find($this->deletingSiteId);
 
-        if (!$site) {
+        if (! $site) {
             $this->deletingSiteId = null;
+
             return;
         }
 
@@ -70,7 +72,7 @@ class SiteList extends Component
 
             session()->flash('success', "Site {$site->domain} deleted successfully.");
         } catch (\Exception $e) {
-            session()->flash('error', 'Failed to delete site: ' . $e->getMessage());
+            session()->flash('error', 'Failed to delete site: '.$e->getMessage());
         }
 
         $this->deletingSiteId = null;
@@ -81,7 +83,7 @@ class SiteList extends Component
         $tenant = $this->getTenant();
         $site = $tenant->sites()->with('vpsServer')->find($siteId);
 
-        if (!$site || !$site->vpsServer) {
+        if (! $site || ! $site->vpsServer) {
             return;
         }
 
@@ -106,7 +108,7 @@ class SiteList extends Component
                 }
             }
         } catch (\Exception $e) {
-            session()->flash('error', 'Failed to toggle site: ' . $e->getMessage());
+            session()->flash('error', 'Failed to toggle site: '.$e->getMessage());
         }
     }
 
@@ -124,7 +126,7 @@ class SiteList extends Component
             ->orderBy('created_at', 'desc');
 
         if ($this->search) {
-            $query->where('domain', 'like', '%' . $this->search . '%');
+            $query->where('domain', 'like', '%'.$this->search.'%');
         }
 
         if ($this->statusFilter) {

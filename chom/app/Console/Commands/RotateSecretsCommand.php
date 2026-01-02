@@ -48,6 +48,7 @@ class RotateSecretsCommand extends Command
         }
 
         $this->error('Please specify --all or --vps=ID');
+
         return self::FAILURE;
     }
 
@@ -57,6 +58,7 @@ class RotateSecretsCommand extends Command
 
         if ($servers->isEmpty()) {
             $this->info('✓ No VPS servers require key rotation at this time.');
+
             return self::SUCCESS;
         }
 
@@ -92,6 +94,7 @@ class RotateSecretsCommand extends Command
 
         if ($servers->isEmpty()) {
             $this->info('✓ No VPS servers require key rotation.');
+
             return self::SUCCESS;
         }
 
@@ -107,7 +110,7 @@ class RotateSecretsCommand extends Command
         $this->newLine(2);
 
         // Display results
-        $this->info("Rotation Summary:");
+        $this->info('Rotation Summary:');
         $this->info("  Total: {$results['total']}");
         $this->info("  ✓ Successful: {$results['successful']}");
 
@@ -118,6 +121,7 @@ class RotateSecretsCommand extends Command
             foreach ($results['errors'] as $error) {
                 $this->error("  - {$error['vps_name']} (ID: {$error['vps_id']}): {$error['error']}");
             }
+
             return self::FAILURE;
         }
 
@@ -131,18 +135,19 @@ class RotateSecretsCommand extends Command
     {
         $vps = \App\Models\VpsServer::find($vpsId);
 
-        if (!$vps) {
+        if (! $vps) {
             $this->error("VPS server with ID {$vpsId} not found.");
+
             return self::FAILURE;
         }
 
         $this->info("Rotating credentials for VPS: {$vps->name} ({$vps->ip})");
 
-        if ($vps->key_rotated_at && !$this->option('force')) {
+        if ($vps->key_rotated_at && ! $this->option('force')) {
             $daysSince = now()->diffInDays($vps->key_rotated_at);
             if ($daysSince < 90) {
                 $this->warn("Keys were rotated {$daysSince} days ago (policy: 90 days).");
-                if (!$this->confirm('Rotate anyway?')) {
+                if (! $this->confirm('Rotate anyway?')) {
                     return self::SUCCESS;
                 }
             }
@@ -161,6 +166,7 @@ class RotateSecretsCommand extends Command
 
         } catch (\Exception $e) {
             $this->error("✗ Rotation failed: {$e->getMessage()}");
+
             return self::FAILURE;
         }
     }

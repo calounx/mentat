@@ -2,11 +2,10 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 use App\Services\Alerting\AlertManager;
 use Exception;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 
 class BackupDatabase extends Command
 {
@@ -34,21 +33,21 @@ class BackupDatabase extends Command
         try {
             // Create backup directory if it doesn't exist
             $backupDir = storage_path('app/backups');
-            if (!is_dir($backupDir)) {
+            if (! is_dir($backupDir)) {
                 mkdir($backupDir, 0755, true);
             }
 
             // Generate backup filename
             $timestamp = now()->format('Y-m-d_His');
             $filename = "backup_{$timestamp}.sql";
-            $filepath = $backupDir . '/' . $filename;
+            $filepath = $backupDir.'/'.$filename;
 
             // Create backup
             $this->info('Creating database dump...');
             $this->createBackup($filepath);
 
             $filesize = filesize($filepath);
-            $this->info("Backup created: {$filename} (" . $this->formatBytes($filesize) . ")");
+            $this->info("Backup created: {$filename} (".$this->formatBytes($filesize).')');
 
             // Encrypt if requested
             if ($this->option('encrypt')) {
@@ -97,7 +96,7 @@ class BackupDatabase extends Command
             return Command::SUCCESS;
 
         } catch (Exception $e) {
-            $this->error('Backup failed: ' . $e->getMessage());
+            $this->error('Backup failed: '.$e->getMessage());
 
             logger()->error('Database backup failed', [
                 'error' => $e->getMessage(),
@@ -107,7 +106,7 @@ class BackupDatabase extends Command
             // Send failure alert
             $this->alertManager->critical(
                 'backup_failed',
-                'Database backup failed: ' . $e->getMessage()
+                'Database backup failed: '.$e->getMessage()
             );
 
             return Command::FAILURE;
@@ -154,10 +153,10 @@ class BackupDatabase extends Command
         exec($command, $output, $returnCode);
 
         if ($returnCode !== 0) {
-            throw new Exception('MySQL backup failed with exit code ' . $returnCode);
+            throw new Exception('MySQL backup failed with exit code '.$returnCode);
         }
 
-        if (!file_exists($filepath) || filesize($filepath) === 0) {
+        if (! file_exists($filepath) || filesize($filepath) === 0) {
             throw new Exception('Backup file is empty or does not exist');
         }
     }
@@ -179,10 +178,10 @@ class BackupDatabase extends Command
         exec($command, $output, $returnCode);
 
         if ($returnCode !== 0) {
-            throw new Exception('PostgreSQL backup failed with exit code ' . $returnCode);
+            throw new Exception('PostgreSQL backup failed with exit code '.$returnCode);
         }
 
-        if (!file_exists($filepath) || filesize($filepath) === 0) {
+        if (! file_exists($filepath) || filesize($filepath) === 0) {
             throw new Exception('Backup file is empty or does not exist');
         }
     }
@@ -191,25 +190,27 @@ class BackupDatabase extends Command
     {
         $dbPath = $config['database'];
 
-        if (!file_exists($dbPath)) {
+        if (! file_exists($dbPath)) {
             throw new Exception("SQLite database not found: {$dbPath}");
         }
 
-        if (!copy($dbPath, $filepath)) {
+        if (! copy($dbPath, $filepath)) {
             throw new Exception('Failed to copy SQLite database');
         }
     }
 
     protected function encryptBackup(string $filepath): ?string
     {
-        if (!function_exists('openssl_encrypt')) {
+        if (! function_exists('openssl_encrypt')) {
             $this->warn('OpenSSL not available, skipping encryption');
+
             return null;
         }
 
         $key = config('app.key');
-        if (!$key) {
+        if (! $key) {
             $this->warn('APP_KEY not set, skipping encryption');
+
             return null;
         }
 
@@ -224,10 +225,10 @@ class BackupDatabase extends Command
         $encrypted = openssl_encrypt($data, 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv);
 
         // Combine IV and encrypted data
-        $encryptedData = base64_encode($iv . $encrypted);
+        $encryptedData = base64_encode($iv.$encrypted);
 
         // Write to new file
-        $encryptedPath = $filepath . '.enc';
+        $encryptedPath = $filepath.'.enc';
         file_put_contents($encryptedPath, $encryptedData);
 
         return $encryptedPath;
@@ -240,13 +241,13 @@ class BackupDatabase extends Command
 
         try {
             Storage::disk($disk)->put(
-                'backups/' . $filename,
+                'backups/'.$filename,
                 file_get_contents($filepath)
             );
 
             $this->info("Uploaded to {$disk}: backups/{$filename}");
         } catch (Exception $e) {
-            $this->warn("Failed to upload to remote storage: " . $e->getMessage());
+            $this->warn('Failed to upload to remote storage: '.$e->getMessage());
         }
     }
 
@@ -272,6 +273,6 @@ class BackupDatabase extends Command
             $bytes /= 1024;
         }
 
-        return round($bytes, $precision) . ' ' . $units[$i];
+        return round($bytes, $precision).' '.$units[$i];
     }
 }

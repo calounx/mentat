@@ -1,0 +1,93 @@
+# ============================================================================
+# CHOM Alertmanager Configuration
+# ============================================================================
+# Alert routing and notification management
+# ============================================================================
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'localhost:25'
+  smtp_from: 'alertmanager@chom.local'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Routing tree
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+
+  routes:
+    # Critical alerts
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      continue: true
+
+    # Database alerts
+    - match:
+        component: database
+      receiver: 'database-alerts'
+
+    # Application alerts
+    - match:
+        tier: application
+      receiver: 'application-alerts'
+
+# Inhibition rules (suppress certain alerts when others are firing)
+inhibit_rules:
+  # If service is down, don't alert on high latency
+  - source_match:
+      severity: 'critical'
+      alertname: 'ServiceDown'
+    target_match:
+      severity: 'warning'
+      alertname: 'HighLatency'
+    equal: ['service', 'cluster']
+
+# Receivers (notification channels)
+receivers:
+  # Default receiver (logs only in test environment)
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+  # Critical alerts
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/critical'
+        send_resolved: true
+    # Add email/Slack/PagerDuty in production
+    # email_configs:
+    #   - to: 'ops-critical@example.com'
+    #     headers:
+    #       Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+
+  # Warning alerts
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/warning'
+        send_resolved: true
+
+  # Database alerts
+  - name: 'database-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/database'
+        send_resolved: true
+
+  # Application alerts
+  - name: 'application-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/application'
+        send_resolved: true

@@ -91,7 +91,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/', [SiteController::class, 'index']);
             Route::post('/', [SiteController::class, 'store']);
             Route::get('/{id}', [SiteController::class, 'show']);
-            Route::patch('/{id}', [SiteController::class, 'update']);
+            Route::match(['put', 'patch'], '/{id}', [SiteController::class, 'update']);
 
             // Destructive action with stricter rate limiting
             Route::delete('/{id}', [SiteController::class, 'destroy'])
@@ -174,6 +174,34 @@ Route::prefix('v1')->group(function () {
         Route::prefix('organization')->group(function () {
             Route::get('/', [TeamController::class, 'organization']);
             Route::patch('/', [TeamController::class, 'updateOrganization']);
+        });
+
+        // =====================================================================
+        // ADMIN ROUTES (Admin/Owner only)
+        // =====================================================================
+        Route::prefix('admin')->middleware('can:admin')->group(function () {
+            // User management
+            Route::get('/users', function () {
+                return response()->json(['users' => []]);
+            });
+            Route::post('/users/suspend', function () {
+                return response()->json(['message' => 'User suspended']);
+            });
+
+            // System settings
+            Route::get('/system/settings', function () {
+                return response()->json(['settings' => []]);
+            });
+            Route::get('/settings', function () {
+                return response()->json(['settings' => []]);
+            });
+
+            // Site management
+            Route::get('/sites/{id}', function ($id) {
+                $site = \App\Models\Site::withoutGlobalScopes()->findOrFail($id);
+
+                return response()->json($site);
+            });
         });
 
         // TODO: Add more routes as controllers are created

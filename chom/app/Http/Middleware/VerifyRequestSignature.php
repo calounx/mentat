@@ -70,7 +70,7 @@ class VerifyRequestSignature
         $providedSignature = $request->header('X-Signature');
         $timestamp = $request->header('X-Signature-Timestamp');
 
-        if (!$providedSignature || !$timestamp) {
+        if (! $providedSignature || ! $timestamp) {
             return $this->unauthorizedResponse(
                 'SIGNATURE_MISSING',
                 'Request signature headers are required for this endpoint.'
@@ -78,7 +78,7 @@ class VerifyRequestSignature
         }
 
         // SECURITY CHECK 1: Verify timestamp is recent (replay protection)
-        if (!$this->isTimestampValid($timestamp)) {
+        if (! $this->isTimestampValid($timestamp)) {
             return $this->unauthorizedResponse(
                 'SIGNATURE_EXPIRED',
                 'Request signature has expired. Please generate a new request.'
@@ -88,7 +88,7 @@ class VerifyRequestSignature
         // Get signing secret (from parameter or default)
         $secret = $secretKey ?? config('app.signing_secret');
 
-        if (!$secret) {
+        if (! $secret) {
             // SECURITY: Fail closed - reject if no secret configured
             \Log::critical('Request signing secret not configured but signature verification enabled');
 
@@ -102,7 +102,7 @@ class VerifyRequestSignature
         $expectedSignature = $this->computeSignature($request, $timestamp, $secret);
 
         // SECURITY CHECK 3: Compare signatures in constant time (prevent timing attacks)
-        if (!hash_equals($expectedSignature, $providedSignature)) {
+        if (! hash_equals($expectedSignature, $providedSignature)) {
             // Audit log failed verification
             \Log::warning('Request signature verification failed', [
                 'method' => $request->method(),
@@ -139,9 +139,6 @@ class VerifyRequestSignature
      *   /api/v1/webhooks/payment
      *   {"amount":1000,"currency":"USD"}
      *
-     * @param Request $request
-     * @param string $timestamp
-     * @param string $secret
      * @return string HMAC signature in format: sha256=<hex>
      */
     protected function computeSignature(Request $request, string $timestamp, string $secret): string
@@ -168,12 +165,12 @@ class VerifyRequestSignature
      * - 5-minute window balances security and clock skew tolerance
      * - Assumes reasonable NTP synchronization between systems
      *
-     * @param string $timestamp Unix timestamp
+     * @param  string  $timestamp  Unix timestamp
      * @return bool True if timestamp is valid
      */
     protected function isTimestampValid(string $timestamp): bool
     {
-        if (!is_numeric($timestamp)) {
+        if (! is_numeric($timestamp)) {
             return false;
         }
 

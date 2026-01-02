@@ -30,6 +30,7 @@ return new class extends Migration
             $table->index('vps_id');
             $table->index('status');
             $table->index('domain');
+            $table->index(['tenant_id', 'status']);
         });
     }
 

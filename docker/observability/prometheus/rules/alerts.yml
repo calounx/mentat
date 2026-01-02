@@ -1,0 +1,245 @@
+# ============================================================================
+# CHOM Prometheus Alert Rules
+# ============================================================================
+# Production-ready alerting rules for the CHOM platform
+# ============================================================================
+
+groups:
+  # ==========================================================================
+  # Infrastructure Alerts
+  # ==========================================================================
+  - name: infrastructure
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanize }}% for 5 minutes"
+
+      # Critical CPU usage
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanize }}% for 2 minutes"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanize }}% for 5 minutes"
+
+      # Critical memory usage
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanize }}% for 2 minutes"
+
+      # High disk usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.mountpoint }} is {{ $value | humanize }}% full"
+
+      # Critical disk usage
+      - alert: CriticalDiskUsage
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical disk usage on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.mountpoint }} is {{ $value | humanize }}% full"
+
+  # ==========================================================================
+  # Application Alerts - Nginx
+  # ==========================================================================
+  - name: nginx
+    interval: 30s
+    rules:
+      # Nginx down
+      - alert: NginxDown
+        expr: up{job="nginx-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: webserver
+        annotations:
+          summary: "Nginx is down on {{ $labels.instance }}"
+          description: "Nginx exporter has been down for 1 minute"
+
+      # High request rate
+      - alert: HighNginxRequestRate
+        expr: rate(nginx_http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: webserver
+        annotations:
+          summary: "High request rate on {{ $labels.instance }}"
+          description: "Request rate is {{ $value | humanize }} req/s for 5 minutes"
+
+      # High error rate (5xx errors)
+      - alert: HighNginxErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: webserver
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.instance }}"
+          description: "5xx error rate is {{ $value | humanizePercentage }} for 5 minutes"
+
+      # Critical error rate
+      - alert: CriticalNginxErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+          component: webserver
+        annotations:
+          summary: "Critical 5xx error rate on {{ $labels.instance }}"
+          description: "5xx error rate is {{ $value | humanizePercentage }} for 2 minutes"
+
+  # ==========================================================================
+  # Application Alerts - PHP-FPM
+  # ==========================================================================
+  - name: php-fpm
+    interval: 30s
+    rules:
+      # PHP-FPM down
+      - alert: PHPFPMDown
+        expr: up{job="php-fpm-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: runtime
+        annotations:
+          summary: "PHP-FPM is down on {{ $labels.instance }}"
+          description: "PHP-FPM exporter has been down for 1 minute"
+
+      # High active processes
+      - alert: HighPHPFPMActiveProcesses
+        expr: phpfpm_active_processes / phpfpm_max_children > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: runtime
+        annotations:
+          summary: "High PHP-FPM active processes on {{ $labels.instance }}"
+          description: "Active processes are at {{ $value | humanizePercentage }} of max for 5 minutes"
+
+      # PHP-FPM queue full
+      - alert: PHPFPMQueueFull
+        expr: phpfpm_listen_queue > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: runtime
+        annotations:
+          summary: "PHP-FPM queue is full on {{ $labels.instance }}"
+          description: "Queue has {{ $value }} waiting connections"
+
+  # ==========================================================================
+  # Application Alerts - MySQL
+  # ==========================================================================
+  - name: mysql
+    interval: 30s
+    rules:
+      # MySQL down
+      - alert: MySQLDown
+        expr: up{job="mysql-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "MySQL is down on {{ $labels.instance }}"
+          description: "MySQL exporter has been down for 1 minute"
+
+      # High query rate
+      - alert: HighMySQLQueryRate
+        expr: rate(mysql_global_status_queries[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High MySQL query rate on {{ $labels.instance }}"
+          description: "Query rate is {{ $value | humanize }} queries/s for 5 minutes"
+
+      # High connection usage
+      - alert: HighMySQLConnectionUsage
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High MySQL connection usage on {{ $labels.instance }}"
+          description: "Connection usage is {{ $value | humanizePercentage }} of max for 5 minutes"
+
+      # Slow queries
+      - alert: HighMySQLSlowQueries
+        expr: rate(mysql_global_status_slow_queries[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High slow query rate on {{ $labels.instance }}"
+          description: "Slow query rate is {{ $value | humanize }} queries/s for 5 minutes"
+
+  # ==========================================================================
+  # Service Availability Alerts
+  # ==========================================================================
+  - name: service_availability
+    interval: 30s
+    rules:
+      # Node exporter down
+      - alert: NodeExporterDown
+        expr: up{job=~"node-exporter.*"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Node exporter is down on {{ $labels.instance }}"
+          description: "Node exporter has been down for 2 minutes"
+
+      # Prometheus scrape failures
+      - alert: PrometheusScrapeFailures
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus scrape failing for {{ $labels.job }}"
+          description: "Failed to scrape {{ $labels.instance }} for 5 minutes"

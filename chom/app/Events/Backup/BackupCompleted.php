@@ -13,18 +13,16 @@ use App\Models\SiteBackup;
  * - RecordAuditLog: Creates audit trail for successful backup
  * - SendNotification: Notifies user of backup completion
  * - RecordMetrics: Records backup duration, size, and success counter
- *
- * @package App\Events\Backup
  */
 class BackupCompleted extends AbstractDomainEvent
 {
     /**
      * Create a new BackupCompleted event instance.
      *
-     * @param SiteBackup $backup The completed backup record
-     * @param int $sizeBytes The actual size of the backup in bytes
-     * @param int $durationSeconds How long the backup took to complete
-     * @param string|null $actorId The ID of the actor (defaults to 'system')
+     * @param  SiteBackup  $backup  The completed backup record
+     * @param  int  $sizeBytes  The actual size of the backup in bytes
+     * @param  int  $durationSeconds  How long the backup took to complete
+     * @param  string|null  $actorId  The ID of the actor (defaults to 'system')
      */
     public function __construct(
         public readonly SiteBackup $backup,

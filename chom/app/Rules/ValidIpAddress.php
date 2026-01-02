@@ -14,14 +14,16 @@ use Illuminate\Contracts\Validation\Rule;
 class ValidIpAddress implements Rule
 {
     private string $message = 'The :attribute must be a valid IP address.';
+
     private bool $allowPrivate;
+
     private ?string $requiredVersion;
 
     /**
      * Create a new rule instance.
      *
-     * @param bool $allowPrivate Allow private IP addresses
-     * @param string|null $requiredVersion Required IP version ('ipv4' or 'ipv6')
+     * @param  bool  $allowPrivate  Allow private IP addresses
+     * @param  string|null  $requiredVersion  Required IP version ('ipv4' or 'ipv6')
      */
     public function __construct(
         bool $allowPrivate = true,
@@ -34,24 +36,25 @@ class ValidIpAddress implements Rule
     /**
      * Determine if the validation rule passes.
      *
-     * @param string $attribute
-     * @param mixed $value
-     * @return bool
+     * @param  string  $attribute
+     * @param  mixed  $value
      */
     public function passes($attribute, $value): bool
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             $this->message = 'The :attribute must be a string.';
+
             return false;
         }
 
         // Use the IpAddress value object for validation
-        if (!IpAddress::isValid($value)) {
+        if (! IpAddress::isValid($value)) {
             try {
                 IpAddress::fromString($value);
             } catch (\InvalidArgumentException $e) {
                 $this->message = $e->getMessage();
             }
+
             return false;
         }
 
@@ -59,20 +62,23 @@ class ValidIpAddress implements Rule
             $ip = IpAddress::fromString($value);
 
             // Check if private IPs are allowed
-            if (!$this->allowPrivate && $ip->isPrivate()) {
+            if (! $this->allowPrivate && $ip->isPrivate()) {
                 $this->message = 'The :attribute must be a public IP address.';
+
                 return false;
             }
 
             // Check IP version requirement
             if ($this->requiredVersion !== null) {
-                if ($this->requiredVersion === 'ipv4' && !$ip->isIpv4()) {
+                if ($this->requiredVersion === 'ipv4' && ! $ip->isIpv4()) {
                     $this->message = 'The :attribute must be an IPv4 address.';
+
                     return false;
                 }
 
-                if ($this->requiredVersion === 'ipv6' && !$ip->isIpv6()) {
+                if ($this->requiredVersion === 'ipv6' && ! $ip->isIpv6()) {
                     $this->message = 'The :attribute must be an IPv6 address.';
+
                     return false;
                 }
             }
@@ -80,14 +86,13 @@ class ValidIpAddress implements Rule
             return true;
         } catch (\InvalidArgumentException $e) {
             $this->message = $e->getMessage();
+
             return false;
         }
     }
 
     /**
      * Get the validation error message.
-     *
-     * @return string
      */
     public function message(): string
     {
@@ -96,8 +101,6 @@ class ValidIpAddress implements Rule
 
     /**
      * Static factory for public IPs only.
-     *
-     * @return self
      */
     public static function publicOnly(): self
     {
@@ -106,8 +109,6 @@ class ValidIpAddress implements Rule
 
     /**
      * Static factory for IPv4 only.
-     *
-     * @return self
      */
     public static function ipv4Only(): self
     {
@@ -116,8 +117,6 @@ class ValidIpAddress implements Rule
 
     /**
      * Static factory for IPv6 only.
-     *
-     * @return self
      */
     public static function ipv6Only(): self
     {

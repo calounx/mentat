@@ -77,7 +77,7 @@ class OperationFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'failed',
-            'error_message' => 'Operation failed: ' . $this->faker->sentence(),
+            'error_message' => 'Operation failed: '.$this->faker->sentence(),
             'started_at' => now()->subHour(),
             'completed_at' => now()->subMinutes(30),
         ]);

@@ -8,7 +8,6 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Sites\SiteCreationService;
 use App\Services\Sites\SiteQuotaService;
-use App\Services\VPS\VpsAllocationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\Concerns\WithMockVpsManager;
@@ -16,8 +15,6 @@ use Tests\TestCase;
 
 /**
  * Unit tests for Site Creation Service
- *
- * @package Tests\Unit\Services
  */
 class SiteCreationServiceTest extends TestCase
 {
@@ -25,6 +22,7 @@ class SiteCreationServiceTest extends TestCase
     use WithMockVpsManager;
 
     protected SiteCreationService $service;
+
     protected User $user;
 
     protected function setUp(): void
@@ -39,8 +37,6 @@ class SiteCreationServiceTest extends TestCase
 
     /**
      * Test successful site creation
-     *
-     * @return void
      */
     public function test_creates_site_successfully(): void
     {
@@ -50,9 +46,8 @@ class SiteCreationServiceTest extends TestCase
         $this->mockSuccessfulSiteDeployment('test.com');
 
         $data = [
-            'user_id' => $this->user->id,
             'domain' => 'test.com',
-            'type' => 'html',
+            'site_type' => 'html',
         ];
 
         // Act
@@ -67,8 +62,6 @@ class SiteCreationServiceTest extends TestCase
 
     /**
      * Test site creation checks quota
-     *
-     * @return void
      */
     public function test_creation_checks_quota_before_proceeding(): void
     {
@@ -85,17 +78,14 @@ class SiteCreationServiceTest extends TestCase
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('quota');
 
-        $this->service->create([
-            'user_id' => $this->user->id,
+        $this->service->createSite($this->user->currentTenant(), [
             'domain' => 'test.com',
-            'type' => 'html',
+            'site_type' => 'html',
         ]);
     }
 
     /**
      * Test site creation allocates VPS
-     *
-     * @return void
      */
     public function test_creation_allocates_vps(): void
     {
@@ -103,10 +93,9 @@ class SiteCreationServiceTest extends TestCase
         $this->mockSuccessfulVpsAllocation('vps-123');
 
         // Act
-        $this->service->create([
-            'user_id' => $this->user->id,
+        $this->service->createSite($this->user->currentTenant(), [
             'domain' => 'test.com',
-            'type' => 'html',
+            'site_type' => 'html',
         ]);
 
         // Assert
@@ -115,8 +104,6 @@ class SiteCreationServiceTest extends TestCase
 
     /**
      * Test rollback on failure
-     *
-     * @return void
      */
     public function test_rolls_back_on_deployment_failure(): void
     {
@@ -126,10 +113,9 @@ class SiteCreationServiceTest extends TestCase
 
         // Act & Assert
         try {
-            $this->service->create([
-                'user_id' => $this->user->id,
+            $this->service->createSite($this->user->currentTenant(), [
                 'domain' => 'test.com',
-                'type' => 'html',
+                'site_type' => 'html',
             ]);
 
             $this->fail('Expected exception not thrown');
@@ -143,24 +129,19 @@ class SiteCreationServiceTest extends TestCase
 
     /**
      * Test validation of site data
-     *
-     * @return void
      */
     public function test_validates_site_data(): void
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $this->service->create([
-            'user_id' => $this->user->id,
+        $this->service->createSite($this->user->currentTenant(), [
             'domain' => '', // Invalid
-            'type' => 'html',
+            'site_type' => 'html',
         ]);
     }
 
     /**
      * Test site creation sets up monitoring
-     *
-     * @return void
      */
     public function test_creation_sets_up_monitoring(): void
     {
@@ -170,10 +151,9 @@ class SiteCreationServiceTest extends TestCase
         $this->mockSuccessfulSiteDeployment('monitored.com');
 
         // Act
-        $site = $this->service->create([
-            'user_id' => $this->user->id,
+        $site = $this->service->createSite($this->user->currentTenant(), [
             'domain' => 'monitored.com',
-            'type' => 'html',
+            'site_type' => 'html',
             'enable_monitoring' => true,
         ]);
 

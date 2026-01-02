@@ -25,10 +25,7 @@ class OwnershipTransferService
      * 3. Transfers ownership in atomic transaction
      * 4. Demotes current owner to admin
      *
-     * @param Organization $organization
-     * @param User $currentOwner
-     * @param User $newOwner
-     * @param string $password Current owner's password for confirmation
+     * @param  string  $password  Current owner's password for confirmation
      * @return array{success: bool, message: string, data?: array}
      */
     public function transferOwnership(
@@ -38,7 +35,7 @@ class OwnershipTransferService
         string $password
     ): array {
         // Validate current owner
-        if (!$currentOwner->isOwner()) {
+        if (! $currentOwner->isOwner()) {
             return [
                 'success' => false,
                 'message' => 'Only the organization owner can transfer ownership',
@@ -46,7 +43,7 @@ class OwnershipTransferService
         }
 
         // Verify password
-        if (!Hash::check($password, $currentOwner->password)) {
+        if (! Hash::check($password, $currentOwner->password)) {
             return [
                 'success' => false,
                 'message' => 'The password you entered is incorrect',
@@ -124,9 +121,6 @@ class OwnershipTransferService
      *
      * Useful for pre-flight checks in the UI.
      *
-     * @param Organization $organization
-     * @param User $currentOwner
-     * @param User $newOwner
      * @return array{valid: bool, errors: array<string>}
      */
     public function validateTransfer(
@@ -136,7 +130,7 @@ class OwnershipTransferService
     ): array {
         $errors = [];
 
-        if (!$currentOwner->isOwner()) {
+        if (! $currentOwner->isOwner()) {
             $errors[] = 'You are not the organization owner';
         }
 
@@ -164,8 +158,6 @@ class OwnershipTransferService
      * Returns members who can receive ownership.
      * Typically admins and members, but not viewers.
      *
-     * @param Organization $organization
-     * @param User $currentOwner
      * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getEligibleMembers(Organization $organization, User $currentOwner)
@@ -184,9 +176,6 @@ class OwnershipTransferService
      * For future implementation: could create a pending transfer
      * that requires acceptance from the new owner.
      *
-     * @param Organization $organization
-     * @param User $currentOwner
-     * @param User $newOwner
      * @return array{success: bool, message: string, request_id?: string}
      */
     public function createTransferRequest(

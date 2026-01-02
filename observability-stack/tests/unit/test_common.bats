@@ -375,8 +375,8 @@ EOF
     echo "old content" > "$existing"
 
     FORCE_MODE=true
-    check_config_diff "$existing" "new content" "test config"
-    [[ $? -eq 0 ]]  # Returns 0 when should overwrite
+    run check_config_diff "$existing" "new content" "test config"
+    [[ $status -eq 0 ]]  # Returns 0 when should overwrite
 }
 
 @test "check_config_diff creates new file" {
@@ -491,6 +491,7 @@ EOF
     [[ "$INSTALL_BIN_DIR" == "/usr/local/bin" ]]
     [[ "$CONFIG_BASE_DIR" == "/etc" ]]
     [[ "$DATA_BASE_DIR" == "/var/lib" ]]
-    [[ "$LOG_BASE_DIR" == "/var/log" ]]
+    # LOG_BASE_DIR is overridden in setup() to TEST_TMP
+    [[ "$LOG_BASE_DIR" == "$TEST_TMP" ]]
     [[ "$SYSTEMD_DIR" == "/etc/systemd/system" ]]
 }

@@ -22,9 +22,9 @@ class SiteFactory extends Factory
             'ssl_enabled' => $this->faker->boolean(80),
             'ssl_expires_at' => $this->faker->optional()->dateTimeBetween('now', '+90 days'),
             'status' => $this->faker->randomElement(['creating', 'active', 'disabled', 'error']),
-            'document_root' => '/var/www/' . $this->faker->slug,
-            'db_name' => 'db_' . $this->faker->uuid(),
-            'db_user' => 'user_' . $this->faker->uuid(),
+            'document_root' => '/var/www/'.$this->faker->slug,
+            'db_name' => 'db_'.$this->faker->uuid(),
+            'db_user' => 'user_'.$this->faker->uuid(),
             'storage_used_mb' => $this->faker->numberBetween(100, 5000),
             'settings' => [],
         ];

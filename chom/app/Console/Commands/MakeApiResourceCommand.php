@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\GeneratorCommand;
-use Illuminate\Support\Str;
 
 class MakeApiResourceCommand extends GeneratorCommand
 {
@@ -20,10 +19,10 @@ class MakeApiResourceCommand extends GeneratorCommand
     protected function getStub(): string
     {
         if ($this->option('collection')) {
-            return __DIR__ . '/stubs/api-resource-collection.stub';
+            return __DIR__.'/stubs/api-resource-collection.stub';
         }
 
-        return __DIR__ . '/stubs/api-resource.stub';
+        return __DIR__.'/stubs/api-resource.stub';
     }
 
     /**
@@ -31,7 +30,7 @@ class MakeApiResourceCommand extends GeneratorCommand
      */
     protected function getDefaultNamespace($rootNamespace): string
     {
-        return $rootNamespace . '\Http\Resources';
+        return $rootNamespace.'\Http\Resources';
     }
 
     /**
@@ -40,8 +39,8 @@ class MakeApiResourceCommand extends GeneratorCommand
     public function handle(): int
     {
         // Create stub directory if it doesn't exist
-        $stubDir = __DIR__ . '/stubs';
-        if (!is_dir($stubDir)) {
+        $stubDir = __DIR__.'/stubs';
+        if (! is_dir($stubDir)) {
             mkdir($stubDir, 0755, true);
         }
 
@@ -56,10 +55,10 @@ class MakeApiResourceCommand extends GeneratorCommand
             $this->components->info('Example usage:');
 
             if ($this->option('collection')) {
-                $this->line('  return ' . class_basename($this->argument('name')) . '::make($items);');
+                $this->line('  return '.class_basename($this->argument('name')).'::make($items);');
             } else {
-                $this->line('  return ' . class_basename($this->argument('name')) . '::make($model);');
-                $this->line('  return ' . class_basename($this->argument('name')) . '::collection($models);');
+                $this->line('  return '.class_basename($this->argument('name')).'::make($model);');
+                $this->line('  return '.class_basename($this->argument('name')).'::collection($models);');
             }
         }
 
@@ -71,13 +70,13 @@ class MakeApiResourceCommand extends GeneratorCommand
      */
     protected function createStubs(string $stubDir): void
     {
-        $resourceStub = $stubDir . '/api-resource.stub';
-        if (!file_exists($resourceStub)) {
+        $resourceStub = $stubDir.'/api-resource.stub';
+        if (! file_exists($resourceStub)) {
             file_put_contents($resourceStub, $this->getResourceStub());
         }
 
-        $collectionStub = $stubDir . '/api-resource-collection.stub';
-        if (!file_exists($collectionStub)) {
+        $collectionStub = $stubDir.'/api-resource-collection.stub';
+        if (! file_exists($collectionStub)) {
             file_put_contents($collectionStub, $this->getCollectionStub());
         }
     }

@@ -79,8 +79,8 @@ return new class extends Migration
 
         foreach ($vpsServers as $server) {
             // Construct expected key file paths
-            $privateKeyPath = $sshKeyPath . '/' . $server->id . '_id_rsa';
-            $publicKeyPath = $sshKeyPath . '/' . $server->id . '_id_rsa.pub';
+            $privateKeyPath = $sshKeyPath.'/'.$server->id.'_id_rsa';
+            $publicKeyPath = $sshKeyPath.'/'.$server->id.'_id_rsa.pub';
 
             // Check if keys exist on filesystem
             if (file_exists($privateKeyPath) && file_exists($publicKeyPath)) {

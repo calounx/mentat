@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Security\SecurityMonitor;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
-use App\Services\Security\SecurityMonitor;
 
 class SecurityScan extends Command
 {
@@ -14,7 +14,9 @@ class SecurityScan extends Command
     protected $description = 'Run security scan on the application';
 
     protected SecurityMonitor $securityMonitor;
+
     protected int $issues = 0;
+
     protected int $warnings = 0;
 
     public function __construct(SecurityMonitor $securityMonitor)
@@ -46,15 +48,18 @@ class SecurityScan extends Command
 
         if ($this->issues === 0 && $this->warnings === 0) {
             $this->info('✓ No security issues found!');
+
             return Command::SUCCESS;
         }
 
         if ($this->issues === 0) {
             $this->warn("✓ Scan completed with {$this->warnings} warning(s)");
+
             return Command::SUCCESS;
         }
 
         $this->error("✗ Found {$this->issues} security issue(s) and {$this->warnings} warning(s)");
+
         return Command::FAILURE;
     }
 
@@ -63,8 +68,7 @@ class SecurityScan extends Command
         $this->info('Checking debug mode...');
 
         if (config('app.debug') && config('app.env') === 'production') {
-            $this->error('Debug mode is enabled in production');
-            $this->issues++;
+            $this->reportError('Debug mode is enabled in production');
         } else {
             $this->success('Debug mode properly configured');
         }
@@ -80,8 +84,7 @@ class SecurityScan extends Command
             $permissions = substr(sprintf('%o', fileperms($envPath)), -4);
 
             if ($permissions !== '0600' && $permissions !== '0640') {
-                $this->warn(".env file has loose permissions: {$permissions}");
-                $this->warnings++;
+                $this->reportWarning(".env file has loose permissions: {$permissions}");
 
                 if ($this->option('fix')) {
                     chmod($envPath, 0600);
@@ -94,12 +97,10 @@ class SecurityScan extends Command
             // Check if .env contains sensitive data
             $content = file_get_contents($envPath);
             if (strpos($content, 'password=root') !== false || strpos($content, 'password=password') !== false) {
-                $this->warn('.env contains default passwords');
-                $this->warnings++;
+                $this->reportWarning('.env contains default passwords');
             }
         } else {
-            $this->error('.env file not found');
-            $this->issues++;
+            $this->reportError('.env file not found');
         }
     }
 
@@ -117,16 +118,14 @@ class SecurityScan extends Command
             $permissions = substr(sprintf('%o', fileperms($path)), -4);
 
             if ($permissions === '0777') {
-                $this->warn("{$path} has insecure permissions (777)");
-                $this->warnings++;
+                $this->reportWarning("{$path} has insecure permissions (777)");
 
                 if ($this->option('fix')) {
                     chmod($path, 0775);
                     $this->info("Fixed: Set {$path} permissions to 0775");
                 }
-            } elseif (!is_writable($path)) {
-                $this->error("{$path} is not writable");
-                $this->issues++;
+            } elseif (! is_writable($path)) {
+                $this->reportError("{$path} is not writable");
             } else {
                 $this->success("{$path} permissions are acceptable");
             }
@@ -139,30 +138,29 @@ class SecurityScan extends Command
 
         $sshPath = storage_path('app/ssh');
 
-        if (!is_dir($sshPath)) {
+        if (! is_dir($sshPath)) {
             $this->success('No SSH keys directory found');
+
             return;
         }
 
-        $keys = File::glob($sshPath . '/*.pem');
+        $keys = File::glob($sshPath.'/*.pem');
 
         foreach ($keys as $key) {
             $age = $this->securityMonitor->checkSshKeyAge($key);
 
             if ($age && $age > 365) {
-                $this->warn(basename($key) . " is {$age} days old");
-                $this->warnings++;
+                $this->reportWarning(basename($key)." is {$age} days old");
             }
 
             $permissions = substr(sprintf('%o', fileperms($key)), -4);
 
             if ($permissions !== '0600') {
-                $this->error(basename($key) . " has insecure permissions: {$permissions}");
-                $this->issues++;
+                $this->reportError(basename($key)." has insecure permissions: {$permissions}");
 
                 if ($this->option('fix')) {
                     chmod($key, 0600);
-                    $this->info('Fixed: Set ' . basename($key) . ' permissions to 0600');
+                    $this->info('Fixed: Set '.basename($key).' permissions to 0600');
                 }
             }
         }
@@ -174,15 +172,16 @@ class SecurityScan extends Command
 
         if (config('app.env') !== 'production') {
             $this->success('SSL check skipped (not production)');
+
             return;
         }
 
-        if (!str_starts_with(config('app.url'), 'https://')) {
+        if (! str_starts_with(config('app.url'), 'https://')) {
             $this->warn('APP_URL does not use HTTPS');
             $this->warnings++;
         }
 
-        if (!config('session.secure')) {
+        if (! config('session.secure')) {
             $this->warn('Session cookies are not secure');
             $this->warnings++;
         }
@@ -220,8 +219,7 @@ class SecurityScan extends Command
             $publicPath = public_path($file);
 
             if (file_exists($publicPath)) {
-                $this->error("Sensitive file exposed in public directory: {$file}");
-                $this->issues++;
+                $this->reportError("Sensitive file exposed in public directory: {$file}");
             }
         }
 
@@ -234,8 +232,9 @@ class SecurityScan extends Command
 
         $url = config('app.url');
 
-        if (!str_starts_with($url, 'http')) {
+        if (! str_starts_with($url, 'http')) {
             $this->warn('Cannot check headers - invalid APP_URL');
+
             return;
         }
 
@@ -249,13 +248,12 @@ class SecurityScan extends Command
             ];
 
             foreach ($requiredHeaders as $header) {
-                if (!isset($headers[$header])) {
-                    $this->warn("Missing security header: {$header}");
-                    $this->warnings++;
+                if (! isset($headers[$header])) {
+                    $this->reportWarning("Missing security header: {$header}");
                 }
             }
         } catch (\Exception $e) {
-            $this->warn('Could not check security headers: ' . $e->getMessage());
+            $this->warn('Could not check security headers: '.$e->getMessage());
         }
     }
 
@@ -264,13 +262,13 @@ class SecurityScan extends Command
         $this->line("  <fg=green>✓</> {$message}");
     }
 
-    protected function error(string $message): void
+    protected function reportError(string $message): void
     {
         $this->issues++;
         $this->line("  <fg=red>✗</> {$message}");
     }
 
-    protected function warn(string $message): void
+    protected function reportWarning(string $message): void
     {
         $this->warnings++;
         $this->line("  <fg=yellow>⚠</> {$message}");

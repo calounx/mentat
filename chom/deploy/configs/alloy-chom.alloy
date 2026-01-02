@@ -1,0 +1,418 @@
+// ============================================================================
+// Grafana Alloy Configuration for CHOM Application
+// ============================================================================
+//
+// This configuration file should be deployed to the VPSManager VPS
+// to collect CHOM application logs and metrics, and forward them to
+// the central observability server.
+//
+// Installation:
+//   1. Install Grafana Alloy on the VPSManager VPS
+//   2. Copy this file to /etc/alloy/config.alloy
+//   3. Update OBSERVABILITY_IP with actual mentat_tst IP/hostname
+//   4. Restart Alloy: systemctl restart alloy
+//
+// ============================================================================
+
+// ============================================================================
+// LOGGING CONFIGURATION - Forward to Loki
+// ============================================================================
+
+// Loki write endpoint configuration
+loki.write "default" {
+    endpoint {
+        url = "http://OBSERVABILITY_IP:3100/loki/api/v1/push"
+
+        // Tenant ID for multi-tenant Loki
+        tenant_id = "chom"
+
+        // Batching configuration for performance
+        batchwait = "1s"
+        batchsize = "1MiB"
+
+        // Retry configuration
+        min_backoff_period = "500ms"
+        max_backoff_period = "5m"
+        max_backoff_retries = 10
+    }
+
+    external_labels = {
+        environment = "production",
+        instance    = env("HOSTNAME"),
+        app         = "chom",
+    }
+}
+
+// ============================================================================
+// CHOM Application Logs (JSON format)
+// ============================================================================
+
+local.file_match "chom_app_logs" {
+    path_targets = [{
+        __path__ = "/var/www/chom/storage/logs/app.json",
+        job      = "chom",
+        log_type = "app",
+    }]
+}
+
+loki.source.file "chom_app" {
+    targets    = local.file_match.chom_app_logs.targets
+    forward_to = [loki.process.chom_json.receiver]
+}
+
+// JSON log processing pipeline
+loki.process "chom_json" {
+    stage.json {
+        expressions = {
+            level    = "level",
+            message  = "message",
+            context  = "context",
+            channel  = "channel",
+            datetime = "datetime",
+        }
+    }
+
+    stage.labels {
+        values = {
+            level   = "",
+            channel = "",
+        }
+    }
+
+    stage.timestamp {
+        source = "datetime"
+        format = "RFC3339Nano"
+    }
+
+    stage.output {
+        source = "message"
+    }
+
+    forward_to = [loki.write.default.receiver]
+}
+
+// ============================================================================
+// CHOM Laravel Daily Logs
+// ============================================================================
+
+local.file_match "chom_laravel_logs" {
+    path_targets = [{
+        __path__ = "/var/www/chom/storage/logs/laravel*.log",
+        job      = "chom",
+        log_type = "laravel",
+    }]
+}
+
+loki.source.file "chom_laravel" {
+    targets    = local.file_match.chom_laravel_logs.targets
+    forward_to = [loki.process.chom_laravel.receiver]
+}
+
+loki.process "chom_laravel" {
+    // Match Laravel log format: [YYYY-MM-DD HH:MM:SS] environment.LEVEL: message
+    stage.regex {
+        expression = "^\\[(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\] (?P<env>\\w+)\\.(?P<level>\\w+): (?P<message>.*)$"
+    }
+
+    stage.labels {
+        values = {
+            level = "",
+        }
+    }
+
+    stage.timestamp {
+        source = "timestamp"
+        format = "2006-01-02 15:04:05"
+    }
+
+    stage.output {
+        source = "message"
+    }
+
+    forward_to = [loki.write.default.receiver]
+}
+
+// ============================================================================
+// CHOM Performance Logs
+// ============================================================================
+
+local.file_match "chom_performance_logs" {
+    path_targets = [{
+        __path__ = "/var/www/chom/storage/logs/performance*.log",
+        job      = "chom",
+        log_type = "performance",
+    }]
+}
+
+loki.source.file "chom_performance" {
+    targets    = local.file_match.chom_performance_logs.targets
+    forward_to = [loki.process.chom_laravel.receiver]
+}
+
+// ============================================================================
+// CHOM Security Logs
+// ============================================================================
+
+local.file_match "chom_security_logs" {
+    path_targets = [{
+        __path__ = "/var/www/chom/storage/logs/security*.log",
+        job      = "chom",
+        log_type = "security",
+    }]
+}
+
+loki.source.file "chom_security" {
+    targets    = local.file_match.chom_security_logs.targets
+    forward_to = [loki.process.chom_laravel.receiver]
+}
+
+// ============================================================================
+// CHOM Audit Logs
+// ============================================================================
+
+local.file_match "chom_audit_logs" {
+    path_targets = [{
+        __path__ = "/var/www/chom/storage/logs/audit*.log",
+        job      = "chom",
+        log_type = "audit",
+    }]
+}
+
+loki.source.file "chom_audit" {
+    targets    = local.file_match.chom_audit_logs.targets
+    forward_to = [loki.process.chom_laravel.receiver]
+}
+
+// ============================================================================
+// Nginx Access Logs
+// ============================================================================
+
+local.file_match "nginx_access_logs" {
+    path_targets = [{
+        __path__ = "/var/log/nginx/chom-access.log",
+        job      = "chom",
+        log_type = "nginx-access",
+    }]
+}
+
+loki.source.file "nginx_access" {
+    targets    = local.file_match.nginx_access_logs.targets
+    forward_to = [loki.process.nginx_access.receiver]
+}
+
+loki.process "nginx_access" {
+    // Common nginx log format
+    stage.regex {
+        expression = "^(?P<remote_addr>[\\d\\.]+) - (?P<remote_user>\\S+) \\[(?P<time_local>[^\\]]+)\\] \"(?P<request>[^\"]+)\" (?P<status>\\d+) (?P<body_bytes_sent>\\d+) \"(?P<http_referer>[^\"]*)\" \"(?P<http_user_agent>[^\"]*)\""
+    }
+
+    stage.labels {
+        values = {
+            status = "",
+        }
+    }
+
+    stage.timestamp {
+        source = "time_local"
+        format = "02/Jan/2006:15:04:05 -0700"
+    }
+
+    forward_to = [loki.write.default.receiver]
+}
+
+// ============================================================================
+// Nginx Error Logs
+// ============================================================================
+
+local.file_match "nginx_error_logs" {
+    path_targets = [{
+        __path__ = "/var/log/nginx/chom-error.log",
+        job      = "chom",
+        log_type = "nginx-error",
+    }]
+}
+
+loki.source.file "nginx_error" {
+    targets    = local.file_match.nginx_error_logs.targets
+    forward_to = [loki.write.default.receiver]
+}
+
+// ============================================================================
+// PHP-FPM Logs
+// ============================================================================
+
+local.file_match "php_fpm_logs" {
+    path_targets = [{
+        __path__ = "/var/log/php*-fpm.log",
+        job      = "chom",
+        log_type = "php-fpm",
+    }]
+}
+
+loki.source.file "php_fpm" {
+    targets    = local.file_match.php_fpm_logs.targets
+    forward_to = [loki.write.default.receiver]
+}
+
+// ============================================================================
+// METRICS CONFIGURATION - Scrape and Forward to Prometheus
+// ============================================================================
+
+// Prometheus remote write endpoint
+prometheus.remote_write "default" {
+    endpoint {
+        url = "http://OBSERVABILITY_IP:9090/api/v1/write"
+
+        // Queue configuration for reliability
+        queue_config {
+            capacity             = 10000
+            max_shards           = 50
+            min_shards           = 1
+            max_samples_per_send = 2000
+            batch_send_deadline  = "5s"
+            min_backoff          = "30ms"
+            max_backoff          = "5s"
+            retry_on_http_429    = true
+        }
+    }
+
+    external_labels = {
+        environment = "production",
+        instance    = env("HOSTNAME"),
+    }
+}
+
+// ============================================================================
+// Node Exporter Scrape (System Metrics)
+// ============================================================================
+
+prometheus.scrape "node_exporter" {
+    targets = [{
+        __address__ = "localhost:9100",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "node_exporter"
+    scrape_interval = "15s"
+    scrape_timeout  = "10s"
+}
+
+// ============================================================================
+// PHP-FPM Exporter Scrape
+// ============================================================================
+
+prometheus.scrape "php_fpm" {
+    targets = [{
+        __address__ = "localhost:9253",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "php-fpm"
+    scrape_interval = "15s"
+    scrape_timeout  = "10s"
+}
+
+// ============================================================================
+// Nginx Exporter Scrape
+// ============================================================================
+
+prometheus.scrape "nginx" {
+    targets = [{
+        __address__ = "localhost:9113",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "nginx"
+    scrape_interval = "15s"
+    scrape_timeout  = "10s"
+}
+
+// ============================================================================
+// Redis Exporter Scrape
+// ============================================================================
+
+prometheus.scrape "redis" {
+    targets = [{
+        __address__ = "localhost:9121",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "redis"
+    scrape_interval = "15s"
+    scrape_timeout  = "10s"
+}
+
+// ============================================================================
+// MySQL/MariaDB Exporter Scrape
+// ============================================================================
+
+prometheus.scrape "mysql" {
+    targets = [{
+        __address__ = "localhost:9104",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "mysql"
+    scrape_interval = "15s"
+    scrape_timeout  = "10s"
+}
+
+// ============================================================================
+// CHOM Application Metrics (Laravel Prometheus Exporter)
+// ============================================================================
+
+prometheus.scrape "chom_app" {
+    targets = [{
+        __address__ = "localhost:8080",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "chom"
+    metrics_path    = "/metrics"
+    scrape_interval = "15s"
+    scrape_timeout  = "10s"
+
+    // Basic auth if required
+    // basic_auth {
+    //     username = "prometheus"
+    //     password = "your-secure-password"
+    // }
+}
+
+// ============================================================================
+// Self Monitoring (Alloy internal metrics)
+// ============================================================================
+
+prometheus.scrape "alloy_self" {
+    targets = [{
+        __address__ = "localhost:12345",
+    }]
+
+    forward_to      = [prometheus.remote_write.default.receiver]
+    job_name        = "alloy"
+    scrape_interval = "60s"
+}
+
+// ============================================================================
+// Example Loki queries for CHOM logs:
+// ============================================================================
+//
+// All CHOM application logs:
+//   {job="chom"}
+//
+// Error logs only:
+//   {job="chom", level="error"} or {job="chom", level="ERROR"}
+//
+// Security-related logs:
+//   {job="chom", log_type="security"}
+//
+// Performance issues (slow requests):
+//   {job="chom", log_type="performance"} |= "Slow request"
+//
+// Nginx 5xx errors:
+//   {job="chom", log_type="nginx-access", status=~"5.."}
+//
+// PHP-FPM logs:
+//   {job="chom", log_type="php-fpm"}
+//
+// ============================================================================

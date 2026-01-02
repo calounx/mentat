@@ -49,7 +49,7 @@ class RequirePasswordConfirmation
         $user = $request->user();
 
         // Require authentication first
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
                 'error' => [

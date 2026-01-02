@@ -13,8 +13,6 @@ use Illuminate\Testing\TestResponse;
  *
  * This trait provides methods for testing common security vulnerabilities
  * including injection attacks, authorization bypasses, and session security.
- *
- * @package Tests\Concerns
  */
 trait WithSecurityTesting
 {
@@ -63,8 +61,7 @@ trait WithSecurityTesting
     /**
      * Test SQL injection vulnerability
      *
-     * @param callable $callback Function that accepts payload and makes request
-     * @return void
+     * @param  callable  $callback  Function that accepts payload and makes request
      */
     protected function assertSqlInjectionProtection(callable $callback): void
     {
@@ -103,8 +100,7 @@ trait WithSecurityTesting
     /**
      * Test PromQL injection protection
      *
-     * @param callable $queryCallback Function that executes PromQL query
-     * @return void
+     * @param  callable  $queryCallback  Function that executes PromQL query
      */
     protected function assertPromQLInjectionProtection(callable $queryCallback): void
     {
@@ -131,8 +127,7 @@ trait WithSecurityTesting
     /**
      * Test LogQL injection protection
      *
-     * @param callable $queryCallback Function that executes LogQL query
-     * @return void
+     * @param  callable  $queryCallback  Function that executes LogQL query
      */
     protected function assertLogQLInjectionProtection(callable $queryCallback): void
     {
@@ -148,9 +143,6 @@ trait WithSecurityTesting
 
     /**
      * Test XSS protection
-     *
-     * @param TestResponse $response
-     * @return void
      */
     protected function assertXSSProtection(TestResponse $response): void
     {
@@ -172,11 +164,6 @@ trait WithSecurityTesting
 
     /**
      * Test CSRF protection
-     *
-     * @param string $method
-     * @param string $uri
-     * @param array $data
-     * @return void
      */
     protected function assertCSRFProtection(string $method, string $uri, array $data = []): void
     {
@@ -190,13 +177,6 @@ trait WithSecurityTesting
 
     /**
      * Test authorization bypass attempts
-     *
-     * @param User $user
-     * @param string $method
-     * @param string $uri
-     * @param array $data
-     * @param int $expectedStatus
-     * @return void
      */
     protected function assertAuthorizationEnforcement(
         User $user,
@@ -217,10 +197,7 @@ trait WithSecurityTesting
     /**
      * Test tenant isolation
      *
-     * @param User $user
-     * @param int $resourceId Resource belonging to different tenant
-     * @param string $uri
-     * @return void
+     * @param  int  $resourceId  Resource belonging to different tenant
      */
     protected function assertTenantIsolation(User $user, int $resourceId, string $uri): void
     {
@@ -240,11 +217,6 @@ trait WithSecurityTesting
 
     /**
      * Test rate limiting
-     *
-     * @param string $uri
-     * @param int $maxAttempts
-     * @param User|null $user
-     * @return void
      */
     protected function assertRateLimiting(
         string $uri,
@@ -267,8 +239,6 @@ trait WithSecurityTesting
 
     /**
      * Test session fixation protection
-     *
-     * @return void
      */
     protected function assertSessionFixationProtection(): void
     {
@@ -295,8 +265,6 @@ trait WithSecurityTesting
 
     /**
      * Test session hijacking protection
-     *
-     * @return void
      */
     protected function assertSessionHijackingProtection(): void
     {
@@ -318,9 +286,6 @@ trait WithSecurityTesting
 
     /**
      * Test password requirements
-     *
-     * @param array $weakPasswords
-     * @return void
      */
     protected function assertPasswordStrength(array $weakPasswords = []): void
     {
@@ -348,16 +313,12 @@ trait WithSecurityTesting
 
     /**
      * Test for mass assignment vulnerabilities
-     *
-     * @param string $model
-     * @param array $unauthorizedFields
-     * @return void
      */
     protected function assertMassAssignmentProtection(
         string $model,
         array $unauthorizedFields
     ): void {
-        $modelInstance = new $model();
+        $modelInstance = new $model;
 
         foreach ($unauthorizedFields as $field) {
             $this->assertNotContains(
@@ -376,11 +337,6 @@ trait WithSecurityTesting
 
     /**
      * Test for insecure direct object reference
-     *
-     * @param User $user
-     * @param int $othersResourceId
-     * @param string $uri
-     * @return void
      */
     protected function assertIDORProtection(User $user, int $othersResourceId, string $uri): void
     {
@@ -399,10 +355,6 @@ trait WithSecurityTesting
 
     /**
      * Test sensitive data is not logged
-     *
-     * @param callable $operation
-     * @param array $sensitiveData
-     * @return void
      */
     protected function assertNoSensitiveDataInLogs(callable $operation, array $sensitiveData): void
     {
@@ -427,9 +379,6 @@ trait WithSecurityTesting
 
     /**
      * Assert secure headers are present
-     *
-     * @param TestResponse $response
-     * @return void
      */
     protected function assertSecureHeaders(TestResponse $response): void
     {

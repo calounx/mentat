@@ -1,0 +1,770 @@
+// ============================================================================
+// Grafana Alloy Configuration - VPSManager/CHOM Node
+// ============================================================================
+// Full telemetry configuration for Laravel application hosting nodes
+// Role: Comprehensive collection for VPSManager and CHOM deployments
+// ============================================================================
+//
+// Template Variables (substituted by install.sh):
+//   ${HOST_NAME}       - Hostname for labels
+//   ${ENVIRONMENT}     - Environment (production, staging, etc.)
+//   ${MODULE_PORT}     - Alloy HTTP listen port (default: 12345)
+//   ${OTLP_GRPC_PORT}  - OTLP gRPC port (default: 4317)
+//   ${OTLP_HTTP_PORT}  - OTLP HTTP port (default: 4318)
+//   ${PROMETHEUS_URL}  - Remote Prometheus URL
+//   ${LOKI_URL}        - Remote Loki URL
+//   ${TEMPO_URL}       - Remote Tempo OTLP endpoint
+// ============================================================================
+
+// Logging configuration
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// ============================================================================
+// Self-Monitoring
+// ============================================================================
+
+prometheus.exporter.self "alloy" { }
+
+prometheus.scrape "alloy_self" {
+  targets         = prometheus.exporter.self.alloy.targets
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "15s"
+}
+
+// ============================================================================
+// Common Label Relabeling
+// ============================================================================
+
+prometheus.relabel "add_common_labels" {
+  forward_to = [prometheus.remote_write.observability.receiver]
+
+  rule {
+    target_label = "host"
+    replacement  = "${HOST_NAME}"
+  }
+
+  rule {
+    target_label = "environment"
+    replacement  = "${ENVIRONMENT}"
+  }
+
+  rule {
+    target_label = "tier"
+    replacement  = "vpsmanager"
+  }
+}
+
+// ============================================================================
+// Local Exporter Scraping - Infrastructure
+// ============================================================================
+
+// Node Exporter - System metrics
+prometheus.scrape "node_exporter" {
+  targets = [{
+    __address__ = "localhost:9100",
+    job         = "node-exporter",
+    component   = "system",
+  }]
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "15s"
+}
+
+// Nginx Exporter - Web server metrics
+prometheus.scrape "nginx_exporter" {
+  targets = [{
+    __address__ = "localhost:9113",
+    job         = "nginx-exporter",
+    component   = "webserver",
+  }]
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "15s"
+}
+
+// MySQL Exporter - Database metrics
+prometheus.scrape "mysql_exporter" {
+  targets = [{
+    __address__ = "localhost:9104",
+    job         = "mysql-exporter",
+    component   = "database",
+  }]
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "15s"
+}
+
+// PHP-FPM Exporter - Runtime metrics
+prometheus.scrape "phpfpm_exporter" {
+  targets = [{
+    __address__ = "localhost:9253",
+    job         = "phpfpm-exporter",
+    component   = "runtime",
+  }]
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "15s"
+}
+
+// Fail2ban Exporter - Security metrics
+prometheus.scrape "fail2ban_exporter" {
+  targets = [{
+    __address__ = "localhost:9117",
+    job         = "fail2ban-exporter",
+    component   = "security",
+  }]
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "30s"
+}
+
+// Redis Exporter - Cache metrics (if using Redis)
+prometheus.scrape "redis_exporter" {
+  targets = [{
+    __address__ = "localhost:9121",
+    job         = "redis-exporter",
+    component   = "cache",
+  }]
+  forward_to      = [prometheus.relabel.add_common_labels.receiver]
+  scrape_interval = "15s"
+}
+
+// ============================================================================
+// Prometheus Remote Write
+// ============================================================================
+
+prometheus.remote_write "observability" {
+  endpoint {
+    url = "${PROMETHEUS_URL}/api/v1/write"
+
+    queue_config {
+      capacity             = 10000
+      max_shards           = 10
+      min_shards           = 1
+      max_samples_per_send = 5000
+      batch_send_deadline  = "5s"
+      min_backoff          = "30ms"
+      max_backoff          = "5s"
+    }
+
+    retry_on_http_429 = true
+  }
+
+  wal {
+    truncate_frequency = "2h"
+    max_segment_age    = "4h"
+  }
+}
+
+// ============================================================================
+// Log Collection - Nginx Access Logs (JSON Format)
+// ============================================================================
+
+local.file_match "nginx_access_logs" {
+  path_targets = [
+    {__path__ = "/var/log/nginx/*access*.log", job = "nginx-access", component = "webserver"},
+    {__path__ = "/var/log/nginx/chom-access.log", job = "chom-access", component = "application"},
+  ]
+}
+
+loki.source.file "nginx_access" {
+  targets    = local.file_match.nginx_access_logs.targets
+  forward_to = [loki.process.nginx_access.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "nginx_access" {
+  forward_to = [loki.write.observability.receiver]
+
+  // Parse JSON nginx logs (CHOM nginx format)
+  stage.json {
+    expressions = {
+      remote_addr       = "remote_addr",
+      time_local        = "time_local",
+      request_method    = "method",
+      request_uri       = "uri",
+      status            = "status",
+      body_bytes_sent   = "body_bytes_sent",
+      request_time      = "request_time",
+      upstream_time     = "upstream_response_time",
+      http_user_agent   = "http_user_agent",
+      http_referer      = "http_referer",
+      request_id        = "request_id",
+      trace_id          = "trace_id",
+    }
+  }
+
+  // Add static labels
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  // Extract HTTP status as label for filtering
+  stage.labels {
+    values = {
+      status         = "",
+      request_method = "",
+    }
+  }
+
+  // Classify log level based on status code
+  stage.match {
+    selector = "{job=~\".*access.*\"} |~ \"\\\"status\\\":\\s*\\\"5[0-9]{2}\\\"\""
+    stage.static_labels {
+      values = {
+        level = "error",
+      }
+    }
+  }
+
+  stage.match {
+    selector = "{job=~\".*access.*\"} |~ \"\\\"status\\\":\\s*\\\"4[0-9]{2}\\\"\""
+    stage.static_labels {
+      values = {
+        level = "warn",
+      }
+    }
+  }
+
+  // Drop health check and metrics endpoints
+  stage.match {
+    selector = "{job=~\".*access.*\"} |~ \"/(health|ready|ping|metrics|_debugbar)\""
+    action   = "drop"
+  }
+}
+
+// ============================================================================
+// Log Collection - Nginx Error Logs
+// ============================================================================
+
+local.file_match "nginx_error_logs" {
+  path_targets = [
+    {__path__ = "/var/log/nginx/*error*.log", job = "nginx-error", component = "webserver"},
+    {__path__ = "/var/log/nginx/chom-error.log", job = "chom-error", component = "application"},
+  ]
+}
+
+loki.source.file "nginx_error" {
+  targets    = local.file_match.nginx_error_logs.targets
+  forward_to = [loki.process.nginx_error.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "nginx_error" {
+  forward_to = [loki.write.observability.receiver]
+
+  // Parse nginx error format
+  stage.regex {
+    expression = "^(?P<timestamp>\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}) \\[(?P<level>\\w+)\\] (?P<pid>\\d+)#(?P<tid>\\d+): (?:\\*(?P<cid>\\d+) )?(?P<message>.*)"
+  }
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - Laravel Application Logs
+// ============================================================================
+
+local.file_match "laravel_logs" {
+  path_targets = [
+    {__path__ = "/var/www/chom/storage/logs/*.log", job = "chom-app", component = "application"},
+    {__path__ = "/var/www/*/storage/logs/*.log", job = "laravel-app", component = "application"},
+  ]
+}
+
+loki.source.file "laravel" {
+  targets    = local.file_match.laravel_logs.targets
+  forward_to = [loki.process.laravel.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "laravel" {
+  forward_to = [loki.write.observability.receiver]
+
+  // Handle multiline Laravel logs (stack traces)
+  stage.multiline {
+    firstline     = "^\\[\\d{4}-\\d{2}-\\d{2}"
+    max_wait_time = "3s"
+    max_lines     = 256
+  }
+
+  // Parse Laravel log format: [YYYY-MM-DD HH:MM:SS] environment.LEVEL: message
+  stage.regex {
+    expression = "^\\[(?P<timestamp>\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}:\\d{2}[.\\d+Z]*)\\] (?P<app_env>\\w+)\\.(?P<level>\\w+): (?P<message>.*)"
+  }
+
+  // Add static labels
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  // Extract level and app environment as labels
+  stage.labels {
+    values = {
+      level   = "",
+      app_env = "",
+    }
+  }
+
+  // Normalize level names
+  stage.replace {
+    expression = "(?i)(emergency|alert|critical)"
+    replace    = "critical"
+    source     = "level"
+  }
+
+  stage.replace {
+    expression = "(?i)(warning)"
+    replace    = "warn"
+    source     = "level"
+  }
+}
+
+// ============================================================================
+// Log Collection - Laravel Horizon (Queue Worker)
+// ============================================================================
+
+local.file_match "horizon_logs" {
+  path_targets = [{
+    __path__ = "/var/www/chom/storage/logs/horizon*.log",
+    job      = "chom-horizon",
+    component = "queue",
+  }]
+}
+
+loki.source.file "horizon" {
+  targets    = local.file_match.horizon_logs.targets
+  forward_to = [loki.process.horizon.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "horizon" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.multiline {
+    firstline     = "^\\[\\d{4}-\\d{2}-\\d{2}"
+    max_wait_time = "3s"
+  }
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - PHP-FPM Logs
+// ============================================================================
+
+local.file_match "phpfpm_logs" {
+  path_targets = [{
+    __path__ = "/var/log/php*-fpm*.log",
+    job      = "php-fpm",
+    component = "runtime",
+  }]
+}
+
+loki.source.file "phpfpm" {
+  targets    = local.file_match.phpfpm_logs.targets
+  forward_to = [loki.process.phpfpm.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "phpfpm" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.multiline {
+    firstline     = "^\\["
+    max_wait_time = "3s"
+  }
+
+  stage.regex {
+    expression = "^\\[(?P<timestamp>[^\\]]+)\\] (?P<level>\\w+): (?P<message>.*)"
+  }
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - MySQL Logs
+// ============================================================================
+
+local.file_match "mysql_error_logs" {
+  path_targets = [{
+    __path__ = "/var/log/mysql/error.log",
+    job      = "mysql-error",
+    component = "database",
+  }]
+}
+
+loki.source.file "mysql_error" {
+  targets    = local.file_match.mysql_error_logs.targets
+  forward_to = [loki.process.mysql.receiver]
+
+  tail_from_end = true
+}
+
+local.file_match "mysql_slow_logs" {
+  path_targets = [{
+    __path__ = "/var/log/mysql/mysql-slow.log",
+    job      = "mysql-slow",
+    component = "database",
+  }]
+}
+
+loki.source.file "mysql_slow" {
+  targets    = local.file_match.mysql_slow_logs.targets
+  forward_to = [loki.process.mysql_slow.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "mysql" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+}
+
+loki.process "mysql_slow" {
+  forward_to = [loki.write.observability.receiver]
+
+  // Handle multiline slow query logs
+  stage.multiline {
+    firstline     = "^# Time:|^# User@Host:"
+    max_wait_time = "3s"
+    max_lines     = 128
+  }
+
+  // Extract query time from slow logs
+  stage.regex {
+    expression = "# Query_time: (?P<query_time>[\\d.]+)\\s+Lock_time: (?P<lock_time>[\\d.]+)\\s+Rows_sent: (?P<rows_sent>\\d+)\\s+Rows_examined: (?P<rows_examined>\\d+)"
+  }
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+      level       = "warn",
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - Supervisor Logs
+// ============================================================================
+
+local.file_match "supervisor_logs" {
+  path_targets = [{
+    __path__ = "/var/log/supervisor/*.log",
+    job      = "supervisor",
+    component = "process-manager",
+  }]
+}
+
+loki.source.file "supervisor" {
+  targets    = local.file_match.supervisor_logs.targets
+  forward_to = [loki.process.supervisor.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "supervisor" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  // Mark FATAL/CRITICAL/ERROR as errors
+  stage.match {
+    selector = "{job=\"supervisor\"} |~ \"(FATAL|CRITICAL|ERROR)\""
+    stage.static_labels {
+      values = {
+        level = "error",
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Log Collection - System/Security Logs
+// ============================================================================
+
+local.file_match "syslog" {
+  path_targets = [
+    {__path__ = "/var/log/syslog", job = "syslog", component = "os"},
+    {__path__ = "/var/log/messages", job = "messages", component = "os"},
+  ]
+}
+
+loki.source.file "syslog" {
+  targets    = local.file_match.syslog.targets
+  forward_to = [loki.process.syslog.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "syslog" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+}
+
+// Auth/Security logs
+local.file_match "auth_logs" {
+  path_targets = [{
+    __path__ = "/var/log/auth.log",
+    job      = "auth",
+    component = "security",
+  }]
+}
+
+loki.source.file "auth" {
+  targets    = local.file_match.auth_logs.targets
+  forward_to = [loki.process.auth.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "auth" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  // Highlight security events
+  stage.match {
+    selector = "{job=\"auth\"} |~ \"(Failed|Invalid|error|denied|BREAK-IN|attack)\""
+    stage.static_labels {
+      values = {
+        level        = "warn",
+        security_event = "true",
+      }
+    }
+  }
+
+  stage.match {
+    selector = "{job=\"auth\"} |~ \"Accepted\""
+    stage.static_labels {
+      values = {
+        auth_result = "success",
+      }
+    }
+  }
+}
+
+// Fail2ban logs
+local.file_match "fail2ban_logs" {
+  path_targets = [{
+    __path__ = "/var/log/fail2ban.log",
+    job      = "fail2ban",
+    component = "security",
+  }]
+}
+
+loki.source.file "fail2ban" {
+  targets    = local.file_match.fail2ban_logs.targets
+  forward_to = [loki.process.fail2ban.receiver]
+
+  tail_from_end = true
+}
+
+loki.process "fail2ban" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.regex {
+    expression = "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3}) fail2ban\\.(?P<module>\\w+)\\s+\\[(?P<pid>\\d+)\\]: (?P<level>\\w+)\\s+\\[(?P<jail>[^\\]]+)\\] (?P<action>\\w+) (?P<ip>[\\d.]+)"
+  }
+
+  stage.static_labels {
+    values = {
+      host        = "${HOST_NAME}",
+      environment = "${ENVIRONMENT}",
+      tier        = "vpsmanager",
+    }
+  }
+
+  stage.labels {
+    values = {
+      jail   = "",
+      action = "",
+    }
+  }
+
+  // Flag bans as warnings
+  stage.match {
+    selector = "{job=\"fail2ban\"} |~ \"Ban\""
+    stage.static_labels {
+      values = {
+        level          = "warn",
+        security_event = "true",
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Loki Writer
+// ============================================================================
+
+loki.write "observability" {
+  endpoint {
+    url = "${LOKI_URL}/loki/api/v1/push"
+
+    batchwait = "1s"
+    batchsize = 1048576
+
+    min_backoff = "500ms"
+    max_backoff = "5m"
+    max_retries = 10
+  }
+
+  external_labels = {
+    source = "alloy",
+    role   = "vpsmanager",
+  }
+}
+
+// ============================================================================
+// Trace Collection (OTLP) - For Laravel Telescope/Sentry integration
+// ============================================================================
+
+otelcol.receiver.otlp "local" {
+  grpc {
+    endpoint = "127.0.0.1:${OTLP_GRPC_PORT}"
+  }
+
+  http {
+    endpoint = "127.0.0.1:${OTLP_HTTP_PORT}"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.traces.input]
+  }
+}
+
+otelcol.processor.batch "traces" {
+  timeout             = "5s"
+  send_batch_size     = 8192
+  send_batch_max_size = 0
+
+  output {
+    traces = [otelcol.processor.attributes.add_host.input]
+  }
+}
+
+otelcol.processor.attributes "add_host" {
+  action {
+    key    = "host.name"
+    value  = "${HOST_NAME}"
+    action = "upsert"
+  }
+
+  action {
+    key    = "deployment.environment"
+    value  = "${ENVIRONMENT}"
+    action = "upsert"
+  }
+
+  action {
+    key    = "service.tier"
+    value  = "vpsmanager"
+    action = "upsert"
+  }
+
+  action {
+    key    = "service.namespace"
+    value  = "chom"
+    action = "upsert"
+  }
+
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "${TEMPO_URL}"
+
+    tls {
+      insecure             = true
+      insecure_skip_verify = true
+    }
+
+    compression = "gzip"
+  }
+
+  sending_queue {
+    enabled       = true
+    num_consumers = 4
+    queue_size    = 1000
+  }
+
+  retry_on_failure {
+    enabled          = true
+    initial_interval = "5s"
+    max_interval     = "30s"
+    max_elapsed_time = "5m"
+  }
+}

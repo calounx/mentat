@@ -23,8 +23,9 @@ class TestDataSeeder extends Seeder
         $org = Organization::where('slug', 'test-org')->first();
         $tenant = Tenant::where('slug', 'test-tenant')->first();
 
-        if (!$org || !$tenant) {
+        if (! $org || ! $tenant) {
             $this->command->error('Test organization not found. Run TestUserSeeder first.');
+
             return;
         }
 
@@ -90,8 +91,9 @@ class TestDataSeeder extends Seeder
         // Get first active VPS
         $vps = VpsServer::where('status', 'active')->first();
 
-        if (!$vps) {
+        if (! $vps) {
             $this->command->warn('No active VPS servers available. Skipping site creation.');
+
             return;
         }
 
@@ -174,7 +176,7 @@ class TestDataSeeder extends Seeder
                     'type' => $type,
                     'status' => 'completed',
                     'size_mb' => rand(50, 1000),
-                    'storage_path' => "backups/{$site->domain}/" . $createdAt->format('Y-m-d') . "_{$type}.tar.gz",
+                    'storage_path' => "backups/{$site->domain}/".$createdAt->format('Y-m-d')."_{$type}.tar.gz",
                     'completed_at' => $createdAt->addMinutes(rand(5, 30)),
                 ]
             );

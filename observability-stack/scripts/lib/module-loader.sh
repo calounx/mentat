@@ -323,6 +323,8 @@ validate_module() {
         errors+=("Missing required field: exporter.port")
     elif ! [[ "$port" =~ ^[0-9]+$ ]]; then
         errors+=("Invalid port: $port (must be numeric)")
+    elif [[ "$port" -lt 1 || "$port" -gt 65535 ]]; then
+        errors+=("Invalid port: $port (must be between 1 and 65535)")
     fi
 
     # Check for required files
@@ -454,8 +456,8 @@ get_host_enabled_modules() {
     # Parse modules section and filter by enabled: true
     awk '
         /^modules:/ { in_modules = 1; next }
-        in_modules && /^[a-zA-Z_-]+:/ { in_modules = 0 }
-        in_modules && /^  [a-zA-Z_-]+:/ {
+        in_modules && /^[a-zA-Z0-9-]+:/ { in_modules = 0 }
+        in_modules && /^  [a-zA-Z0-9_-]+:/ {
             module = $1
             gsub(/:$/, "", module)
             current_module = module

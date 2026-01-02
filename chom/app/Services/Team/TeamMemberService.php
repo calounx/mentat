@@ -18,10 +18,9 @@ class TeamMemberService
     /**
      * Update a team member's role.
      *
-     * @param Organization $organization
-     * @param User $member The member to update
-     * @param string $newRole The new role
-     * @param User $updater The user performing the update
+     * @param  User  $member  The member to update
+     * @param  string  $newRole  The new role
+     * @param  User  $updater  The user performing the update
      * @return array{success: bool, message: string}
      */
     public function updateMemberRole(
@@ -31,7 +30,7 @@ class TeamMemberService
         User $updater
     ): array {
         // Validate permissions
-        if (!$this->canUpdateRole($updater, $member, $newRole)) {
+        if (! $this->canUpdateRole($updater, $member, $newRole)) {
             return [
                 'success' => false,
                 'message' => 'You do not have permission to perform this action',
@@ -79,9 +78,8 @@ class TeamMemberService
     /**
      * Remove a member from the organization.
      *
-     * @param Organization $organization
-     * @param User $member The member to remove
-     * @param User $remover The user performing the removal
+     * @param  User  $member  The member to remove
+     * @param  User  $remover  The user performing the removal
      * @return array{success: bool, message: string}
      */
     public function removeMember(
@@ -90,7 +88,7 @@ class TeamMemberService
         User $remover
     ): array {
         // Validate permissions
-        if (!$this->canRemoveMember($remover, $member)) {
+        if (! $this->canRemoveMember($remover, $member)) {
             return [
                 'success' => false,
                 'message' => 'You do not have permission to remove this member',
@@ -152,7 +150,6 @@ class TeamMemberService
     /**
      * Get formatted member list.
      *
-     * @param Organization $organization
      * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getMembers(Organization $organization)
@@ -166,14 +163,13 @@ class TeamMemberService
     /**
      * Get member statistics for the organization.
      *
-     * @param Organization $organization
      * @return array{total: int, by_role: array<string, int>}
      */
     public function getMemberStats(Organization $organization): array
     {
         $members = $organization->users;
 
-        $byRole = $members->groupBy('role')->map(fn($group) => $group->count())->toArray();
+        $byRole = $members->groupBy('role')->map(fn ($group) => $group->count())->toArray();
 
         return [
             'total' => $members->count(),
@@ -183,16 +179,11 @@ class TeamMemberService
 
     /**
      * Check if updater can update member's role.
-     *
-     * @param User $updater
-     * @param User $member
-     * @param string $newRole
-     * @return bool
      */
     protected function canUpdateRole(User $updater, User $member, string $newRole): bool
     {
         // Must be at least admin
-        if (!$updater->isAdmin()) {
+        if (! $updater->isAdmin()) {
             return false;
         }
 
@@ -202,12 +193,12 @@ class TeamMemberService
         }
 
         // Only owners can promote to admin
-        if ($newRole === 'admin' && !$updater->isOwner()) {
+        if ($newRole === 'admin' && ! $updater->isOwner()) {
             return false;
         }
 
         // Admins cannot modify other admins
-        if ($member->isAdmin() && !$updater->isOwner()) {
+        if ($member->isAdmin() && ! $updater->isOwner()) {
             return false;
         }
 
@@ -216,15 +207,11 @@ class TeamMemberService
 
     /**
      * Check if remover can remove member.
-     *
-     * @param User $remover
-     * @param User $member
-     * @return bool
      */
     protected function canRemoveMember(User $remover, User $member): bool
     {
         // Must be at least admin
-        if (!$remover->isAdmin()) {
+        if (! $remover->isAdmin()) {
             return false;
         }
 
@@ -239,7 +226,7 @@ class TeamMemberService
         }
 
         // Only owners can remove admins
-        if ($member->isAdmin() && !$remover->isOwner()) {
+        if ($member->isAdmin() && ! $remover->isOwner()) {
             return false;
         }
 
@@ -249,9 +236,7 @@ class TeamMemberService
     /**
      * Validate role name.
      *
-     * @param string $role
-     * @param bool $ownerAllowed Whether owner role is allowed
-     * @return bool
+     * @param  bool  $ownerAllowed  Whether owner role is allowed
      */
     public function isValidRole(string $role, bool $ownerAllowed = false): bool
     {

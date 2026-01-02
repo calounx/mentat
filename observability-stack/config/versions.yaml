@@ -282,11 +282,74 @@ components:
 
     compatible_with:
       promtail: ">=3.0.0"
+      alloy: ">=1.0.0"
 
     download:
       archive_type: zip
       archive_pattern: "loki-linux-amd64.zip"
       binary_name: "loki-linux-amd64"
+
+  # Grafana Alloy - Unified telemetry collector (replacement for Promtail)
+  # OpenTelemetry-compatible collector for metrics, logs, and traces
+  alloy:
+    strategy: pinned
+    github_repo: grafana/alloy
+    fallback_version: "1.5.1"
+    minimum_version: "1.0.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    compatible_with:
+      prometheus: ">=2.0.0"
+      loki: ">=2.8.0"
+      tempo: ">=2.0.0"
+
+    download:
+      archive_type: zip
+      archive_pattern: "alloy-linux-{ARCH}.zip"
+      checksum_file: "SHA256SUMS"
+
+  # Tempo - Distributed tracing backend
+  tempo:
+    strategy: pinned
+    github_repo: grafana/tempo
+    fallback_version: "2.3.1"
+    minimum_version: "2.0.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    compatible_with:
+      grafana: ">=9.0.0"
+      alloy: ">=1.0.0"
+
+    download:
+      archive_type: tar.gz
+      archive_pattern: "tempo_{VERSION}_linux_amd64.tar.gz"
+      checksum_file: "SHA256SUMS"
+
+  # Alertmanager - Alert handling for Prometheus
+  alertmanager:
+    strategy: pinned
+    github_repo: prometheus/alertmanager
+    fallback_version: "0.27.0"
+    minimum_version: "0.25.0"
+
+    constraints:
+      architecture: linux-amd64
+      exclude_prereleases: true
+
+    compatible_with:
+      prometheus: ">=2.0.0"
+      grafana: ">=9.0.0"
+
+    download:
+      archive_type: tar.gz
+      archive_pattern: "alertmanager-{VERSION}.linux-amd64.tar.gz"
+      checksum_file: "sha256sums.txt"
 
 #===============================================================================
 # ENVIRONMENT-SPECIFIC OVERRIDES
@@ -336,6 +399,18 @@ environments:
         strategy: pinned
         version: "3.6.3"  # Phase 3 upgrade target
 
+      alloy:
+        strategy: pinned
+        version: "1.5.1"
+
+      tempo:
+        strategy: pinned
+        version: "2.3.1"
+
+      alertmanager:
+        strategy: pinned
+        version: "0.27.0"
+
   # Staging environment - Test latest before production
   staging:
     default_strategy: latest
@@ -365,12 +440,25 @@ environments:
 # Used to validate that component versions work together
 
 compatibility_matrix:
-  # Promtail must be compatible with Loki
+  # Promtail must be compatible with Loki (DEPRECATED - use Alloy instead)
   - component: promtail
     requires:
       loki:
         constraint: ">=2.9.0"
         reason: "API compatibility"
+
+  # Alloy - unified telemetry collector
+  - component: alloy
+    requires:
+      prometheus:
+        constraint: ">=2.0.0"
+        reason: "Remote write API compatibility"
+      loki:
+        constraint: ">=2.8.0"
+        reason: "Push API compatibility"
+      tempo:
+        constraint: ">=2.0.0"
+        reason: "OTLP trace ingestion"
 
   # Prometheus exporter compatibility
   - component: node_exporter
@@ -391,6 +479,13 @@ compatibility_matrix:
         constraint: ">=2.0.0"
         reason: "Metrics format compatibility"
 
+  # Tempo compatibility
+  - component: tempo
+    requires:
+      grafana:
+        constraint: ">=9.0.0"
+        reason: "Trace visualization"
+
   # Grafana dashboard compatibility
   - component: grafana
     requires:
@@ -400,6 +495,9 @@ compatibility_matrix:
       loki:
         constraint: ">=2.0.0"
         reason: "Data source compatibility"
+      tempo:
+        constraint: ">=2.0.0"
+        reason: "Trace data source compatibility"
 
 #===============================================================================
 # VERSION UPDATE POLICIES

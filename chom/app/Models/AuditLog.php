@@ -64,21 +64,21 @@ class AuditLog extends Model
      * SECURITY: Hash includes all critical fields plus previous hash to create chain.
      * This makes it cryptographically impossible to modify logs without detection.
      *
-     * @param string $previousHash The hash of the previous log entry
-     * @param AuditLog $log The current log entry
+     * @param  string  $previousHash  The hash of the previous log entry
+     * @param  AuditLog  $log  The current log entry
      * @return string SHA-256 hash
      */
     protected static function calculateLogHash(string $previousHash, self $log): string
     {
         $data = $previousHash
-            . ($log->id ?? '')
-            . ($log->organization_id ?? '')
-            . ($log->user_id ?? '')
-            . $log->action
-            . ($log->resource_type ?? '')
-            . ($log->resource_id ?? '')
-            . $log->ip_address
-            . now()->toDateTimeString();  // Use current timestamp for consistency
+            .($log->id ?? '')
+            .($log->organization_id ?? '')
+            .($log->user_id ?? '')
+            .$log->action
+            .($log->resource_type ?? '')
+            .($log->resource_id ?? '')
+            .$log->ip_address
+            .now()->toDateTimeString();  // Use current timestamp for consistency
 
         return hash('sha256', $data);
     }
@@ -105,14 +105,14 @@ class AuditLog extends Model
         foreach ($logs as $log) {
             $expectedHash = hash('sha256',
                 $previousHash
-                . $log->id
-                . $log->organization_id
-                . $log->user_id
-                . $log->action
-                . $log->resource_type
-                . $log->resource_id
-                . $log->ip_address
-                . $log->created_at
+                .$log->id
+                .$log->organization_id
+                .$log->user_id
+                .$log->action
+                .$log->resource_type
+                .$log->resource_id
+                .$log->ip_address
+                .$log->created_at
             );
 
             if ($expectedHash !== $log->hash) {
@@ -157,14 +157,13 @@ class AuditLog extends Model
      * SECURITY: Logs security-relevant events with severity levels for alerting.
      * High and critical severity events should trigger immediate notifications.
      *
-     * @param string $action The action being logged
-     * @param Organization|null $organization The organization context
-     * @param User|null $user The user performing the action
-     * @param string|null $resourceType Type of resource affected
-     * @param string|null $resourceId ID of resource affected
-     * @param array|null $metadata Additional context data
-     * @param string $severity Severity level (low, medium, high, critical)
-     * @return self
+     * @param  string  $action  The action being logged
+     * @param  Organization|null  $organization  The organization context
+     * @param  User|null  $user  The user performing the action
+     * @param  string|null  $resourceType  Type of resource affected
+     * @param  string|null  $resourceId  ID of resource affected
+     * @param  array|null  $metadata  Additional context data
+     * @param  string  $severity  Severity level (low, medium, high, critical)
      */
     public static function log(
         string $action,

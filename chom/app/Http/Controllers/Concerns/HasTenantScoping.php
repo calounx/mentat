@@ -16,15 +16,13 @@ trait HasTenantScoping
     /**
      * Get the current tenant from the authenticated user.
      *
-     * @param Request $request
-     * @return Tenant
      * @throws \Symfony\Component\HttpKernel\Exception\HttpException
      */
     protected function getTenant(Request $request): Tenant
     {
         $tenant = $request->user()->currentTenant();
 
-        if (!$tenant || !$tenant->isActive()) {
+        if (! $tenant || ! $tenant->isActive()) {
             abort(403, 'No active tenant found.');
         }
 
@@ -33,9 +31,6 @@ trait HasTenantScoping
 
     /**
      * Get the current tenant ID.
-     *
-     * @param Request $request
-     * @return string
      */
     protected function getTenantId(Request $request): string
     {
@@ -44,10 +39,6 @@ trait HasTenantScoping
 
     /**
      * Check if tenant can perform action (quota check helper).
-     *
-     * @param Tenant $tenant
-     * @param string $action
-     * @return bool
      */
     protected function tenantCan(Tenant $tenant, string $action): bool
     {
@@ -61,10 +52,7 @@ trait HasTenantScoping
     /**
      * Verify resource belongs to tenant.
      *
-     * @param mixed $resource
-     * @param Tenant $tenant
-     * @param string $tenantIdField
-     * @return bool
+     * @param  mixed  $resource
      */
     protected function belongsToTenant($resource, Tenant $tenant, string $tenantIdField = 'tenant_id'): bool
     {

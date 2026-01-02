@@ -21,10 +21,10 @@ class QuotaExceededException extends Exception
     /**
      * Create a new quota exceeded exception.
      *
-     * @param string $message The exception message
-     * @param array<string, mixed> $context Additional context
-     * @param int $code The exception code
-     * @param \Throwable|null $previous Previous exception
+     * @param  string  $message  The exception message
+     * @param  array<string, mixed>  $context  Additional context
+     * @param  int  $code  The exception code
+     * @param  \Throwable|null  $previous  Previous exception
      */
     public function __construct(
         string $message = 'Quota exceeded',

@@ -30,8 +30,8 @@ class TenantIsolationIntegrationTest extends TestCase
         [$tenant1, $tenant2] = $this->createMultipleTenants(2);
 
         // Create VPS servers (shared resource, not tenant-scoped)
-        $vps1 = VpsServer::factory()->create(['allocation_mode' => 'shared']);
-        $vps2 = VpsServer::factory()->create(['allocation_mode' => 'shared']);
+        $vps1 = VpsServer::factory()->create(['allocation_type' => 'shared']);
+        $vps2 = VpsServer::factory()->create(['allocation_type' => 'shared']);
 
         // Create data for tenant 1
         $site1 = Site::factory()->create([
@@ -218,7 +218,7 @@ class TenantIsolationIntegrationTest extends TestCase
     public function test_site_creation_is_scoped_to_authenticated_tenant(): void
     {
         $tenantData = $this->createTenantWithUser();
-        VpsServer::factory()->create(['status' => 'active', 'allocation_mode' => 'shared']);
+        VpsServer::factory()->create(['status' => 'active', 'allocation_type' => 'shared']);
 
         $this->actingAs($tenantData['user']);
 
@@ -425,7 +425,7 @@ class TenantIsolationIntegrationTest extends TestCase
         $tenantData = $this->createTenantWithUser();
         $this->actingAs($tenantData['user']);
 
-        $vps = VpsServer::factory()->create(['allocation_mode' => 'shared']);
+        $vps = VpsServer::factory()->create(['allocation_type' => 'shared']);
 
         // Creating a site should be scoped to the authenticated tenant
         $site = Site::create([

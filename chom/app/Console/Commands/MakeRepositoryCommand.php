@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\GeneratorCommand;
-use Illuminate\Support\Str;
 
 class MakeRepositoryCommand extends GeneratorCommand
 {
@@ -19,8 +18,8 @@ class MakeRepositoryCommand extends GeneratorCommand
     public function handle(): int
     {
         // Create stub directory if it doesn't exist
-        $stubDir = __DIR__ . '/stubs';
-        if (!is_dir($stubDir)) {
+        $stubDir = __DIR__.'/stubs';
+        if (! is_dir($stubDir)) {
             mkdir($stubDir, 0755, true);
         }
 
@@ -38,10 +37,10 @@ class MakeRepositoryCommand extends GeneratorCommand
             $this->newLine();
             $this->components->info('Next steps:');
             $this->line('1. Register in AppServiceProvider:');
-            $this->line('   $this->app->bind(\\App\\Contracts\\' . $this->argument('name') . 'Interface::class, \\App\\Repositories\\' . $this->argument('name') . '::class);');
+            $this->line('   $this->app->bind(\\App\\Contracts\\'.$this->argument('name').'Interface::class, \\App\\Repositories\\'.$this->argument('name').'::class);');
             $this->newLine();
             $this->line('2. Use in your controllers:');
-            $this->line('   public function __construct(private ' . $this->argument('name') . 'Interface $repository) {}');
+            $this->line('   public function __construct(private '.$this->argument('name').'Interface $repository) {}');
         }
 
         return $result ?? self::FAILURE;
@@ -53,16 +52,17 @@ class MakeRepositoryCommand extends GeneratorCommand
     protected function createInterface(): void
     {
         $name = $this->argument('name');
-        $interfaceName = $name . 'Interface';
+        $interfaceName = $name.'Interface';
 
-        $path = $this->laravel->basePath('app/Contracts/' . $interfaceName . '.php');
+        $path = $this->laravel->basePath('app/Contracts/'.$interfaceName.'.php');
 
-        if (!is_dir(dirname($path))) {
+        if (! is_dir(dirname($path))) {
             mkdir(dirname($path), 0755, true);
         }
 
         if (file_exists($path)) {
             $this->components->warn("Interface [$interfaceName] already exists!");
+
             return;
         }
 
@@ -81,7 +81,7 @@ class MakeRepositoryCommand extends GeneratorCommand
      */
     protected function getStub(): string
     {
-        return __DIR__ . '/stubs/repository.stub';
+        return __DIR__.'/stubs/repository.stub';
     }
 
     /**
@@ -89,7 +89,7 @@ class MakeRepositoryCommand extends GeneratorCommand
      */
     protected function getDefaultNamespace($rootNamespace): string
     {
-        return $rootNamespace . '\Repositories';
+        return $rootNamespace.'\Repositories';
     }
 
     /**
@@ -99,7 +99,7 @@ class MakeRepositoryCommand extends GeneratorCommand
     {
         $stub = parent::buildClass($name);
 
-        $interfaceName = class_basename($name) . 'Interface';
+        $interfaceName = class_basename($name).'Interface';
 
         $stub = str_replace('{{ interface }}', $interfaceName, $stub);
 
@@ -111,13 +111,13 @@ class MakeRepositoryCommand extends GeneratorCommand
      */
     protected function createStubs(string $stubDir): void
     {
-        $repoStub = $stubDir . '/repository.stub';
-        if (!file_exists($repoStub)) {
+        $repoStub = $stubDir.'/repository.stub';
+        if (! file_exists($repoStub)) {
             file_put_contents($repoStub, $this->getRepositoryStub());
         }
 
-        $interfaceStub = $stubDir . '/repository-interface.stub';
-        if (!file_exists($interfaceStub)) {
+        $interfaceStub = $stubDir.'/repository-interface.stub';
+        if (! file_exists($interfaceStub)) {
             file_put_contents($interfaceStub, $this->getInterfaceStub());
         }
     }

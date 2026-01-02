@@ -2,11 +2,11 @@
 
 namespace App\Services\Alerting;
 
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class AlertManager
 {
@@ -21,14 +21,14 @@ class AlertManager
         ?string $severity = null,
         array $context = []
     ): void {
-        if (!config('alerting.enabled')) {
+        if (! config('alerting.enabled')) {
             return;
         }
 
         // Get rule configuration
         $ruleConfig = config("alerting.rules.{$rule}");
 
-        if (!$ruleConfig || !($ruleConfig['enabled'] ?? true)) {
+        if (! $ruleConfig || ! ($ruleConfig['enabled'] ?? true)) {
             return;
         }
 
@@ -40,12 +40,14 @@ class AlertManager
                 'rule' => $rule,
                 'severity' => $severity,
             ]);
+
             return;
         }
 
         // Check throttling
         if ($this->isThrottled($rule)) {
             Log::info('Alert throttled', ['rule' => $rule]);
+
             return;
         }
 
@@ -112,7 +114,7 @@ class AlertManager
     {
         $ruleConfig = config("alerting.rules.{$rule}");
 
-        if (!$ruleConfig || !($ruleConfig['enabled'] ?? true)) {
+        if (! $ruleConfig || ! ($ruleConfig['enabled'] ?? true)) {
             return false;
         }
 
@@ -139,14 +141,15 @@ class AlertManager
      */
     protected function sendToSlack(array $alert): void
     {
-        if (!config('alerting.slack.enabled')) {
+        if (! config('alerting.slack.enabled')) {
             return;
         }
 
         $webhookUrl = config('alerting.slack.webhook_url');
 
-        if (!$webhookUrl) {
+        if (! $webhookUrl) {
             Log::warning('Slack webhook URL not configured');
+
             return;
         }
 
@@ -189,7 +192,7 @@ class AlertManager
      */
     protected function sendToEmail(array $alert): void
     {
-        if (!config('alerting.email.enabled')) {
+        if (! config('alerting.email.enabled')) {
             return;
         }
 
@@ -197,6 +200,7 @@ class AlertManager
 
         if (empty($recipients)) {
             Log::warning('No email recipients configured for alerts');
+
             return;
         }
 
@@ -217,14 +221,15 @@ class AlertManager
      */
     protected function sendToPagerDuty(array $alert): void
     {
-        if (!config('alerting.pagerduty.enabled')) {
+        if (! config('alerting.pagerduty.enabled')) {
             return;
         }
 
         $integrationKey = config('alerting.pagerduty.integration_key');
 
-        if (!$integrationKey) {
+        if (! $integrationKey) {
             Log::warning('PagerDuty integration key not configured');
+
             return;
         }
 
@@ -256,13 +261,13 @@ class AlertManager
      */
     protected function isQuietHours(string $severity): bool
     {
-        if (!config('alerting.quiet_hours.enabled')) {
+        if (! config('alerting.quiet_hours.enabled')) {
             return false;
         }
 
         $suppressedSeverities = config('alerting.quiet_hours.suppress_severities', []);
 
-        if (!in_array($severity, $suppressedSeverities)) {
+        if (! in_array($severity, $suppressedSeverities)) {
             return false;
         }
 
@@ -284,7 +289,7 @@ class AlertManager
      */
     protected function isThrottled(string $rule): bool
     {
-        if (!config('alerting.throttling.enabled')) {
+        if (! config('alerting.throttling.enabled')) {
             return false;
         }
 
@@ -302,7 +307,7 @@ class AlertManager
      */
     protected function updateThrottle(string $rule): void
     {
-        if (!config('alerting.throttling.enabled')) {
+        if (! config('alerting.throttling.enabled')) {
             return;
         }
 
@@ -350,7 +355,7 @@ class AlertManager
         $logFile = storage_path('logs/laravel.log');
         $lines = config('alerting.context.log_lines', 20);
 
-        if (!file_exists($logFile)) {
+        if (! file_exists($logFile)) {
             return [];
         }
 
@@ -370,7 +375,7 @@ class AlertManager
                     $lineCount++;
                 }
 
-                $text = $char . $text;
+                $text = $char.$text;
                 fseek($handle, -2, SEEK_CUR);
             }
 
@@ -413,7 +418,7 @@ class AlertManager
      */
     protected function storeAlert(array $alert): void
     {
-        if (!config('alerting.storage.enabled')) {
+        if (! config('alerting.storage.enabled')) {
             return;
         }
 
@@ -441,7 +446,7 @@ class AlertManager
      */
     protected function storeInCache(array $alert): void
     {
-        $cacheKey = "alerts:history:" . now()->timestamp;
+        $cacheKey = 'alerts:history:'.now()->timestamp;
         $retention = config('alerting.storage.retention_days', 90) * 86400;
 
         Cache::put($cacheKey, $alert, $retention);

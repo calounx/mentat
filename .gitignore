@@ -28,6 +28,9 @@ chom/.phpunit.cache
 chom/.phpunit.result.cache
 chom/auth.json
 chom/vendor/
+chom/composer.phar
+chom/*.sqlite
+chom/database/*.sqlite
 
 # Node.js and NPM
 chom/node_modules/
@@ -81,9 +84,46 @@ observability-stack/*.key
 observability-stack/dist/
 observability-stack/build/
 
+# ------------------------------------------------------------------------------
+# Docker (docker/)
+# ------------------------------------------------------------------------------
+# Docker environment files (keep .env.example)
+docker/.env
+docker/.env.test
+docker/.env.local
+!docker/.env.example
+
+# Docker volumes and data
+docker/data/
+docker/volumes/
+docker/**/data/
+docker/**/volumes/
+
+# Docker temporary files
+docker/**/*.log
+docker/**/*.pid
+
+# ------------------------------------------------------------------------------
 # OS files (general)
+# ------------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
 *~
+
+# ------------------------------------------------------------------------------
+# General artifacts
+# ------------------------------------------------------------------------------
+# SQLite databases (any location)
+*.sqlite
+*.sqlite3
+*.db
+
+# Composer artifacts
+composer.phar
+
+# Coverage reports
+coverage/
+.coverage
+htmlcov/

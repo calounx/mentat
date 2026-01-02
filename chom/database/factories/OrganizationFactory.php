@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Organization;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -28,6 +29,24 @@ class OrganizationFactory extends Factory
             'billing_email' => fake()->unique()->companyEmail(),
             'stripe_customer_id' => 'cus_'.Str::random(14),
         ];
+    }
+
+    /**
+     * Configure the model factory.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Organization $organization) {
+            // Create default tenant for the organization if it doesn't exist
+            if ($organization->tenants()->count() === 0) {
+                $tenant = Tenant::factory()->create([
+                    'organization_id' => $organization->id,
+                ]);
+
+                // Set the default tenant
+                $organization->update(['default_tenant_id' => $tenant->id]);
+            }
+        });
     }
 
     /**

@@ -1,0 +1,243 @@
+# ============================================================================
+# CHOM VPS Simulation Environment
+# ============================================================================
+# Simulates 3 Debian 13 VPS for testing deployment scripts
+#
+# Architecture:
+# - mentat_tst (10.10.100.10): Observability VPS (Prometheus, Grafana, Loki, Tempo)
+# - landsraad_tst (10.10.100.20): VPSManager/CHOM application (primary)
+# - richese_tst (10.10.100.30): Hosting node (secondary web server)
+#
+# Usage:
+#   docker compose -f docker-compose.vps.yml up -d
+#   docker exec -it mentat_tst bash
+#   docker exec -it landsraad_tst bash
+#   docker exec -it richese_tst bash
+# ============================================================================
+
+networks:
+  vps-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.100.0/24
+
+volumes:
+  # Observability VPS data
+  mentat-prometheus-data:
+  mentat-loki-data:
+  mentat-tempo-data:
+  mentat-grafana-data:
+  mentat-alertmanager-data:
+
+  # CHOM VPS data (landsraad - primary)
+  landsraad-mysql-data:
+  landsraad-redis-data:
+  landsraad-app-storage:
+
+  # Hosting node data (richese - secondary)
+  richese-mysql-data:
+  richese-redis-data:
+  richese-app-storage:
+
+services:
+  # ==========================================================================
+  # OBSERVABILITY VPS - mentat_tst
+  # ==========================================================================
+  mentat_tst:
+    container_name: mentat_tst
+    hostname: mentat-tst
+    build:
+      context: ./vps-base
+      dockerfile: Dockerfile
+    networks:
+      vps-network:
+        ipv4_address: 10.10.100.10
+    ports:
+      # SSH
+      - "2210:22"
+      # Prometheus
+      - "9090:9090"
+      # Alertmanager
+      - "9093:9093"
+      # Loki
+      - "3100:3100"
+      # Tempo
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+      # Grafana
+      - "3000:3000"
+      # Node Exporter (mapped to avoid host conflict)
+      - "9110:9100"
+    volumes:
+      # Mount observability-stack for deployment
+      - ../observability-stack:/opt/observability-stack:ro
+      # Mount vps-base scripts for deployment
+      - ./vps-base/scripts:/opt/scripts:ro
+      # Persistent data volumes
+      - mentat-prometheus-data:/var/lib/prometheus
+      - mentat-loki-data:/var/lib/loki
+      - mentat-tempo-data:/var/lib/tempo
+      - mentat-grafana-data:/var/lib/grafana
+      - mentat-alertmanager-data:/var/lib/alertmanager
+      # Required for systemd
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - TZ=UTC
+      - DEPLOYMENT_ROLE=observability
+      - HOST_IP=10.10.100.10
+      - HOST_NAME=mentat_tst
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "systemctl is-active multi-user.target || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # VPSMANAGER/CHOM VPS - landsraad_tst
+  # ==========================================================================
+  landsraad_tst:
+    container_name: landsraad_tst
+    hostname: landsraad-tst
+    build:
+      context: ./vps-base
+      dockerfile: Dockerfile
+    networks:
+      vps-network:
+        ipv4_address: 10.10.100.20
+    ports:
+      # SSH
+      - "2220:22"
+      # HTTP/HTTPS
+      - "8000:80"
+      - "8443:443"
+      # MySQL
+      - "3316:3306"
+      # Redis
+      - "6389:6379"
+      # Exporters (mapped to avoid host conflicts)
+      - "9111:9100"   # Node Exporter
+      - "9114:9113"   # Nginx Exporter
+      - "9105:9104"   # MySQL Exporter
+      - "9254:9253"   # PHP-FPM Exporter
+    volumes:
+      # Mount observability-stack for deployment
+      - ../observability-stack:/opt/observability-stack:ro
+      # Mount vps-base scripts for deployment
+      - ./vps-base/scripts:/opt/scripts:ro
+      # Mount CHOM application
+      - ../chom:/opt/chom:cached
+      # Persistent data volumes
+      - landsraad-mysql-data:/var/lib/mysql
+      - landsraad-redis-data:/var/lib/redis
+      - landsraad-app-storage:/var/www/chom/storage
+      # Required for systemd
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - TZ=UTC
+      - DEPLOYMENT_ROLE=vpsmanager
+      - HOST_IP=10.10.100.20
+      - HOST_NAME=landsraad_tst
+      - OBSERVABILITY_IP=10.10.100.10
+      # Database
+      - DB_DATABASE=chom
+      - DB_USERNAME=chom
+      - DB_PASSWORD=secret
+      - MYSQL_ROOT_PASSWORD=root
+    restart: unless-stopped
+    depends_on:
+      mentat_tst:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "systemctl is-active multi-user.target || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # HOSTING NODE - richese_tst (Secondary Web Server)
+  # ==========================================================================
+  richese_tst:
+    container_name: richese_tst
+    hostname: richese-tst
+    build:
+      context: ./vps-base
+      dockerfile: Dockerfile
+    networks:
+      vps-network:
+        ipv4_address: 10.10.100.30
+    ports:
+      # SSH
+      - "2230:22"
+      # HTTP/HTTPS
+      - "8010:80"
+      - "8453:443"
+      # MySQL
+      - "3326:3306"
+      # Redis
+      - "6399:6379"
+      # Exporters (mapped to avoid host conflicts)
+      - "9112:9100"   # Node Exporter
+      - "9115:9113"   # Nginx Exporter
+      - "9106:9104"   # MySQL Exporter
+      - "9255:9253"   # PHP-FPM Exporter
+    volumes:
+      # Mount observability-stack for deployment
+      - ../observability-stack:/opt/observability-stack:ro
+      # Mount vps-base scripts for deployment
+      - ./vps-base/scripts:/opt/scripts:ro
+      # Persistent data volumes
+      - richese-mysql-data:/var/lib/mysql
+      - richese-redis-data:/var/lib/redis
+      - richese-app-storage:/var/www/html/storage
+      # Required for systemd
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - TZ=UTC
+      - DEPLOYMENT_ROLE=hosting
+      - HOST_IP=10.10.100.30
+      - HOST_NAME=richese_tst
+      - OBSERVABILITY_IP=10.10.100.10
+      # Database
+      - DB_DATABASE=richese
+      - DB_USERNAME=richese
+      - DB_PASSWORD=secret
+      - MYSQL_ROOT_PASSWORD=root
+    restart: unless-stopped
+    depends_on:
+      mentat_tst:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "systemctl is-active multi-user.target || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

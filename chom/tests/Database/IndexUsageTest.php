@@ -13,8 +13,6 @@ use Tests\TestCase;
  * Test database index usage
  *
  * Ensures queries use appropriate indexes for performance
- *
- * @package Tests\Database
  */
 class IndexUsageTest extends TestCase
 {
@@ -22,15 +20,13 @@ class IndexUsageTest extends TestCase
 
     /**
      * Test sites table has required indexes
-     *
-     * @return void
      */
     public function test_sites_table_has_required_indexes(): void
     {
         $indexes = Schema::getIndexes('sites');
         $indexColumns = collect($indexes)->pluck('columns')->flatten();
 
-        $requiredIndexes = ['user_id', 'domain', 'status'];
+        $requiredIndexes = ['tenant_id', 'domain', 'status'];
 
         foreach ($requiredIndexes as $column) {
             $this->assertTrue(
@@ -42,12 +38,10 @@ class IndexUsageTest extends TestCase
 
     /**
      * Test backups table has required indexes
-     *
-     * @return void
      */
     public function test_backups_table_has_required_indexes(): void
     {
-        $indexes = Schema::getIndexes('backups');
+        $indexes = Schema::getIndexes('site_backups');
         $indexColumns = collect($indexes)->pluck('columns')->flatten();
 
         $this->assertTrue($indexColumns->contains('site_id'));
@@ -56,43 +50,40 @@ class IndexUsageTest extends TestCase
 
     /**
      * Test composite indexes exist where needed
-     *
-     * @return void
      */
     public function test_composite_indexes_exist(): void
     {
         $indexes = Schema::getIndexes('sites');
 
-        // Check for composite index on (user_id, status)
+        // Check for composite index on (tenant_id, status)
         $compositeIndex = collect($indexes)->first(function ($index) {
             return count($index['columns']) > 1
-                && in_array('user_id', $index['columns'])
+                && in_array('tenant_id', $index['columns'])
                 && in_array('status', $index['columns']);
         });
 
-        $this->assertNotNull($compositeIndex, 'Missing composite index on (user_id, status)');
+        $this->assertNotNull($compositeIndex, 'Missing composite index on (tenant_id, status)');
     }
 
     /**
      * Test queries actually use indexes
-     *
-     * @return void
      */
     public function test_queries_use_indexes(): void
     {
         // Skip if not MySQL/PostgreSQL
-        if (!in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'])) {
+        if (! in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'])) {
             $this->markTestSkipped('Index usage testing requires MySQL or PostgreSQL');
         }
 
-        $query = 'SELECT * FROM sites WHERE user_id = ?';
+        $query = 'SELECT * FROM sites WHERE tenant_id = ?';
         $explain = DB::select("EXPLAIN {$query}", [1]);
 
         $usesIndex = collect($explain)->contains(function ($row) {
             $key = $row->key ?? $row->KEY ?? null;
+
             return $key !== null && $key !== '';
         });
 
-        $this->assertTrue($usesIndex, 'Query does not use index on user_id');
+        $this->assertTrue($usesIndex, 'Query does not use index on tenant_id');
     }
 }

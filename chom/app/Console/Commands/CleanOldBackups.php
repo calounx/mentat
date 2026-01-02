@@ -2,9 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
 use Exception;
+use Illuminate\Console\Command;
 
 class CleanOldBackups extends Command
 {
@@ -27,8 +26,9 @@ class CleanOldBackups extends Command
         try {
             $backupDir = storage_path('app/backups');
 
-            if (!is_dir($backupDir)) {
+            if (! is_dir($backupDir)) {
                 $this->warn('Backup directory does not exist');
+
                 return Command::SUCCESS;
             }
 
@@ -37,10 +37,11 @@ class CleanOldBackups extends Command
 
             if (empty($backups)) {
                 $this->info('No backups found');
+
                 return Command::SUCCESS;
             }
 
-            $this->info('Found ' . count($backups) . ' backup(s)');
+            $this->info('Found '.count($backups).' backup(s)');
 
             // Categorize backups
             $categorized = $this->categorizeBackups($backups);
@@ -50,6 +51,7 @@ class CleanOldBackups extends Command
 
             if (empty($toDelete)) {
                 $this->info('No backups need to be deleted');
+
                 return Command::SUCCESS;
             }
 
@@ -63,18 +65,20 @@ class CleanOldBackups extends Command
                 $this->line("  - {$backup['filename']} ({$this->formatBytes($size)})");
             }
 
-            $this->info("Total space to be freed: " . $this->formatBytes($totalSize));
+            $this->info('Total space to be freed: '.$this->formatBytes($totalSize));
 
             // If dry-run, stop here
             if ($this->option('dry-run')) {
                 $this->info('Dry run - no files were deleted');
+
                 return Command::SUCCESS;
             }
 
             // Confirm deletion
-            if (!$this->option('force')) {
-                if (!$this->confirm('Do you want to proceed with deletion?')) {
+            if (! $this->option('force')) {
+                if (! $this->confirm('Do you want to proceed with deletion?')) {
                     $this->info('Deletion cancelled');
+
                     return Command::SUCCESS;
                 }
             }
@@ -99,7 +103,7 @@ class CleanOldBackups extends Command
             return Command::SUCCESS;
 
         } catch (Exception $e) {
-            $this->error('Backup cleanup failed: ' . $e->getMessage());
+            $this->error('Backup cleanup failed: '.$e->getMessage());
 
             logger()->error('Backup cleanup failed', [
                 'error' => $e->getMessage(),
@@ -112,7 +116,7 @@ class CleanOldBackups extends Command
 
     protected function getBackupFiles(string $dir): array
     {
-        $files = glob($dir . '/backup_*.sql*');
+        $files = glob($dir.'/backup_*.sql*');
         $backups = [];
 
         foreach ($files as $file) {
@@ -125,13 +129,13 @@ class CleanOldBackups extends Command
                     'filename' => $filename,
                     'date' => $matches[1],
                     'time' => $matches[2],
-                    'timestamp' => strtotime($matches[1] . ' ' . substr($matches[2], 0, 2) . ':' . substr($matches[2], 2, 2) . ':' . substr($matches[2], 4, 2)),
+                    'timestamp' => strtotime($matches[1].' '.substr($matches[2], 0, 2).':'.substr($matches[2], 2, 2).':'.substr($matches[2], 4, 2)),
                 ];
             }
         }
 
         // Sort by timestamp descending (newest first)
-        usort($backups, fn($a, $b) => $b['timestamp'] <=> $a['timestamp']);
+        usort($backups, fn ($a, $b) => $b['timestamp'] <=> $a['timestamp']);
 
         return $backups;
     }
@@ -154,13 +158,13 @@ class CleanOldBackups extends Command
             } elseif ($age <= 28) {
                 // Keep one backup per week
                 $weekNum = date('W', $backup['timestamp']);
-                if (!isset($categorized['weekly'][$weekNum])) {
+                if (! isset($categorized['weekly'][$weekNum])) {
                     $categorized['weekly'][$weekNum] = $backup;
                 }
             } elseif ($age <= 365) {
                 // Keep one backup per month
                 $monthKey = date('Y-m', $backup['timestamp']);
-                if (!isset($categorized['monthly'][$monthKey])) {
+                if (! isset($categorized['monthly'][$monthKey])) {
                     $categorized['monthly'][$monthKey] = $backup;
                 }
             } else {
@@ -217,6 +221,6 @@ class CleanOldBackups extends Command
             $bytes /= 1024;
         }
 
-        return round($bytes, $precision) . ' ' . $units[$i];
+        return round($bytes, $precision).' '.$units[$i];
     }
 }

@@ -5,11 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Site;
 use App\Models\User;
-use App\Models\VpsServer;
 use App\Services\Secrets\SecretsRotationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * SECURITY: Health Check and Security Posture Monitoring
@@ -69,7 +68,7 @@ class HealthController extends Controller
             'storage' => $this->checkStorage(),
         ];
 
-        $allHealthy = collect($checks)->every(fn($check) => $check['status'] === 'ok');
+        $allHealthy = collect($checks)->every(fn ($check) => $check['status'] === 'ok');
 
         return response()->json([
             'status' => $allHealthy ? 'ok' : 'degraded',
@@ -104,7 +103,7 @@ class HealthController extends Controller
         $user = $request->user();
 
         // SECURITY: Only admins can access security posture
-        if (!$user || !$user->isAdmin()) {
+        if (! $user || ! $user->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -173,7 +172,7 @@ class HealthController extends Controller
 
         // CHECK 4: Audit log integrity
         $auditLogCheck = $this->checkAuditLogIntegrity();
-        if (!$auditLogCheck['healthy']) {
+        if (! $auditLogCheck['healthy']) {
             $issues[] = [
                 'category' => 'logging',
                 'severity' => 'high',
@@ -187,7 +186,7 @@ class HealthController extends Controller
 
         // CHECK 5: Session security settings
         $sessionCheck = $this->checkSessionSecurity();
-        if (!$sessionCheck['secure']) {
+        if (! $sessionCheck['secure']) {
             $warnings[] = [
                 'category' => 'session',
                 'severity' => 'medium',
@@ -201,7 +200,7 @@ class HealthController extends Controller
 
         // CHECK 6: Environment security
         $envCheck = $this->checkEnvironmentSecurity();
-        if (!$envCheck['secure']) {
+        if (! $envCheck['secure']) {
             $issues[] = [
                 'category' => 'configuration',
                 'severity' => 'critical',
@@ -219,7 +218,7 @@ class HealthController extends Controller
         $securityScore = $totalChecks > 0 ? round(($passCount / $totalChecks) * 100) : 0;
 
         // Determine overall status
-        $status = match(true) {
+        $status = match (true) {
             count($issues) > 0 => 'critical',
             count($warnings) > 2 => 'warning',
             count($warnings) > 0 => 'notice',
@@ -272,7 +271,7 @@ class HealthController extends Controller
     protected function checkCache(): array
     {
         try {
-            $key = 'health_check_' . time();
+            $key = 'health_check_'.time();
             Cache::put($key, 'test', 10);
             $value = Cache::get($key);
             Cache::forget($key);
@@ -336,7 +335,7 @@ class HealthController extends Controller
         } catch (\Exception $e) {
             return [
                 'healthy' => false,
-                'message' => 'Unable to verify audit log integrity: ' . $e->getMessage(),
+                'message' => 'Unable to verify audit log integrity: '.$e->getMessage(),
             ];
         }
     }
@@ -354,12 +353,12 @@ class HealthController extends Controller
         }
 
         // Check secure cookies
-        if (!config('session.secure') && config('app.env') === 'production') {
+        if (! config('session.secure') && config('app.env') === 'production') {
             $issues[] = 'Secure cookie flag should be enabled in production';
         }
 
         // Check HTTP only cookies
-        if (!config('session.http_only')) {
+        if (! config('session.http_only')) {
             $issues[] = 'HTTP-only cookie flag should be enabled';
         }
 
@@ -392,14 +391,14 @@ class HealthController extends Controller
         }
 
         // Check HTTPS enforcement
-        if (!config('app.url')) {
+        if (! config('app.url')) {
             $issues[] = 'APP_URL is not configured';
         }
 
         return [
             'secure' => empty($issues),
             'message' => empty($issues) ? 'Environment is securely configured' : implode('; ', $issues),
-            'remediation' => !empty($issues) ? 'Review .env file and fix configuration issues' : null,
+            'remediation' => ! empty($issues) ? 'Review .env file and fix configuration issues' : null,
         ];
     }
 

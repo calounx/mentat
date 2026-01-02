@@ -13,17 +13,15 @@ use App\Models\Site;
  * - RecordAuditLog: Creates audit trail for successful provisioning
  * - SendNotification: Sends email notification to user
  * - RecordMetrics: Records provisioning duration and success counter
- *
- * @package App\Events\Site
  */
 class SiteProvisioned extends AbstractDomainEvent
 {
     /**
      * Create a new SiteProvisioned event instance.
      *
-     * @param Site $site The successfully provisioned site
-     * @param array<string, mixed> $provisioningDetails Additional provisioning metadata (e.g., duration)
-     * @param string|null $actorId The ID of the actor (defaults to 'system')
+     * @param  Site  $site  The successfully provisioned site
+     * @param  array<string, mixed>  $provisioningDetails  Additional provisioning metadata (e.g., duration)
+     * @param  string|null  $actorId  The ID of the actor (defaults to 'system')
      */
     public function __construct(
         public readonly Site $site,

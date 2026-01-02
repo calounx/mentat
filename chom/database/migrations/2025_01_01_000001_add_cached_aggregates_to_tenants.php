@@ -46,8 +46,10 @@ return new class extends Migration
         });
 
         // Populate initial values for existing tenants
-        // Use raw SQL for better performance on large datasets
-        DB::statement("
+        // Use database-agnostic approach for timestamp
+        $now = now()->toDateTimeString();
+
+        DB::statement('
             UPDATE tenants
             SET
                 cached_storage_mb = (
@@ -62,8 +64,8 @@ return new class extends Migration
                     WHERE sites.tenant_id = tenants.id
                     AND sites.deleted_at IS NULL
                 ),
-                cached_at = NOW()
-        ");
+                cached_at = ?
+        ', [$now]);
     }
 
     /**

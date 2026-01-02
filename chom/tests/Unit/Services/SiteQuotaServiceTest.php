@@ -12,8 +12,6 @@ use Tests\TestCase;
 
 /**
  * Unit tests for Site Quota Service
- *
- * @package Tests\Unit\Services
  */
 class SiteQuotaServiceTest extends TestCase
 {
@@ -24,67 +22,63 @@ class SiteQuotaServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new SiteQuotaService();
+        $this->service = new SiteQuotaService;
     }
 
     /**
      * Test basic tier quota enforcement
-     *
-     * @return void
      */
     public function test_basic_tier_has_limited_quota(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'basic']);
-        Site::factory()->count(3)->create(['user_id' => $user->id]);
+        $user = User::factory()->create();
+        $tenant = $user->currentTenant();
+        Site::factory()->count(3)->create(['tenant_id' => $tenant->id]);
 
-        $this->assertFalse($this->service->canCreateSite($user));
-        $this->assertEquals(3, $this->service->getSiteLimit($user));
-        $this->assertEquals(0, $this->service->getRemainingQuota($user));
+        $this->assertFalse($this->service->canCreateSite($tenant));
+        $this->assertEquals(3, $this->service->getSiteLimit($tenant));
+        $this->assertEquals(0, $this->service->getRemainingQuota($tenant));
     }
 
     /**
      * Test professional tier has higher quota
-     *
-     * @return void
      */
     public function test_professional_tier_has_higher_quota(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'professional']);
-        Site::factory()->count(5)->create(['user_id' => $user->id]);
+        $user = User::factory()->create();
+        $tenant = $user->currentTenant();
+        Site::factory()->count(5)->create(['tenant_id' => $tenant->id]);
 
-        $this->assertTrue($this->service->canCreateSite($user));
-        $this->assertGreaterThan(5, $this->service->getSiteLimit($user));
+        $this->assertTrue($this->service->canCreateSite($tenant));
+        $this->assertGreaterThan(5, $this->service->getSiteLimit($tenant));
     }
 
     /**
      * Test quota calculation is accurate
-     *
-     * @return void
      */
     public function test_quota_calculation_is_accurate(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'basic']);
-        Site::factory()->count(2)->create(['user_id' => $user->id]);
+        $user = User::factory()->create();
+        $tenant = $user->currentTenant();
+        Site::factory()->count(2)->create(['tenant_id' => $tenant->id]);
 
-        $this->assertEquals(1, $this->service->getRemainingQuota($user));
-        $this->assertTrue($this->service->canCreateSite($user));
+        $this->assertEquals(1, $this->service->getRemainingQuota($tenant));
+        $this->assertTrue($this->service->canCreateSite($tenant));
     }
 
     /**
      * Test deleted sites don't count toward quota
-     *
-     * @return void
      */
     public function test_deleted_sites_do_not_count_toward_quota(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'basic']);
-        Site::factory()->count(2)->create(['user_id' => $user->id]);
+        $user = User::factory()->create();
+        $tenant = $user->currentTenant();
+        Site::factory()->count(2)->create(['tenant_id' => $tenant->id]);
         Site::factory()->count(2)->create([
-            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'deleted_at' => now(),
         ]);
 
-        $this->assertEquals(2, $this->service->getCurrentSiteCount($user));
-        $this->assertTrue($this->service->canCreateSite($user));
+        $this->assertEquals(2, $this->service->getCurrentSiteCount($tenant));
+        $this->assertTrue($this->service->canCreateSite($tenant));
     }
 }

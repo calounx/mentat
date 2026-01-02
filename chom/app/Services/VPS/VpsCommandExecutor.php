@@ -37,10 +37,11 @@ class VpsCommandExecutor
     /**
      * Execute a VPSManager command on the remote VPS.
      *
-     * @param VpsServer $vps The VPS server
-     * @param string $command The VPSManager command (e.g., 'site:create')
-     * @param array $args Command arguments
+     * @param  VpsServer  $vps  The VPS server
+     * @param  string  $command  The VPSManager command (e.g., 'site:create')
+     * @param  array  $args  Command arguments
      * @return array Result with 'success', 'exit_code', 'output', and optional 'data'
+     *
      * @throws \RuntimeException If execution fails
      */
     public function execute(VpsServer $vps, string $command, array $args = []): array
@@ -57,7 +58,7 @@ class VpsCommandExecutor
         ]);
 
         $ssh = $this->connectionManager->getConnection();
-        if (!$ssh) {
+        if (! $ssh) {
             throw new \RuntimeException('No active SSH connection');
         }
 
@@ -74,7 +75,7 @@ class VpsCommandExecutor
         ];
 
         // Try to parse JSON output
-        if (!empty($output)) {
+        if (! empty($output)) {
             $jsonData = $this->parseJsonOutput($output);
             if ($jsonData !== null) {
                 $result['data'] = $jsonData;
@@ -95,9 +96,10 @@ class VpsCommandExecutor
      * Execute a whitelisted SSH command.
      * Only allows commands from the strict whitelist for security.
      *
-     * @param VpsServer $vps The VPS server
-     * @param string $command The command to execute
+     * @param  VpsServer  $vps  The VPS server
+     * @param  string  $command  The command to execute
      * @return array Result with 'success', 'exit_code', 'output'
+     *
      * @throws \InvalidArgumentException If command is not in the whitelist
      */
     public function executeRaw(VpsServer $vps, string $command): array
@@ -105,7 +107,7 @@ class VpsCommandExecutor
         // Strict command whitelist validation
         $normalizedCommand = trim($command);
 
-        if (!$this->validateCommand($normalizedCommand)) {
+        if (! $this->validateCommand($normalizedCommand)) {
             Log::warning('Blocked unauthorized raw SSH command attempt', [
                 'vps' => $vps->hostname,
                 'command' => $command,
@@ -124,11 +126,11 @@ class VpsCommandExecutor
         ]);
 
         $ssh = $this->connectionManager->getConnection();
-        if (!$ssh) {
+        if (! $ssh) {
             throw new \RuntimeException('No active SSH connection');
         }
 
-        $output = $ssh->exec($normalizedCommand . ' 2>&1');
+        $output = $ssh->exec($normalizedCommand.' 2>&1');
         $exitCode = $ssh->getExitStatus() ?? 0;
 
         $this->connectionManager->disconnect();
@@ -142,9 +144,6 @@ class VpsCommandExecutor
 
     /**
      * Validate if a command is allowed for raw execution.
-     *
-     * @param string $command
-     * @return bool
      */
     public function validateCommand(string $command): bool
     {
@@ -153,8 +152,6 @@ class VpsCommandExecutor
 
     /**
      * Get list of allowed raw commands.
-     *
-     * @return array
      */
     public function getAllowedCommands(): array
     {
@@ -163,14 +160,10 @@ class VpsCommandExecutor
 
     /**
      * Build full command string with arguments.
-     *
-     * @param string $command
-     * @param array $args
-     * @return string
      */
     private function buildCommand(string $command, array $args): string
     {
-        $fullCommand = $this->vpsmanagerPath . ' ' . $command;
+        $fullCommand = $this->vpsmanagerPath.' '.$command;
 
         foreach ($args as $key => $value) {
             if (is_bool($value)) {
@@ -179,9 +172,9 @@ class VpsCommandExecutor
                 }
             } elseif (is_numeric($key)) {
                 // Positional argument
-                $fullCommand .= ' ' . escapeshellarg($value);
+                $fullCommand .= ' '.escapeshellarg($value);
             } else {
-                $fullCommand .= " --{$key}=" . escapeshellarg($value);
+                $fullCommand .= " --{$key}=".escapeshellarg($value);
             }
         }
 
@@ -193,9 +186,6 @@ class VpsCommandExecutor
 
     /**
      * Parse JSON from command output.
-     *
-     * @param string $output
-     * @return array|null
      */
     private function parseJsonOutput(string $output): ?array
     {
@@ -206,13 +196,12 @@ class VpsCommandExecutor
                 return $json;
             }
         }
+
         return null;
     }
 
     /**
      * Set the VPSManager binary path.
-     *
-     * @param string $path
      */
     public function setVpsManagerPath(string $path): void
     {
@@ -221,8 +210,6 @@ class VpsCommandExecutor
 
     /**
      * Get the VPSManager binary path.
-     *
-     * @return string
      */
     public function getVpsManagerPath(): string
     {

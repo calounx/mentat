@@ -21,13 +21,25 @@ return [
     |--------------------------------------------------------------------------
     | Observability Stack
     |--------------------------------------------------------------------------
+    |
+    | Configuration for observability stack integration.
+    | For detailed settings, see config/observability.php
+    |
+    | Legacy configuration - new deployments should use config/observability.php
+    |
     */
 
     'observability' => [
-        'prometheus_url' => env('CHOM_PROMETHEUS_URL', 'http://localhost:9090'),
-        'loki_url' => env('CHOM_LOKI_URL', 'http://localhost:3100'),
-        'grafana_url' => env('CHOM_GRAFANA_URL', 'http://localhost:3000'),
-        'grafana_api_key' => env('CHOM_GRAFANA_API_KEY'),
+        // Use new config values with fallback to legacy env vars
+        'prometheus_url' => env('PROMETHEUS_URL', env('CHOM_PROMETHEUS_URL', 'http://localhost:9090')),
+        'loki_url' => env('LOKI_URL', env('CHOM_LOKI_URL', 'http://localhost:3100')),
+        'grafana_url' => env('GRAFANA_URL', env('CHOM_GRAFANA_URL', 'http://localhost:3000')),
+        'grafana_api_key' => env('GRAFANA_API_KEY', env('CHOM_GRAFANA_API_KEY')),
+
+        // New configuration options
+        'enabled' => env('OBSERVABILITY_ENABLED', false),
+        'tempo_url' => env('TEMPO_ENDPOINT', 'http://localhost:4318'),
+        'alertmanager_url' => env('ALERTMANAGER_URL', 'http://localhost:9093'),
     ],
 
     /*

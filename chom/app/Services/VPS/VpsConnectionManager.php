@@ -4,8 +4,8 @@ namespace App\Services\VPS;
 
 use App\Models\VpsServer;
 use Illuminate\Support\Facades\Log;
-use phpseclib3\Net\SSH2;
 use phpseclib3\Crypt\PublicKeyLoader;
+use phpseclib3\Net\SSH2;
 
 /**
  * VPS Connection Manager.
@@ -16,12 +16,14 @@ use phpseclib3\Crypt\PublicKeyLoader;
 class VpsConnectionManager
 {
     private ?SSH2 $ssh = null;
+
     private int $timeout = 120; // seconds
 
     /**
      * Connect to a VPS server via SSH.
      *
-     * @param VpsServer $vps The VPS server to connect to
+     * @param  VpsServer  $vps  The VPS server to connect to
+     *
      * @throws \RuntimeException If connection fails
      */
     public function connect(VpsServer $vps): void
@@ -34,7 +36,7 @@ class VpsConnectionManager
         // Load SSH key
         $keyPath = config('chom.ssh_key_path', storage_path('app/ssh/chom_deploy_key'));
 
-        if (!file_exists($keyPath)) {
+        if (! file_exists($keyPath)) {
             throw new \RuntimeException("SSH key not found at: {$keyPath}");
         }
 
@@ -43,7 +45,7 @@ class VpsConnectionManager
 
         $key = PublicKeyLoader::load(file_get_contents($keyPath));
 
-        if (!$this->ssh->login('root', $key)) {
+        if (! $this->ssh->login('root', $key)) {
             throw new \RuntimeException("SSH authentication failed for VPS: {$vps->hostname}");
         }
 
@@ -64,7 +66,6 @@ class VpsConnectionManager
     /**
      * Test SSH connection to VPS.
      *
-     * @param VpsServer $vps
      * @return bool True if connection successful, false otherwise
      */
     public function testConnection(VpsServer $vps): bool
@@ -72,20 +73,20 @@ class VpsConnectionManager
         try {
             $this->connect($vps);
             $this->disconnect();
+
             return true;
         } catch (\Exception $e) {
             Log::warning('SSH connection test failed', [
                 'vps' => $vps->hostname,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
 
     /**
      * Get the active SSH connection.
-     *
-     * @return SSH2|null
      */
     public function getConnection(): ?SSH2
     {
@@ -94,8 +95,6 @@ class VpsConnectionManager
 
     /**
      * Check if currently connected.
-     *
-     * @return bool
      */
     public function isConnected(): bool
     {
@@ -104,8 +103,6 @@ class VpsConnectionManager
 
     /**
      * Set connection timeout in seconds.
-     *
-     * @param int $seconds
      */
     public function setTimeout(int $seconds): void
     {
@@ -120,7 +117,6 @@ class VpsConnectionManager
      * Validate SSH key file permissions.
      * SSH keys should have 0600 permissions (read/write only for owner).
      *
-     * @param string $keyPath
      * @throws \RuntimeException If permissions are too permissive
      */
     private function validateSshKeyPermissions(string $keyPath): void
@@ -136,7 +132,7 @@ class VpsConnectionManager
             ]);
 
             throw new \RuntimeException(
-                "SSH key at {$keyPath} has insecure permissions (" . sprintf('0%o', $perms) . "). " .
+                "SSH key at {$keyPath} has insecure permissions (".sprintf('0%o', $perms).'). '.
                 "Expected 0600 or 0400. Run: chmod 600 {$keyPath}"
             );
         }

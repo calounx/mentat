@@ -14,11 +14,15 @@ class SiteCreate extends Component
     use AuthorizesRequests;
 
     public string $domain = '';
+
     public string $siteType = 'wordpress';
+
     public string $phpVersion = '8.2';
+
     public bool $sslEnabled = true;
 
     public bool $isCreating = false;
+
     public ?string $error = null;
 
     protected $rules = [
@@ -48,14 +52,16 @@ class SiteCreate extends Component
         $tenant = auth()->user()->currentTenant();
 
         // Check quota
-        if (!$tenant->canCreateSite()) {
+        if (! $tenant->canCreateSite()) {
             $this->error = 'You have reached your plan\'s site limit. Please upgrade to create more sites.';
+
             return;
         }
 
         // Check if domain already exists
         if ($tenant->sites()->where('domain', $this->domain)->exists()) {
             $this->error = 'This domain is already configured for your account.';
+
             return;
         }
 
@@ -67,7 +73,7 @@ class SiteCreate extends Component
                 // Find available VPS
                 $vps = $this->findAvailableVps($tenant);
 
-                if (!$vps) {
+                if (! $vps) {
                     throw new \RuntimeException('No available server found. Please contact support.');
                 }
 

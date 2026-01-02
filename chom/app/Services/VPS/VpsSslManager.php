@@ -18,10 +18,6 @@ class VpsSslManager
 
     /**
      * Issue SSL certificate for a domain.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function issueSSL(VpsServer $vps, string $domain): array
     {
@@ -31,9 +27,7 @@ class VpsSslManager
     /**
      * Renew SSL certificates.
      *
-     * @param VpsServer $vps
-     * @param string|null $domain Specific domain or null for all
-     * @return array
+     * @param  string|null  $domain  Specific domain or null for all
      */
     public function renewSSL(VpsServer $vps, ?string $domain = null): array
     {
@@ -47,10 +41,6 @@ class VpsSslManager
 
     /**
      * Get SSL status for a domain.
-     *
-     * @param VpsServer $vps
-     * @param string $domain
-     * @return array
      */
     public function getSSLStatus(VpsServer $vps, string $domain): array
     {

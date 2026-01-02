@@ -24,11 +24,6 @@ class PrometheusAdapter
 
     /**
      * Query Prometheus metrics with tenant scoping.
-     *
-     * @param Tenant $tenant
-     * @param string $query
-     * @param array $options
-     * @return array
      */
     public function queryMetrics(Tenant $tenant, string $query, array $options = []): array
     {
@@ -64,13 +59,6 @@ class PrometheusAdapter
 
     /**
      * Query Prometheus range (for graphs).
-     *
-     * @param Tenant $tenant
-     * @param string $query
-     * @param string $start
-     * @param string $end
-     * @param string $step
-     * @return array
      */
     public function queryRange(
         Tenant $tenant,
@@ -101,16 +89,13 @@ class PrometheusAdapter
 
     /**
      * Get active alerts for a tenant.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function getActiveAlerts(Tenant $tenant): array
     {
         try {
             $response = Http::timeout(15)->get("{$this->prometheusUrl}/api/v1/alerts");
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [];
             }
 
@@ -122,15 +107,13 @@ class PrometheusAdapter
             });
         } catch (\Exception $e) {
             Log::error('Failed to fetch alerts', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
 
     /**
      * Get VPS metrics summary.
-     *
-     * @param VpsServer $vps
-     * @return array
      */
     public function getVpsSummary(VpsServer $vps): array
     {
@@ -156,8 +139,6 @@ class PrometheusAdapter
     /**
      * Query bandwidth usage for a tenant.
      *
-     * @param Tenant $tenant
-     * @param string $period
      * @return float Bandwidth in GB
      */
     public function queryBandwidth(Tenant $tenant, string $period = '30d'): float
@@ -175,7 +156,6 @@ class PrometheusAdapter
     /**
      * Query disk usage for a tenant.
      *
-     * @param Tenant $tenant
      * @return float Disk usage in GB
      */
     public function queryDiskUsage(Tenant $tenant): float
@@ -192,13 +172,12 @@ class PrometheusAdapter
 
     /**
      * Check if Prometheus is healthy.
-     *
-     * @return bool
      */
     public function isHealthy(): bool
     {
         try {
             $response = Http::timeout(5)->get("{$this->prometheusUrl}/-/healthy");
+
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -207,10 +186,6 @@ class PrometheusAdapter
 
     /**
      * Generate scrape config for a VPS.
-     *
-     * @param VpsServer $vps
-     * @param Tenant $tenant
-     * @return array
      */
     public function generateScrapeConfig(VpsServer $vps, Tenant $tenant): array
     {
@@ -228,9 +203,6 @@ class PrometheusAdapter
 
     /**
      * Query Prometheus without tenant scoping (for internal queries).
-     *
-     * @param string $query
-     * @return array
      */
     private function queryDirect(string $query): array
     {
@@ -247,9 +219,6 @@ class PrometheusAdapter
 
     /**
      * Extract single value from Prometheus response.
-     *
-     * @param array $response
-     * @return float|null
      */
     private function extractValue(array $response): ?float
     {
@@ -257,16 +226,13 @@ class PrometheusAdapter
         if ($result && isset($result['value'][1])) {
             return round((float) $result['value'][1], 2);
         }
+
         return null;
     }
 
     /**
      * Inject tenant_id label into PromQL query.
      * Uses proper escaping to prevent PromQL injection attacks.
-     *
-     * @param string $query
-     * @param string $tenantId
-     * @return string
      */
     private function injectTenantScope(string $query, string $tenantId): string
     {
@@ -277,7 +243,7 @@ class PrometheusAdapter
         // This is a simplified approach - production would need proper PromQL parsing
         return preg_replace(
             '/(\w+)\{/',
-            '$1{tenant_id="' . $escapedTenantId . '",',
+            '$1{tenant_id="'.$escapedTenantId.'",',
             $query
         );
     }
@@ -285,9 +251,6 @@ class PrometheusAdapter
     /**
      * Escape a string for safe use in PromQL label values.
      * Prevents PromQL injection by escaping special characters.
-     *
-     * @param string $value
-     * @return string
      */
     private function escapePromQLLabelValue(string $value): string
     {

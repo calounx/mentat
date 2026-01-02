@@ -2,10 +2,10 @@
 
 namespace App\Services\Security;
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use App\Services\Alerting\AlertManager;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class SecurityMonitor
 {
@@ -211,7 +211,7 @@ class SecurityMonitor
         if ($violations >= 10) {
             $this->alertManager->warning(
                 'security_event',
-                'Repeated rate limit violations from ' . $request->ip(),
+                'Repeated rate limit violations from '.$request->ip(),
                 [
                     'ip' => $request->ip(),
                     'violations' => $violations,
@@ -278,7 +278,7 @@ class SecurityMonitor
 
             // In a real implementation, you'd use a GeoIP service
             // For now, just track unique IPs
-            if (!in_array($ip, $countries)) {
+            if (! in_array($ip, $countries)) {
                 $countries[] = $ip;
                 Cache::put($countryKey, $countries, 86400 * 30); // 30 days
 
@@ -380,7 +380,7 @@ class SecurityMonitor
      */
     public function checkSshKeyAge(string $keyPath): ?int
     {
-        if (!file_exists($keyPath)) {
+        if (! file_exists($keyPath)) {
             return null;
         }
 

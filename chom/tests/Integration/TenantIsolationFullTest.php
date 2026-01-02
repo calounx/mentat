@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Models\Backup;
 use App\Models\Site;
 use App\Models\User;
-use App\Models\Backup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\WithSecurityTesting;
 use Tests\TestCase;
@@ -15,8 +15,6 @@ use Tests\TestCase;
  * End-to-end tenant isolation testing
  *
  * Ensures complete data isolation between tenants across all application layers.
- *
- * @package Tests\Integration
  */
 class TenantIsolationFullTest extends TestCase
 {
@@ -24,6 +22,7 @@ class TenantIsolationFullTest extends TestCase
     use WithSecurityTesting;
 
     protected User $tenant1;
+
     protected User $tenant2;
 
     protected function setUp(): void
@@ -36,14 +35,12 @@ class TenantIsolationFullTest extends TestCase
 
     /**
      * Test tenant cannot access another tenant's sites
-     *
-     * @return void
      */
     public function test_tenant_cannot_access_other_tenants_sites(): void
     {
         // Arrange
-        $tenant1Site = Site::factory()->create(['user_id' => $this->tenant1->id]);
-        $tenant2Site = Site::factory()->create(['user_id' => $this->tenant2->id]);
+        $tenant1Site = Site::factory()->create(['tenant_id' => $this->tenant1->currentTenant()->id]);
+        $tenant2Site = Site::factory()->create(['tenant_id' => $this->tenant2->currentTenant()->id]);
 
         // Act & Assert
         $response = $this->actingAs($this->tenant1)
@@ -54,14 +51,12 @@ class TenantIsolationFullTest extends TestCase
 
     /**
      * Test database queries are automatically scoped to tenant
-     *
-     * @return void
      */
     public function test_database_queries_scoped_to_tenant(): void
     {
         // Arrange
-        Site::factory()->count(5)->create(['user_id' => $this->tenant1->id]);
-        Site::factory()->count(3)->create(['user_id' => $this->tenant2->id]);
+        Site::factory()->count(5)->create(['tenant_id' => $this->tenant1->currentTenant()->id]);
+        Site::factory()->count(3)->create(['tenant_id' => $this->tenant2->currentTenant()->id]);
 
         // Act
         $response = $this->actingAs($this->tenant1)
@@ -78,14 +73,12 @@ class TenantIsolationFullTest extends TestCase
 
     /**
      * Test tenant cannot access other tenant's backups
-     *
-     * @return void
      */
     public function test_tenant_cannot_access_other_tenants_backups(): void
     {
         // Arrange
-        $tenant1Site = Site::factory()->create(['user_id' => $this->tenant1->id]);
-        $tenant2Site = Site::factory()->create(['user_id' => $this->tenant2->id]);
+        $tenant1Site = Site::factory()->create(['tenant_id' => $this->tenant1->currentTenant()->id]);
+        $tenant2Site = Site::factory()->create(['tenant_id' => $this->tenant2->currentTenant()->id]);
 
         $tenant2Backup = Backup::factory()->create(['site_id' => $tenant2Site->id]);
 
@@ -99,8 +92,6 @@ class TenantIsolationFullTest extends TestCase
 
     /**
      * Test observability data is isolated per tenant
-     *
-     * @return void
      */
     public function test_observability_data_isolated_per_tenant(): void
     {
@@ -130,12 +121,10 @@ class TenantIsolationFullTest extends TestCase
 
     /**
      * Test all endpoints enforce tenant isolation
-     *
-     * @return void
      */
     public function test_all_endpoints_enforce_tenant_isolation(): void
     {
-        $tenant2Site = Site::factory()->create(['user_id' => $this->tenant2->id]);
+        $tenant2Site = Site::factory()->create(['tenant_id' => $this->tenant2->currentTenant()->id]);
 
         $endpoints = [
             ['GET', "/api/v1/sites/{$tenant2Site->id}"],

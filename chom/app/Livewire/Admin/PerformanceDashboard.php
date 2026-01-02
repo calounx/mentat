@@ -2,19 +2,23 @@
 
 namespace App\Livewire\Admin;
 
-use Livewire\Component;
 use App\Services\Monitoring\MetricsCollector;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\Cache;
+use Livewire\Component;
 
 class PerformanceDashboard extends Component
 {
     public array $metrics = [];
+
     public array $systemMetrics = [];
+
     public array $databaseMetrics = [];
+
     public array $cacheMetrics = [];
+
     public array $queueMetrics = [];
+
     public int $refreshInterval = 5000; // milliseconds
 
     protected MetricsCollector $metricsCollector;
@@ -88,12 +92,12 @@ class PerformanceDashboard extends Component
 
             $size = null;
             if ($driver === 'mysql') {
-                $result = DB::select("
+                $result = DB::select('
                     SELECT
                         SUM(data_length + index_length) as size
                     FROM information_schema.TABLES
                     WHERE table_schema = ?
-                ", [$dbName]);
+                ', [$dbName]);
 
                 $size = $result[0]->size ?? 0;
             }
@@ -106,7 +110,7 @@ class PerformanceDashboard extends Component
                 'driver' => $driver,
                 'database' => $dbName,
                 'size' => $size ? $this->formatBytes($size) : 'N/A',
-                'slow_query_threshold' => $slowQueryThreshold . 'ms',
+                'slow_query_threshold' => $slowQueryThreshold.'ms',
             ];
         } catch (\Exception $e) {
             return [
@@ -140,7 +144,7 @@ class PerformanceDashboard extends Component
                 $misses = (int) ($info['keyspace_misses'] ?? 0);
                 $total = $hits + $misses;
 
-                $info['hit_rate'] = $total > 0 ? round(($hits / $total) * 100, 2) . '%' : 'N/A';
+                $info['hit_rate'] = $total > 0 ? round(($hits / $total) * 100, 2).'%' : 'N/A';
             }
 
             return [
@@ -192,8 +196,8 @@ class PerformanceDashboard extends Component
                 }
             }
 
-            if (!empty($responseTimes)) {
-                $metrics['avg_response_time'] = round(array_sum($responseTimes) / count($responseTimes), 2) . 'ms';
+            if (! empty($responseTimes)) {
+                $metrics['avg_response_time'] = round(array_sum($responseTimes) / count($responseTimes), 2).'ms';
             } else {
                 $metrics['avg_response_time'] = 'N/A';
             }
@@ -236,7 +240,7 @@ class PerformanceDashboard extends Component
             $bytes /= 1024;
         }
 
-        return round($bytes, $precision) . ' ' . $units[$i];
+        return round($bytes, $precision).' '.$units[$i];
     }
 
     public function render()

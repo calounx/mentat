@@ -47,7 +47,7 @@ class SitePolicy
      */
     public function update(User $user, Site $site): Response
     {
-        if (!$this->belongsToTenant($user, $site)) {
+        if (! $this->belongsToTenant($user, $site)) {
             return Response::deny('You do not have access to this site.');
         }
 
@@ -64,7 +64,7 @@ class SitePolicy
      */
     public function delete(User $user, Site $site): Response
     {
-        if (!$this->belongsToTenant($user, $site)) {
+        if (! $this->belongsToTenant($user, $site)) {
             return Response::deny('You do not have access to this site.');
         }
 
@@ -81,7 +81,7 @@ class SitePolicy
      */
     public function enable(User $user, Site $site): Response
     {
-        if (!$this->belongsToTenant($user, $site)) {
+        if (! $this->belongsToTenant($user, $site)) {
             return Response::deny('You do not have access to this site.');
         }
 
@@ -98,7 +98,7 @@ class SitePolicy
      */
     public function disable(User $user, Site $site): Response
     {
-        if (!$this->belongsToTenant($user, $site)) {
+        if (! $this->belongsToTenant($user, $site)) {
             return Response::deny('You do not have access to this site.');
         }
 
@@ -115,7 +115,7 @@ class SitePolicy
      */
     public function issueSSL(User $user, Site $site): Response
     {
-        if (!$this->belongsToTenant($user, $site)) {
+        if (! $this->belongsToTenant($user, $site)) {
             return Response::deny('You do not have access to this site.');
         }
 

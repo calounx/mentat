@@ -37,7 +37,7 @@ class PerformanceMonitoring
         $executionTime = (microtime(true) - $startTime) * 1000;
 
         // Add response time header
-        $response->headers->set('X-Response-Time', number_format($executionTime, 2) . 'ms');
+        $response->headers->set('X-Response-Time', number_format($executionTime, 2).'ms');
 
         // Log slow requests
         if ($executionTime > self::SLOW_REQUEST_THRESHOLD) {
@@ -54,9 +54,6 @@ class PerformanceMonitoring
 
     /**
      * Log slow request details.
-     *
-     * @param Request $request
-     * @param float $executionTime
      */
     private function logSlowRequest(Request $request, float $executionTime): void
     {
@@ -74,10 +71,6 @@ class PerformanceMonitoring
 
     /**
      * Log detailed performance metrics.
-     *
-     * @param Request $request
-     * @param float $executionTime
-     * @param Response $response
      */
     private function logPerformanceMetrics(Request $request, float $executionTime, Response $response): void
     {
@@ -96,8 +89,6 @@ class PerformanceMonitoring
 
     /**
      * Get database query count if query logging is enabled.
-     *
-     * @return int|null
      */
     private function getQueryCount(): ?int
     {

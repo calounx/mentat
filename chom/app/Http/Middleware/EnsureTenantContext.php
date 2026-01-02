@@ -31,7 +31,7 @@ class EnsureTenantContext
     public function handle(Request $request, Closure $next): Response
     {
         // Skip if user is not authenticated
-        if (!$request->user()) {
+        if (! $request->user()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -45,7 +45,7 @@ class EnsureTenantContext
         $tenant = $request->user()->currentTenant();
 
         // Ensure tenant exists
-        if (!$tenant) {
+        if (! $tenant) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -56,7 +56,7 @@ class EnsureTenantContext
         }
 
         // Ensure tenant is active
-        if (!$tenant->isActive()) {
+        if (! $tenant->isActive()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -75,6 +75,9 @@ class EnsureTenantContext
 
         // Also make it available via request->tenant for convenience
         $request->merge(['_tenant' => $tenant]);
+
+        // Bind tenant_id in container for global access
+        app()->instance('tenant_id', $tenant->id);
 
         return $next($request);
     }

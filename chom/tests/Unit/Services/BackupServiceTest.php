@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services;
 
-use App\Models\Backup;
 use App\Models\Site;
+use App\Models\SiteBackup;
 use App\Services\Backup\BackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -14,8 +14,6 @@ use Tests\TestCase;
 
 /**
  * Unit tests for Backup Service
- *
- * @package Tests\Unit\Services
  */
 class BackupServiceTest extends TestCase
 {
@@ -23,6 +21,7 @@ class BackupServiceTest extends TestCase
     use WithMockVpsManager;
 
     protected BackupService $service;
+
     protected Site $site;
 
     protected function setUp(): void
@@ -39,8 +38,6 @@ class BackupServiceTest extends TestCase
 
     /**
      * Test backup creation
-     *
-     * @return void
      */
     public function test_creates_backup_successfully(): void
     {
@@ -49,68 +46,73 @@ class BackupServiceTest extends TestCase
 
         $backup = $this->service->createBackup($this->site, 'full');
 
-        $this->assertInstanceOf(Backup::class, $backup);
-        $this->assertEquals('full', $backup->type);
+        $this->assertInstanceOf(SiteBackup::class, $backup);
+        $this->assertEquals('full', $backup->backup_type);
         $this->assertEquals($this->site->id, $backup->site_id);
     }
 
     /**
-     * Test backup with encryption
-     *
-     * @return void
+     * Test backup with custom retention
      */
-    public function test_creates_encrypted_backup(): void
+    public function test_creates_backup_with_custom_retention(): void
     {
-        $this->mockSuccessfulSshConnection();
-        $this->mockCommandExecution('tar -czf', 'Backup created', 0);
-        $this->mockCommandExecution('openssl enc', 'Encrypted', 0);
+        $backup = $this->service->createBackup($this->site, 'full', 60);
 
-        $backup = $this->service->createBackup($this->site, 'full', true);
-
-        $this->assertTrue($backup->encrypted);
-        $this->assertNotNull($backup->encryption_key_id);
+        $this->assertEquals(60, $backup->retention_days);
+        $this->assertNotNull($backup->expires_at);
+        $this->assertEquals(now()->addDays(60)->format('Y-m-d'), $backup->expires_at->format('Y-m-d'));
     }
 
     /**
-     * Test backup verification
-     *
-     * @return void
+     * Test backup execution
      */
-    public function test_verifies_backup_integrity(): void
+    public function test_executes_backup_successfully(): void
     {
-        $backup = Backup::factory()->create([
+        $backup = SiteBackup::factory()->create([
             'site_id' => $this->site->id,
-            'checksum' => 'abc123',
+            'storage_path' => null,
         ]);
 
-        $this->mockSuccessfulSshConnection();
-        $this->mockCommandExecution('sha256sum', 'abc123', 0);
+        // Mock VPS manager's createBackup method
+        $this->vpsManager
+            ->shouldReceive('createBackup')
+            ->once()
+            ->andReturn([
+                'success' => true,
+                'path' => '/backups/test.tar.gz',
+                'size' => 1024000,
+                'checksum' => 'abc123',
+            ]);
 
-        $verified = $this->service->verifyBackup($backup);
+        $result = $this->service->executeBackup($backup);
 
-        $this->assertTrue($verified);
+        $this->assertTrue($result['success']);
+        $this->assertEquals('/backups/test.tar.gz', $result['path']);
+        $backup->refresh();
+        $this->assertNotNull($backup->storage_path);
     }
 
     /**
-     * Test backup cleanup removes old backups
-     *
-     * @return void
+     * Test backup cleanup removes expired backups
      */
-    public function test_cleanup_removes_old_backups(): void
+    public function test_cleanup_removes_expired_backups(): void
     {
-        $oldBackup = Backup::factory()->create([
+        $expiredBackup = SiteBackup::factory()->create([
             'site_id' => $this->site->id,
-            'created_at' => now()->subDays(31),
+            'expires_at' => now()->subDays(1),
+            'storage_path' => '/tmp/old-backup.tar.gz',
         ]);
 
-        $recentBackup = Backup::factory()->create([
+        $activeBackup = SiteBackup::factory()->create([
             'site_id' => $this->site->id,
-            'created_at' => now()->subDays(15),
+            'expires_at' => now()->addDays(15),
+            'storage_path' => '/tmp/recent-backup.tar.gz',
         ]);
 
-        $this->service->cleanup(30);
+        $count = $this->service->cleanupExpiredBackups($this->site);
 
-        $this->assertDatabaseMissing('backups', ['id' => $oldBackup->id]);
-        $this->assertDatabaseHas('backups', ['id' => $recentBackup->id]);
+        $this->assertEquals(1, $count);
+        $this->assertDatabaseMissing('site_backups', ['id' => $expiredBackup->id]);
+        $this->assertDatabaseHas('site_backups', ['id' => $activeBackup->id]);
     }
 }

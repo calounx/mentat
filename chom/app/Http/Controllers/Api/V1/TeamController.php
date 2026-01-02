@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\HasTenantScoping;
+use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
 class TeamController extends Controller
 {
     use HasTenantScoping;
+
     /**
      * List all team members in the organization.
      */
@@ -30,7 +29,7 @@ class TeamController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => collect($members->items())->map(fn($user) => $this->formatMember($user)),
+            'data' => collect($members->items())->map(fn ($user) => $this->formatMember($user)),
             'meta' => [
                 'pagination' => [
                     'current_page' => $members->currentPage(),
@@ -66,7 +65,7 @@ class TeamController extends Controller
         $currentUser = $request->user();
 
         // Only owners and admins can update roles
-        if (!$currentUser->isAdmin()) {
+        if (! $currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -90,7 +89,7 @@ class TeamController extends Controller
         }
 
         // Admins cannot promote to owner or admin
-        if (!$currentUser->isOwner()) {
+        if (! $currentUser->isOwner()) {
             $validated = $request->validate([
                 'role' => ['required', 'in:member,viewer'],
             ]);
@@ -118,7 +117,7 @@ class TeamController extends Controller
         $currentUser = $request->user();
 
         // Only owners and admins can remove members
-        if (!$currentUser->isAdmin()) {
+        if (! $currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -153,7 +152,7 @@ class TeamController extends Controller
         }
 
         // Admins cannot remove other admins (only owner can)
-        if (!$currentUser->isOwner() && $member->isAdmin()) {
+        if (! $currentUser->isOwner() && $member->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -203,7 +202,7 @@ class TeamController extends Controller
         $currentUser = $request->user();
 
         // Only owners and admins can invite
-        if (!$currentUser->isAdmin()) {
+        if (! $currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -289,7 +288,7 @@ class TeamController extends Controller
         $organization = $this->getOrganization($request);
         $currentUser = $request->user();
 
-        if (!$currentUser->isAdmin()) {
+        if (! $currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -317,7 +316,7 @@ class TeamController extends Controller
         $currentUser = $request->user();
 
         // Only current owner can transfer ownership
-        if (!$currentUser->isOwner()) {
+        if (! $currentUser->isOwner()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -333,7 +332,7 @@ class TeamController extends Controller
         ]);
 
         // Verify password
-        if (!\Hash::check($validated['password'], $currentUser->password)) {
+        if (! \Hash::check($validated['password'], $currentUser->password)) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -417,7 +416,7 @@ class TeamController extends Controller
         $currentUser = $request->user();
 
         // Only owners can update organization settings
-        if (!$currentUser->isOwner()) {
+        if (! $currentUser->isOwner()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -454,7 +453,7 @@ class TeamController extends Controller
     {
         $organization = $request->user()->organization;
 
-        if (!$organization) {
+        if (! $organization) {
             abort(403, 'No organization found.');
         }
 
@@ -468,7 +467,7 @@ class TeamController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
-            'email_verified' => !is_null($user->email_verified_at),
+            'email_verified' => ! is_null($user->email_verified_at),
             'created_at' => $user->created_at->toIso8601String(),
         ];
 

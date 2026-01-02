@@ -49,9 +49,10 @@ class SecretsRotationService
      * 5. Schedule old key removal after 24 hour overlap
      * 6. Audit log the rotation
      *
-     * @param VpsServer $vps The VPS server to rotate credentials for
-     * @throws \RuntimeException If rotation fails
+     * @param  VpsServer  $vps  The VPS server to rotate credentials for
      * @return array Rotation result with new key information
+     *
+     * @throws \RuntimeException If rotation fails
      */
     public function rotateVpsCredentials(VpsServer $vps): array
     {
@@ -143,12 +144,10 @@ class SecretsRotationService
      * - Called 24 hours after new key deployment
      * - Removes old public key from authorized_keys
      * - Securely wipes old private key from database
-     *
-     * @param VpsServer $vps
      */
     public function cleanupOldKey(VpsServer $vps): void
     {
-        if (!$vps->previous_ssh_public_key) {
+        if (! $vps->previous_ssh_public_key) {
             return; // Nothing to clean up
         }
 
@@ -195,7 +194,7 @@ class SecretsRotationService
      * - Invalidates old token immediately (no overlap period for API tokens)
      * - Tokens are hashed before storage (SHA-256)
      *
-     * @param \Illuminate\Database\Eloquent\Model $model User or Organization
+     * @param  \Illuminate\Database\Eloquent\Model  $model  User or Organization
      * @return array New token information
      */
     public function rotateApiToken($model): array
@@ -217,7 +216,7 @@ class SecretsRotationService
             resourceId: $model->id,
             metadata: [
                 'rotated_at' => now()->toIso8601String(),
-                'token_preview' => substr($token, 0, 8) . '...',
+                'token_preview' => substr($token, 0, 8).'...',
             ],
             severity: 'high'
         );
@@ -225,7 +224,7 @@ class SecretsRotationService
         return [
             'success' => true,
             'token' => $token, // Return plain token ONCE
-            'token_preview' => substr($token, 0, 8) . '...',
+            'token_preview' => substr($token, 0, 8).'...',
             'rotated_at' => now()->toIso8601String(),
             'warning' => 'Save this token securely. It will not be shown again.',
         ];
@@ -285,13 +284,13 @@ class SecretsRotationService
      * - Fast and resistant to timing attacks
      * - No passphrase (stored encrypted in database instead)
      *
-     * @param string $comment Key comment/identifier
+     * @param  string  $comment  Key comment/identifier
      * @return array ['private' => string, 'public' => string]
      */
     protected function generateSshKeyPair(string $comment): array
     {
         $tempDir = sys_get_temp_dir();
-        $keyName = 'chom_rotation_' . Str::random(16);
+        $keyName = 'chom_rotation_'.Str::random(16);
         $keyPath = "{$tempDir}/{$keyName}";
 
         try {
@@ -304,7 +303,7 @@ class SecretsRotationService
                 '-N', '', // No passphrase (encrypted by Laravel)
             ]);
 
-            if (!$result->successful()) {
+            if (! $result->successful()) {
                 throw new \RuntimeException("SSH key generation failed: {$result->errorOutput()}");
             }
 
@@ -331,9 +330,6 @@ class SecretsRotationService
 
     /**
      * Deploy new public key to VPS server.
-     *
-     * @param VpsServer $vps
-     * @param string $publicKey
      */
     protected function deployPublicKey(VpsServer $vps, string $publicKey): void
     {
@@ -345,14 +341,12 @@ class SecretsRotationService
     /**
      * Test new SSH key authentication.
      *
-     * @param VpsServer $vps
-     * @param string $privateKey
      * @throws \RuntimeException If test fails
      */
     protected function testNewKey(VpsServer $vps, string $privateKey): void
     {
         // Write private key to temporary file
-        $tempKeyPath = sys_get_temp_dir() . '/test_key_' . Str::random(16);
+        $tempKeyPath = sys_get_temp_dir().'/test_key_'.Str::random(16);
         file_put_contents($tempKeyPath, $privateKey);
         chmod($tempKeyPath, 0600);
 
@@ -365,13 +359,13 @@ class SecretsRotationService
                 '-o', 'ConnectTimeout=10',
                 '-p', $vps->ssh_port,
                 "{$vps->ssh_user}@{$vps->ip}",
-                'echo "test"'
+                'echo "test"',
             ]);
 
             unlink($tempKeyPath);
 
-            if (!$result->successful()) {
-                throw new \RuntimeException("New key authentication test failed");
+            if (! $result->successful()) {
+                throw new \RuntimeException('New key authentication test failed');
             }
         } catch (\Exception $e) {
             @unlink($tempKeyPath);
@@ -384,7 +378,7 @@ class SecretsRotationService
      */
     protected function executeRemoteCommand(VpsServer $vps, string $command): void
     {
-        $tempKeyPath = sys_get_temp_dir() . '/vps_key_' . Str::random(16);
+        $tempKeyPath = sys_get_temp_dir().'/vps_key_'.Str::random(16);
         file_put_contents($tempKeyPath, $vps->ssh_private_key);
         chmod($tempKeyPath, 0600);
 
@@ -395,12 +389,12 @@ class SecretsRotationService
                 '-o', 'StrictHostKeyChecking=no',
                 '-p', $vps->ssh_port,
                 "{$vps->ssh_user}@{$vps->ip}",
-                $command
+                $command,
             ]);
 
             unlink($tempKeyPath);
 
-            if (!$result->successful()) {
+            if (! $result->successful()) {
                 throw new \RuntimeException("Remote command failed: {$result->errorOutput()}");
             }
         } catch (\Exception $e) {
@@ -416,6 +410,7 @@ class SecretsRotationService
     {
         // Extract key data (second field of public key)
         $parts = explode(' ', trim($publicKey));
+
         return $parts[1] ?? '';
     }
 }

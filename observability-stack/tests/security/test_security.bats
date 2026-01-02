@@ -492,8 +492,9 @@ EOF
         done
     } > "$TEST_TMP/large.yaml"
 
-    # Should complete in reasonable time
-    timeout 5s yaml_get "$TEST_TMP/large.yaml" "data"
+    # Should complete in reasonable time (use run with timeout via bash)
+    run bash -c "timeout 5s bash -c 'source $LIB_DIR/yaml-parser.sh && yaml_get \"$TEST_TMP/large.yaml\" \"data\"'"
+    [ "$status" -eq 0 ]
 }
 
 @test "recursive operations have depth limits" {

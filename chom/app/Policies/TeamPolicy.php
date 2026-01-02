@@ -37,12 +37,12 @@ class TeamPolicy
      */
     public function update(User $user, User $member): Response
     {
-        if (!$this->belongsToOrganization($user, $member)) {
+        if (! $this->belongsToOrganization($user, $member)) {
             return Response::deny('You do not have access to this member.');
         }
 
         // Only owner can modify another owner
-        if ($member->isOwner() && !$user->isOwner()) {
+        if ($member->isOwner() && ! $user->isOwner()) {
             return Response::deny('Only the owner can modify owner settings.');
         }
 
@@ -61,7 +61,7 @@ class TeamPolicy
      */
     public function remove(User $user, User $member): Response
     {
-        if (!$this->belongsToOrganization($user, $member)) {
+        if (! $this->belongsToOrganization($user, $member)) {
             return Response::deny('You do not have access to this member.');
         }
 
@@ -71,7 +71,7 @@ class TeamPolicy
         }
 
         // Only owner can remove another owner
-        if ($member->isOwner() && !$user->isOwner()) {
+        if ($member->isOwner() && ! $user->isOwner()) {
             return Response::deny('Only the owner can remove other owners.');
         }
 

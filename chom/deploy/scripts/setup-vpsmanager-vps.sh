@@ -14,12 +14,32 @@ set -euo pipefail
 
 # Source shared library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_PATH="${SCRIPT_DIR}/../lib/deploy-common.sh"
 
-if [[ ! -f "$LIB_PATH" ]]; then
-    echo "ERROR: Cannot find shared library at: $LIB_PATH"
+# Try multiple locations for the common library:
+# 1. Remote deployment location: /tmp/chom-deploy/lib/
+# 2. Local development: ../lib/
+# 3. Same directory as script
+LIB_PATH=""
+for lib_path in \
+    "${SCRIPT_DIR}/lib/deploy-common.sh" \
+    "${SCRIPT_DIR}/../lib/deploy-common.sh" \
+    "/tmp/chom-deploy/lib/deploy-common.sh"; do
+    if [[ -f "$lib_path" ]]; then
+        LIB_PATH="$lib_path"
+        break
+    fi
+done
+
+if [[ -z "$LIB_PATH" ]] || [[ ! -f "$LIB_PATH" ]]; then
+    echo "ERROR: Cannot find common library"
+    echo "Searched in:"
+    echo "  - ${SCRIPT_DIR}/lib/deploy-common.sh"
+    echo "  - ${SCRIPT_DIR}/../lib/deploy-common.sh"
+    echo "  - /tmp/chom-deploy/lib/deploy-common.sh"
     exit 1
 fi
+
+echo "[INFO] Loading common library from: $LIB_PATH"
 
 # shellcheck source=../lib/deploy-common.sh
 source "$LIB_PATH"

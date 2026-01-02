@@ -16,8 +16,6 @@ class VpsHealthService
 {
     /**
      * Create a new VPS health service instance.
-     *
-     * @param VpsManagerInterface $vpsManager
      */
     public function __construct(
         protected VpsManagerInterface $vpsManager
@@ -26,7 +24,7 @@ class VpsHealthService
     /**
      * Perform health check on a VPS server.
      *
-     * @param VpsServer $vps The VPS to check
+     * @param  VpsServer  $vps  The VPS to check
      * @return array{healthy: bool, load?: float, memory_used?: int, disk_used?: int, issues: array<string>}
      */
     public function checkHealth(VpsServer $vps): array
@@ -36,7 +34,7 @@ class VpsHealthService
 
             $issues = [];
 
-            if (!$result['healthy']) {
+            if (! $result['healthy']) {
                 $issues[] = 'VPS health check failed';
             }
 
@@ -75,7 +73,7 @@ class VpsHealthService
 
             return [
                 'healthy' => false,
-                'issues' => ['Health check failed: ' . $e->getMessage()],
+                'issues' => ['Health check failed: '.$e->getMessage()],
             ];
         }
     }
@@ -101,7 +99,7 @@ class VpsHealthService
 
             if ($result['healthy']) {
                 $stats['healthy']++;
-            } elseif (!empty($result['issues'])) {
+            } elseif (! empty($result['issues'])) {
                 $stats['unhealthy']++;
             } else {
                 $stats['unknown']++;
@@ -143,7 +141,7 @@ class VpsHealthService
             'unhealthy' => $allVps->where('health_status', 'unhealthy')->count(),
             'unknown' => $allVps->where('health_status', 'unknown')->count(),
             'stale_checks' => $allVps->where(function ($vps) {
-                return !$vps->last_health_check_at ||
+                return ! $vps->last_health_check_at ||
                        $vps->last_health_check_at < now()->subHours(24);
             })->count(),
         ];
@@ -151,9 +149,6 @@ class VpsHealthService
 
     /**
      * Mark VPS as healthy.
-     *
-     * @param VpsServer $vps
-     * @return void
      */
     public function markHealthy(VpsServer $vps): void
     {
@@ -169,10 +164,6 @@ class VpsHealthService
 
     /**
      * Mark VPS as unhealthy.
-     *
-     * @param VpsServer $vps
-     * @param string|null $reason
-     * @return void
      */
     public function markUnhealthy(VpsServer $vps, ?string $reason = null): void
     {

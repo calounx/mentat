@@ -4,7 +4,6 @@ namespace App\Listeners;
 
 use App\Events\AbstractDomainEvent;
 use App\Models\AuditLog;
-use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
@@ -18,8 +17,6 @@ use Illuminate\Support\Facades\Log;
  * This listener provides centralized, automatic audit logging for all domain events.
  * Instead of manually calling AuditLog::log() in every controller/service, we capture
  * the event and log it automatically with proper context and severity.
- *
- * @package App\Listeners
  */
 class RecordAuditLog implements ShouldQueue
 {
@@ -42,13 +39,10 @@ class RecordAuditLog implements ShouldQueue
      *
      * @var int
      */
-    public $backoff = 30;
+    public $backoff = 60;
 
     /**
      * Handle any domain event and create audit log entry.
-     *
-     * @param AbstractDomainEvent $event
-     * @return void
      */
     public function handle(AbstractDomainEvent $event): void
     {
@@ -76,9 +70,6 @@ class RecordAuditLog implements ShouldQueue
 
     /**
      * Map event class to audit action string.
-     *
-     * @param AbstractDomainEvent $event
-     * @return string
      */
     private function mapEventToAction(AbstractDomainEvent $event): string
     {
@@ -97,8 +88,7 @@ class RecordAuditLog implements ShouldQueue
     /**
      * Extract resource type from event metadata.
      *
-     * @param array<string, mixed> $metadata
-     * @return string|null
+     * @param  array<string, mixed>  $metadata
      */
     private function extractResourceType(array $metadata): ?string
     {
@@ -108,14 +98,14 @@ class RecordAuditLog implements ShouldQueue
         if (isset($metadata['backup_id'])) {
             return 'backup';
         }
+
         return null;
     }
 
     /**
      * Extract resource ID from event metadata.
      *
-     * @param array<string, mixed> $metadata
-     * @return string|null
+     * @param  array<string, mixed>  $metadata
      */
     private function extractResourceId(array $metadata): ?string
     {
@@ -126,9 +116,6 @@ class RecordAuditLog implements ShouldQueue
 
     /**
      * Determine audit log severity based on event type.
-     *
-     * @param AbstractDomainEvent $event
-     * @return string
      */
     private function determineSeverity(AbstractDomainEvent $event): string
     {
@@ -144,10 +131,6 @@ class RecordAuditLog implements ShouldQueue
 
     /**
      * Handle a job failure.
-     *
-     * @param AbstractDomainEvent $event
-     * @param \Throwable $exception
-     * @return void
      */
     public function failed(AbstractDomainEvent $event, \Throwable $exception): void
     {

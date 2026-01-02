@@ -16,7 +16,7 @@ class ProvisionerFactoryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->factory = new ProvisionerFactory();
+        $this->factory = new ProvisionerFactory;
     }
 
     /** @test */

@@ -18,23 +18,20 @@ use Tests\TestCase;
  *
  * Tests the entire site provisioning workflow from user request through
  * VPS allocation, site deployment, SSL installation, and observability setup.
- *
- * @package Tests\Integration
  */
 class SiteProvisioningFlowTest extends TestCase
 {
     use RefreshDatabase;
-    use WithMockVpsManager;
     use WithMockObservability;
+    use WithMockVpsManager;
     use WithPerformanceTesting;
 
     protected User $user;
+
     protected SiteCreationService $siteService;
 
     /**
      * Set up test environment
-     *
-     * @return void
      */
     protected function setUp(): void
     {
@@ -52,8 +49,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test complete site provisioning flow for HTML site
-     *
-     * @return void
      */
     public function test_complete_html_site_provisioning_flow(): void
     {
@@ -73,7 +68,7 @@ class SiteProvisioningFlowTest extends TestCase
 
         // Act
         $site = $this->assertBenchmark(
-            fn() => $this->actingAs($this->user)
+            fn () => $this->actingAs($this->user)
                 ->post('/api/v1/sites', $siteData)
                 ->json('data'),
             'site_creation'
@@ -98,8 +93,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test Laravel site provisioning with database setup
-     *
-     * @return void
      */
     public function test_laravel_site_provisioning_with_database(): void
     {
@@ -138,8 +131,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test WordPress site provisioning with auto-configuration
-     *
-     * @return void
      */
     public function test_wordpress_site_provisioning_with_auto_config(): void
     {
@@ -180,8 +171,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test site provisioning with quota enforcement
-     *
-     * @return void
      */
     public function test_site_provisioning_respects_quota_limits(): void
     {
@@ -216,8 +205,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test site provisioning rollback on failure
-     *
-     * @return void
      */
     public function test_site_provisioning_rollback_on_deployment_failure(): void
     {
@@ -247,8 +234,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test multi-tenant site isolation during provisioning
-     *
-     * @return void
      */
     public function test_multi_tenant_isolation_during_provisioning(): void
     {
@@ -285,8 +270,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test site provisioning with custom environment variables
-     *
-     * @return void
      */
     public function test_site_provisioning_with_environment_variables(): void
     {
@@ -325,8 +308,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test concurrent site provisioning
-     *
-     * @return void
      */
     public function test_concurrent_site_provisioning(): void
     {
@@ -365,8 +346,6 @@ class SiteProvisioningFlowTest extends TestCase
 
     /**
      * Test site provisioning with monitoring setup
-     *
-     * @return void
      */
     public function test_site_provisioning_includes_monitoring_setup(): void
     {

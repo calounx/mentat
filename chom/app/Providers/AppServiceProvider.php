@@ -23,7 +23,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Register VPS Connection Pool as singleton for connection reuse
         $this->app->singleton(VpsConnectionPool::class, function ($app) {
-            return new VpsConnectionPool();
+            return new VpsConnectionPool;
         });
 
         // Bind VPS Manager interface to implementation
@@ -76,6 +76,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('team.invite', [TeamPolicy::class, 'invite']);
         Gate::define('team.update', [TeamPolicy::class, 'update']);
         Gate::define('team.remove', [TeamPolicy::class, 'remove']);
+
+        // Admin access gate
+        Gate::define('admin', function ($user) {
+            return in_array($user->role, ['admin', 'owner']);
+        });
     }
 
     /**
@@ -115,7 +120,7 @@ class AppServiceProvider extends ServiceProvider
             $user = $request->user();
 
             // Unauthenticated requests: 60/min by IP
-            if (!$user) {
+            if (! $user) {
                 return Limit::perMinute(60)->by($request->ip());
             }
 
@@ -123,12 +128,14 @@ class AppServiceProvider extends ServiceProvider
             $tier = $user->organization->subscription->tier ?? 'free';
 
             // Tier-based rate limits
-            return match($tier) {
+            $limit = match ($tier) {
                 'enterprise' => Limit::perMinute(1000)->by($user->id),
                 'professional' => Limit::perMinute(500)->by($user->id),
                 'starter' => Limit::perMinute(100)->by($user->id),
                 default => Limit::perMinute(60)->by($user->id),
-            }->response(function (Request $request, array $headers) use ($tier) {
+            };
+
+            return $limit->response(function (Request $request, array $headers) use ($tier) {
                 return response()->json([
                     'success' => false,
                     'error' => [

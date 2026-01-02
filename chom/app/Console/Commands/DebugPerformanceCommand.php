@@ -34,7 +34,7 @@ class DebugPerformanceCommand extends Command
             ['Metric', 'Value'],
             [
                 ['Query Count', count($queries)],
-                ['Sample Query Time', round($queryTime, 2) . ' ms'],
+                ['Sample Query Time', round($queryTime, 2).' ms'],
                 ['Connection', DB::getDriverName()],
             ]
         );
@@ -70,7 +70,7 @@ class DebugPerformanceCommand extends Command
             ['Setting', 'Value'],
             [
                 ['Version', PHP_VERSION],
-                ['Max Execution Time', ini_get('max_execution_time') . 's'],
+                ['Max Execution Time', ini_get('max_execution_time').'s'],
                 ['Memory Limit', ini_get('memory_limit')],
                 ['Upload Max Filesize', ini_get('upload_max_filesize')],
                 ['Post Max Size', ini_get('post_max_size')],
@@ -95,8 +95,8 @@ class DebugPerformanceCommand extends Command
         $this->table(
             ['Operation', 'Time'],
             [
-                ['Cache Write', round($writeTime, 2) . ' ms'],
-                ['Cache Read', round($readTime, 2) . ' ms'],
+                ['Cache Write', round($writeTime, 2).' ms'],
+                ['Cache Read', round($readTime, 2).' ms'],
             ]
         );
 
@@ -130,7 +130,7 @@ class DebugPerformanceCommand extends Command
 
         $issues = [];
 
-        if (!extension_loaded('opcache') || !ini_get('opcache.enable')) {
+        if (! extension_loaded('opcache') || ! ini_get('opcache.enable')) {
             $issues[] = 'OPcache is not enabled - enable it for better PHP performance';
         }
 
@@ -186,6 +186,6 @@ class DebugPerformanceCommand extends Command
             $i++;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 }

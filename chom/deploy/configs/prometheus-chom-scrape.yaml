@@ -1,0 +1,225 @@
+# ============================================================================
+# Prometheus Scrape Configuration for CHOM Application
+# ============================================================================
+#
+# Add this configuration to the prometheus.yml on mentat_tst
+# Location: /etc/prometheus/prometheus.yml (or wherever your config is)
+#
+# This enables Prometheus to scrape metrics from the CHOM application
+# running on landsraad_tst.
+#
+# ============================================================================
+
+# Add under 'scrape_configs:' section in prometheus.yml
+
+scrape_configs:
+  # ============================================================================
+  # CHOM Application Metrics
+  # ============================================================================
+  - job_name: 'chom'
+
+    # Scrape interval (how often to collect metrics)
+    scrape_interval: 15s
+
+    # Timeout for scrape requests
+    scrape_timeout: 10s
+
+    # Metrics endpoint path
+    metrics_path: '/metrics'
+
+    # HTTPS scheme (use http if not using SSL)
+    scheme: https
+
+    # TLS configuration (if using self-signed cert)
+    tls_config:
+      insecure_skip_verify: false
+      # ca_file: /etc/prometheus/certs/ca.pem
+
+    # Basic authentication for /metrics endpoint
+    # Must match PROMETHEUS_AUTH_USERNAME/PASSWORD in CHOM .env
+    basic_auth:
+      username: 'prometheus'
+      password: 'your-secure-password'  # Change this!
+
+    # Static targets - CHOM instance(s)
+    static_configs:
+      - targets:
+          - 'landsraad-tst:443'  # Replace with actual hostname/IP
+        labels:
+          environment: 'production'
+          app: 'chom'
+          instance: 'landsraad-tst'
+
+    # Relabeling for cleaner metric names
+    relabel_configs:
+      # Add instance label from target
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+):.+'
+        replacement: '${1}'
+
+      # Preserve original target
+      - source_labels: [__address__]
+        target_label: __param_target
+
+    # Metric relabeling (applied after scrape)
+    metric_relabel_configs:
+      # Drop high-cardinality metrics if needed
+      # - source_labels: [__name__]
+      #   regex: 'chom_http_request_duration_ms_bucket'
+      #   action: drop
+
+  # ============================================================================
+  # CHOM Health Check (optional, for alerting on availability)
+  # ============================================================================
+  - job_name: 'chom-health'
+
+    scrape_interval: 30s
+    scrape_timeout: 5s
+
+    metrics_path: '/health'
+    scheme: https
+
+    tls_config:
+      insecure_skip_verify: false
+
+    static_configs:
+      - targets:
+          - 'landsraad-tst:443'
+        labels:
+          environment: 'production'
+          app: 'chom'
+
+    # Transform health check response to metric
+    # This creates a synthetic 'up' metric based on health endpoint
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+):.+'
+        replacement: '${1}'
+
+# ============================================================================
+# Alert Rules for CHOM (add to alert rules file)
+# ============================================================================
+#
+# File: /etc/prometheus/rules/chom-alerts.yml
+#
+# groups:
+#   - name: chom-alerts
+#     rules:
+#       # Application down
+#       - alert: CHOMDown
+#         expr: up{job="chom"} == 0
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "CHOM application is down"
+#           description: "CHOM has been unreachable for more than 1 minute."
+#
+#       # High error rate
+#       - alert: CHOMHighErrorRate
+#         expr: |
+#           sum(rate(chom_http_errors_total{type="5xx"}[5m])) /
+#           sum(rate(chom_http_requests_total[5m])) > 0.05
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "CHOM experiencing high error rate"
+#           description: "Error rate is above 5% for the last 5 minutes."
+#
+#       # Slow response time
+#       - alert: CHOMSlowResponses
+#         expr: |
+#           histogram_quantile(0.95,
+#             sum(rate(chom_http_request_duration_ms_bucket[5m])) by (le)
+#           ) > 1000
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "CHOM response times are slow"
+#           description: "95th percentile response time is above 1 second."
+#
+#       # High memory usage
+#       - alert: CHOMHighMemoryUsage
+#         expr: chom_memory_usage_bytes / 1024 / 1024 > 256
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "CHOM high memory usage"
+#           description: "Memory usage is above 256MB."
+#
+#       # Disk space low
+#       - alert: CHOMDiskSpaceLow
+#         expr: |
+#           (chom_disk_total_bytes - chom_disk_free_bytes) /
+#           chom_disk_total_bytes > 0.9
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "CHOM disk space low"
+#           description: "Disk usage is above 90%."
+#
+#       # Database connection issues
+#       - alert: CHOMDatabaseUnhealthy
+#         expr: chom_health_status == 0
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "CHOM database connection issues"
+#           description: "Health check reports database is unhealthy."
+#
+#       # Backup failures
+#       - alert: CHOMBackupFailed
+#         expr: increase(chom_backups_failed_total[1h]) > 0
+#         for: 0m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "CHOM backup failed"
+#           description: "A backup operation has failed in the last hour."
+#
+# ============================================================================
+
+# ============================================================================
+# Recording Rules for CHOM (add to recording rules file)
+# ============================================================================
+#
+# File: /etc/prometheus/rules/chom-recording.yml
+#
+# groups:
+#   - name: chom-recording
+#     rules:
+#       # Request rate
+#       - record: chom:http_requests:rate5m
+#         expr: sum(rate(chom_http_requests_total[5m])) by (method, path)
+#
+#       # Error rate
+#       - record: chom:http_errors:rate5m
+#         expr: sum(rate(chom_http_errors_total[5m])) by (type)
+#
+#       # Response time percentiles
+#       - record: chom:http_request_duration_ms:p50
+#         expr: |
+#           histogram_quantile(0.50,
+#             sum(rate(chom_http_request_duration_ms_bucket[5m])) by (le)
+#           )
+#
+#       - record: chom:http_request_duration_ms:p95
+#         expr: |
+#           histogram_quantile(0.95,
+#             sum(rate(chom_http_request_duration_ms_bucket[5m])) by (le)
+#           )
+#
+#       - record: chom:http_request_duration_ms:p99
+#         expr: |
+#           histogram_quantile(0.99,
+#             sum(rate(chom_http_request_duration_ms_bucket[5m])) by (le)
+#           )
+#
+# ============================================================================

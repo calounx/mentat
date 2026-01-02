@@ -18,15 +18,11 @@ use Illuminate\Support\Facades\Log;
  *
  * This listener integrates with the observability stack (Prometheus) to record
  * metrics counters and histograms for all significant business events.
- *
- * @package App\Listeners
  */
 class RecordMetrics
 {
     /**
      * Create a new RecordMetrics listener instance.
-     *
-     * @param ObservabilityInterface $observability
      */
     public function __construct(
         private ObservabilityInterface $observability
@@ -36,9 +32,6 @@ class RecordMetrics
      * Handle site created event.
      *
      * Increments the sites_created_total counter.
-     *
-     * @param SiteCreated $event
-     * @return void
      */
     public function handleSiteCreated(SiteCreated $event): void
     {
@@ -58,9 +51,6 @@ class RecordMetrics
      * Handle site provisioned event.
      *
      * Increments success counter and records provisioning duration.
-     *
-     * @param SiteProvisioned $event
-     * @return void
      */
     public function handleSiteProvisioned(SiteProvisioned $event): void
     {
@@ -87,9 +77,6 @@ class RecordMetrics
      * Handle site provisioning failed event.
      *
      * Increments the failure counter for monitoring.
-     *
-     * @param SiteProvisioningFailed $event
-     * @return void
      */
     public function handleSiteProvisioningFailed(SiteProvisioningFailed $event): void
     {
@@ -108,9 +95,6 @@ class RecordMetrics
      * Handle site deleted event.
      *
      * Increments the sites_deleted_total counter.
-     *
-     * @param SiteDeleted $event
-     * @return void
      */
     public function handleSiteDeleted(SiteDeleted $event): void
     {
@@ -128,9 +112,6 @@ class RecordMetrics
      * Handle backup completed event.
      *
      * Records backup metrics including duration and size.
-     *
-     * @param BackupCompleted $event
-     * @return void
      */
     public function handleBackupCompleted(BackupCompleted $event): void
     {
@@ -161,9 +142,6 @@ class RecordMetrics
      * Handle backup failed event.
      *
      * Increments the backup failure counter.
-     *
-     * @param BackupFailed $event
-     * @return void
      */
     public function handleBackupFailed(BackupFailed $event): void
     {

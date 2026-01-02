@@ -23,7 +23,7 @@ fi
 #===============================================================================
 
 # Global lock file variable
-LOCK_FILE="/var/lock/observability-setup.lock"
+LOCK_FILE="${LOCK_FILE:-/var/lock/observability-setup.lock}"
 LOCK_ACQUIRED=false
 
 # Acquire an exclusive lock

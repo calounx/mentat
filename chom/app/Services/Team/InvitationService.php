@@ -19,11 +19,10 @@ class InvitationService
     /**
      * Invite a new team member.
      *
-     * @param Organization $organization
-     * @param string $email The invitee's email
-     * @param string $role The role to assign
-     * @param User $inviter The user sending the invitation
-     * @param string|null $name Optional name for the invitee
+     * @param  string  $email  The invitee's email
+     * @param  string  $role  The role to assign
+     * @param  User  $inviter  The user sending the invitation
+     * @param  string|null  $name  Optional name for the invitee
      * @return array{success: bool, message: string, invitation?: array}
      */
     public function inviteMember(
@@ -34,7 +33,7 @@ class InvitationService
         ?string $name = null
     ): array {
         // Validate permissions
-        if (!$this->canInvite($inviter, $role)) {
+        if (! $this->canInvite($inviter, $role)) {
             return [
                 'success' => false,
                 'message' => 'You do not have permission to invite members with this role',
@@ -100,14 +99,13 @@ class InvitationService
     /**
      * Cancel a pending invitation.
      *
-     * @param string $invitationId
-     * @param User $canceller The user cancelling the invitation
+     * @param  User  $canceller  The user cancelling the invitation
      * @return array{success: bool, message: string}
      */
     public function cancelInvitation(string $invitationId, User $canceller): array
     {
         // Validate permissions
-        if (!$canceller->isAdmin()) {
+        if (! $canceller->isAdmin()) {
             return [
                 'success' => false,
                 'message' => 'You do not have permission to cancel invitations',
@@ -131,8 +129,8 @@ class InvitationService
     /**
      * Accept an invitation.
      *
-     * @param string $token The invitation token
-     * @param User $user The user accepting the invitation
+     * @param  string  $token  The invitation token
+     * @param  User  $user  The user accepting the invitation
      * @return array{success: bool, message: string, organization?: Organization}
      */
     public function acceptInvitation(string $token, User $user): array
@@ -153,9 +151,6 @@ class InvitationService
 
     /**
      * Get pending invitations for an organization.
-     *
-     * @param Organization $organization
-     * @return array
      */
     public function getPendingInvitations(Organization $organization): array
     {
@@ -167,20 +162,16 @@ class InvitationService
 
     /**
      * Check if user can invite members with the specified role.
-     *
-     * @param User $inviter
-     * @param string $role
-     * @return bool
      */
     protected function canInvite(User $inviter, string $role): bool
     {
         // Must be at least admin
-        if (!$inviter->isAdmin()) {
+        if (! $inviter->isAdmin()) {
             return false;
         }
 
         // Only owners can invite admins
-        if ($role === 'admin' && !$inviter->isOwner()) {
+        if ($role === 'admin' && ! $inviter->isOwner()) {
             return false;
         }
 
@@ -189,10 +180,6 @@ class InvitationService
 
     /**
      * Check if user already exists in organization.
-     *
-     * @param Organization $organization
-     * @param string $email
-     * @return bool
      */
     protected function userExistsInOrganization(Organization $organization, string $email): bool
     {
@@ -204,14 +191,12 @@ class InvitationService
     /**
      * Resend an invitation.
      *
-     * @param string $invitationId
-     * @param User $sender
      * @return array{success: bool, message: string}
      */
     public function resendInvitation(string $invitationId, User $sender): array
     {
         // Validate permissions
-        if (!$sender->isAdmin()) {
+        if (! $sender->isAdmin()) {
             return [
                 'success' => false,
                 'message' => 'You do not have permission to resend invitations',

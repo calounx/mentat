@@ -16,9 +16,10 @@ interface SiteProvisionerInterface
     /**
      * Provision a site on a VPS server.
      *
-     * @param Site $site The site to provision
-     * @param VpsServer $vps The VPS server to provision on
+     * @param  Site  $site  The site to provision
+     * @param  VpsServer  $vps  The VPS server to provision on
      * @return array Result with 'success', 'exit_code', 'output', and optional 'data'
+     *
      * @throws \RuntimeException If provisioning fails critically
      */
     public function provision(Site $site, VpsServer $vps): array;
@@ -33,7 +34,7 @@ interface SiteProvisionerInterface
     /**
      * Validate site-specific requirements before provisioning.
      *
-     * @param Site $site The site to validate
+     * @param  Site  $site  The site to validate
      * @return bool True if site is valid for this provisioner
      */
     public function validate(Site $site): bool;

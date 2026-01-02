@@ -27,8 +27,11 @@ class BackupLifecycleEventsTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Tenant $tenant;
+
     protected Site $site;
+
     protected VpsServer $vps;
 
     protected function setUp(): void
@@ -37,12 +40,24 @@ class BackupLifecycleEventsTest extends TestCase
 
         // Create test data
         $this->user = User::factory()->create();
-        $this->tenant = Tenant::factory()->create(['owner_id' => $this->user->id]);
+        $this->tenant = Tenant::factory()->create(['organization_id' => $this->user->organization_id]);
 
-        TierLimit::factory()->create([
-            'tier' => 'free',
-            'backup_retention_days' => 7,
-        ]);
+        TierLimit::firstOrCreate(
+            ['tier' => 'starter'],
+            [
+                'name' => 'Starter',
+                'max_sites' => 10,
+                'max_storage_gb' => 10,
+                'max_bandwidth_gb' => 100,
+                'backup_retention_days' => 7,
+                'support_level' => 'email',
+                'dedicated_ip' => false,
+                'staging_environments' => false,
+                'white_label' => false,
+                'api_rate_limit_per_hour' => 100,
+                'price_monthly_cents' => 999,
+            ]
+        );
 
         $this->vps = VpsServer::factory()->create([
             'status' => 'active',

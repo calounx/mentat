@@ -17,8 +17,6 @@ use Mockery\MockInterface;
  *
  * This trait provides pre-configured mocks for all VPS-related services,
  * allowing tests to simulate VPS operations without actual server connections.
- *
- * @package Tests\Concerns
  */
 trait WithMockVpsManager
 {
@@ -49,8 +47,6 @@ trait WithMockVpsManager
 
     /**
      * Set up VPS mocks
-     *
-     * @return void
      */
     protected function setUpVpsMocks(): void
     {
@@ -69,10 +65,6 @@ trait WithMockVpsManager
 
     /**
      * Mock successful VPS allocation
-     *
-     * @param string $vpsId
-     * @param array $vpsData
-     * @return void
      */
     protected function mockSuccessfulVpsAllocation(string $vpsId = 'vps-123', array $vpsData = []): void
     {
@@ -95,8 +87,6 @@ trait WithMockVpsManager
 
     /**
      * Mock successful SSH connection
-     *
-     * @return void
      */
     protected function mockSuccessfulSshConnection(): void
     {
@@ -115,11 +105,6 @@ trait WithMockVpsManager
 
     /**
      * Mock successful command execution
-     *
-     * @param string $expectedCommand
-     * @param string $output
-     * @param int $exitCode
-     * @return void
      */
     protected function mockCommandExecution(
         string $expectedCommand,
@@ -138,15 +123,12 @@ trait WithMockVpsManager
 
     /**
      * Mock successful site deployment
-     *
-     * @param string $siteName
-     * @return void
      */
     protected function mockSuccessfulSiteDeployment(string $siteName = 'example.com'): void
     {
         $this->mockVpsSiteManager
             ->shouldReceive('deploySite')
-            ->with(Mockery::on(fn($site) => $site->domain === $siteName))
+            ->with(Mockery::on(fn ($site) => $site->domain === $siteName))
             ->andReturn([
                 'success' => true,
                 'site_path' => "/var/www/{$siteName}",
@@ -157,9 +139,6 @@ trait WithMockVpsManager
 
     /**
      * Mock successful SSL certificate installation
-     *
-     * @param string $domain
-     * @return void
      */
     protected function mockSuccessfulSslInstallation(string $domain = 'example.com'): void
     {
@@ -176,9 +155,6 @@ trait WithMockVpsManager
 
     /**
      * Mock VPS connection failure
-     *
-     * @param string $errorMessage
-     * @return void
      */
     protected function mockVpsConnectionFailure(string $errorMessage = 'Connection refused'): void
     {
@@ -189,11 +165,6 @@ trait WithMockVpsManager
 
     /**
      * Mock command execution failure
-     *
-     * @param string $expectedCommand
-     * @param string $errorOutput
-     * @param int $exitCode
-     * @return void
      */
     protected function mockCommandFailure(
         string $expectedCommand,
@@ -212,10 +183,6 @@ trait WithMockVpsManager
 
     /**
      * Mock VPS health check
-     *
-     * @param bool $healthy
-     * @param array $metrics
-     * @return void
      */
     protected function mockVpsHealthCheck(bool $healthy = true, array $metrics = []): void
     {
@@ -243,8 +210,6 @@ trait WithMockVpsManager
 
     /**
      * Assert VPS allocation was called
-     *
-     * @return void
      */
     protected function assertVpsAllocationCalled(): void
     {
@@ -255,8 +220,6 @@ trait WithMockVpsManager
 
     /**
      * Assert SSH connection was established
-     *
-     * @return void
      */
     protected function assertSshConnectionEstablished(): void
     {
@@ -267,9 +230,6 @@ trait WithMockVpsManager
 
     /**
      * Assert command was executed
-     *
-     * @param string $command
-     * @return void
      */
     protected function assertCommandExecuted(string $command): void
     {

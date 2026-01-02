@@ -295,7 +295,7 @@ except Exception:
     esac
 
     echo "$result"
-    [[ -n "$result" ]]
+    return 0
 }
 
 # Get a nested value from YAML file using dot notation
@@ -378,7 +378,7 @@ except Exception:
     esac
 
     echo "$result"
-    [[ -n "$result" ]]
+    return 0
 }
 
 # Get a nested value (two levels: parent.child)
@@ -453,7 +453,7 @@ except Exception:
     esac
 
     echo "$result"
-    [[ -n "$result" ]]
+    return 0
 }
 
 # Get a deeply nested value (three levels: level1.level2.level3)
@@ -539,7 +539,7 @@ except Exception:
     esac
 
     echo "$result"
-    [[ -n "$result" ]]
+    return 0
 }
 
 # Get array values from YAML

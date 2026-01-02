@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Http;
 use Exception;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Storage;
 
 class HealthController extends Controller
 {
@@ -43,7 +43,7 @@ class HealthController extends Controller
             $checks['vps_connectivity'] = $this->checkVpsConnectivity();
         }
 
-        $healthy = !in_array(false, $checks, true);
+        $healthy = ! in_array(false, $checks, true);
         $httpCode = $healthy ? 200 : 503;
 
         return response()->json([
@@ -64,7 +64,7 @@ class HealthController extends Controller
             'memory' => $this->checkMemory(),
         ];
 
-        $healthy = !in_array(false, $checks, true);
+        $healthy = ! in_array(false, $checks, true);
         $httpCode = $healthy ? 200 : 503;
 
         return response()->json([
@@ -81,8 +81,8 @@ class HealthController extends Controller
     {
         $checks = [
             'https_enabled' => $this->checkHttps(),
-            'debug_disabled' => !config('app.debug'),
-            'app_key_set' => !empty(config('app.key')),
+            'debug_disabled' => ! config('app.debug'),
+            'app_key_set' => ! empty(config('app.key')),
             'csrf_protection' => true, // Laravel has CSRF enabled by default
             'secure_cookies' => config('session.secure'),
             'rate_limiting' => $this->checkRateLimiting(),
@@ -93,7 +93,7 @@ class HealthController extends Controller
             $checks['ssl_certificate'] = $this->checkSslCertificate();
         }
 
-        $secure = !in_array(false, $checks, true);
+        $secure = ! in_array(false, $checks, true);
 
         return response()->json([
             'status' => $secure ? 'secure' : 'insecure',
@@ -122,7 +122,7 @@ class HealthController extends Controller
             $checks['stripe'] = $this->checkStripeConnectivity();
         }
 
-        $healthy = empty($checks) || !in_array(false, $checks, true);
+        $healthy = empty($checks) || ! in_array(false, $checks, true);
 
         return response()->json([
             'status' => $healthy ? 'healthy' : 'degraded',
@@ -180,9 +180,11 @@ class HealthController extends Controller
         try {
             DB::connection()->getPdo();
             DB::connection()->getDatabaseName();
+
             return true;
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -194,9 +196,11 @@ class HealthController extends Controller
     {
         try {
             Redis::ping();
+
             return true;
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -207,8 +211,8 @@ class HealthController extends Controller
     private function checkCache(): bool
     {
         try {
-            $key = 'health_check_' . time();
-            $value = 'test_' . time();
+            $key = 'health_check_'.time();
+            $value = 'test_'.time();
 
             Cache::put($key, $value, 60);
             $retrieved = Cache::get($key);
@@ -217,6 +221,7 @@ class HealthController extends Controller
             return $retrieved === $value;
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -229,9 +234,11 @@ class HealthController extends Controller
         try {
             // Check if queue connection is working
             $connection = Queue::connection();
+
             return $connection !== null;
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -242,7 +249,7 @@ class HealthController extends Controller
     private function checkStorage(): bool
     {
         try {
-            $testFile = 'health_check_' . time() . '.tmp';
+            $testFile = 'health_check_'.time().'.tmp';
             Storage::put($testFile, 'test');
             $exists = Storage::exists($testFile);
             Storage::delete($testFile);
@@ -250,6 +257,7 @@ class HealthController extends Controller
             return $exists;
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -265,6 +273,7 @@ class HealthController extends Controller
             return true;
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -346,7 +355,7 @@ class HealthController extends Controller
             $url = config('app.url');
             $parsedUrl = parse_url($url);
 
-            if (!isset($parsedUrl['host'])) {
+            if (! isset($parsedUrl['host'])) {
                 return false;
             }
 
@@ -367,7 +376,7 @@ class HealthController extends Controller
                 $streamContext
             );
 
-            if (!$client) {
+            if (! $client) {
                 return false;
             }
 
@@ -384,6 +393,7 @@ class HealthController extends Controller
             ];
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -395,9 +405,11 @@ class HealthController extends Controller
     {
         try {
             $response = Http::timeout(5)->get($url);
+
             return $response->successful();
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -410,10 +422,11 @@ class HealthController extends Controller
         try {
             // Simple check to see if we can access Stripe API
             // In production, you might want to make an actual API call
-            return !empty(config('services.stripe.key')) &&
-                   !empty(config('services.stripe.secret'));
+            return ! empty(config('services.stripe.key')) &&
+                   ! empty(config('services.stripe.secret'));
         } catch (Exception $e) {
             report($e);
+
             return false;
         }
     }
@@ -467,6 +480,6 @@ class HealthController extends Controller
             $bytes /= 1024;
         }
 
-        return round($bytes, $precision) . ' ' . $units[$i];
+        return round($bytes, $precision).' '.$units[$i];
     }
 }

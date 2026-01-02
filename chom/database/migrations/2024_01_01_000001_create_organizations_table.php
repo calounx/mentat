@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('slug', 100)->unique();
             $table->string('billing_email');
             $table->string('stripe_customer_id')->nullable()->unique();
+            $table->uuid('default_tenant_id')->nullable();
             $table->timestamps();
         });
     }

@@ -19,8 +19,6 @@ use Illuminate\Support\Facades\Log;
  *
  * TODO: Integrate with actual email/notification service when available.
  * For now, this logs notification events for tracking.
- *
- * @package App\Listeners
  */
 class SendNotification implements ShouldQueue
 {
@@ -43,15 +41,12 @@ class SendNotification implements ShouldQueue
      *
      * @var int
      */
-    public $backoff = 60;
+    public $backoff = 120;
 
     /**
      * Handle site provisioned event.
      *
      * Sends success notification when a site is fully provisioned.
-     *
-     * @param SiteProvisioned $event
-     * @return void
      */
     public function handleSiteProvisioned(SiteProvisioned $event): void
     {
@@ -74,9 +69,6 @@ class SendNotification implements ShouldQueue
      * Handle site provisioning failed event.
      *
      * Sends error notification when site provisioning fails.
-     *
-     * @param SiteProvisioningFailed $event
-     * @return void
      */
     public function handleSiteProvisioningFailed(SiteProvisioningFailed $event): void
     {
@@ -103,9 +95,6 @@ class SendNotification implements ShouldQueue
      * Handle backup completed event.
      *
      * Sends confirmation when a backup completes successfully.
-     *
-     * @param BackupCompleted $event
-     * @return void
      */
     public function handleBackupCompleted(BackupCompleted $event): void
     {
@@ -127,9 +116,6 @@ class SendNotification implements ShouldQueue
      * Handle backup failed event.
      *
      * Sends error notification when backup fails.
-     *
-     * @param BackupFailed $event
-     * @return void
      */
     public function handleBackupFailed(BackupFailed $event): void
     {
@@ -151,9 +137,7 @@ class SendNotification implements ShouldQueue
     /**
      * Handle a job failure.
      *
-     * @param mixed $event
-     * @param \Throwable $exception
-     * @return void
+     * @param  mixed  $event
      */
     public function failed($event, \Throwable $exception): void
     {

@@ -104,14 +104,14 @@ return new class extends Migration
     protected function calculateHash(string $previousHash, object $log): string
     {
         $data = $previousHash
-            . $log->id
-            . $log->organization_id
-            . $log->user_id
-            . $log->action
-            . $log->resource_type
-            . $log->resource_id
-            . $log->ip_address
-            . $log->created_at;
+            .$log->id
+            .$log->organization_id
+            .$log->user_id
+            .$log->action
+            .$log->resource_type
+            .$log->resource_id
+            .$log->ip_address
+            .$log->created_at;
 
         return hash('sha256', $data);
     }

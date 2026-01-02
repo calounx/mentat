@@ -14,17 +14,15 @@ use App\Models\Tenant;
  * - UpdateTenantMetrics: Invalidates and updates cached site count for tenant
  * - RecordAuditLog: Creates audit trail for site creation
  * - RecordMetrics: Records site_created_total counter in Prometheus
- *
- * @package App\Events\Site
  */
 class SiteCreated extends AbstractDomainEvent
 {
     /**
      * Create a new SiteCreated event instance.
      *
-     * @param Site $site The newly created site
-     * @param Tenant $tenant The tenant who owns the site
-     * @param string|null $actorId The ID of the user who created the site
+     * @param  Site  $site  The newly created site
+     * @param  Tenant  $tenant  The tenant who owns the site
+     * @param  string|null  $actorId  The ID of the user who created the site
      */
     public function __construct(
         public readonly Site $site,

@@ -40,11 +40,12 @@ class IssueSslCertificateJob implements ShouldQueue
         $site = $this->site;
         $vps = $site->vpsServer;
 
-        if (!$vps) {
+        if (! $vps) {
             Log::error('IssueSslCertificateJob: No VPS server associated with site', [
                 'site_id' => $site->id,
                 'domain' => $site->domain,
             ]);
+
             return;
         }
 

@@ -13,7 +13,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    use HasFactory, Notifiable, HasApiTokens, HasUuids;
+    use HasApiTokens, HasFactory, HasUuids, Notifiable;
 
     protected $fillable = [
         'name',
@@ -72,7 +72,16 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function currentTenant(): ?Tenant
     {
-        return $this->organization?->defaultTenant;
+        if (! $this->organization) {
+            return null;
+        }
+
+        // Load the relationship if not already loaded
+        if (! $this->organization->relationLoaded('defaultTenant')) {
+            $this->organization->load('defaultTenant');
+        }
+
+        return $this->organization->defaultTenant;
     }
 
     /**
@@ -127,7 +136,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function requires2FA(): bool
     {
         // Check if 2FA is globally enabled
-        if (!config('auth.two_factor_authentication.enabled', false)) {
+        if (! config('auth.two_factor_authentication.enabled', false)) {
             return false;
         }
 
@@ -147,7 +156,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function isIn2FAGracePeriod(): bool
     {
-        if (!$this->requires2FA()) {
+        if (! $this->requires2FA()) {
             return false;
         }
 
@@ -164,7 +173,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function hasRecentPasswordConfirmation(): bool
     {
-        if (!$this->password_confirmed_at) {
+        if (! $this->password_confirmed_at) {
             return false;
         }
 
@@ -187,7 +196,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function needsKeyRotation(): bool
     {
-        if (!$this->ssh_key_rotated_at) {
+        if (! $this->ssh_key_rotated_at) {
             return true;
         }
 

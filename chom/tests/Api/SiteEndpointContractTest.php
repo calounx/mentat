@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Api;
 
+use App\Models\Organization;
 use App\Models\Site;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -13,8 +15,6 @@ use Tests\TestCase;
  * API contract tests for Site endpoints
  *
  * Ensures API responses match documented contracts
- *
- * @package Tests\Api
  */
 class SiteEndpointContractTest extends TestCase
 {
@@ -22,23 +22,36 @@ class SiteEndpointContractTest extends TestCase
 
     protected User $user;
 
+    protected Organization $organization;
+
+    protected Tenant $tenant;
+
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create();
+
+        // Create organization with default tenant
+        $this->organization = Organization::factory()->create();
+        $this->tenant = Tenant::factory()->create([
+            'organization_id' => $this->organization->id,
+        ]);
+        $this->organization->update(['default_tenant_id' => $this->tenant->id]);
+
+        // Create user in organization
+        $this->user = User::factory()->create([
+            'organization_id' => $this->organization->id,
+        ]);
     }
 
     /**
      * Test site list response structure
-     *
-     * @return void
      */
     public function test_site_list_returns_correct_structure(): void
     {
-        Site::factory()->create(['user_id' => $this->user->id]);
+        Site::factory()->create(['tenant_id' => $this->tenant->id]);
 
         $response = $this->actingAs($this->user)
-            ->get('/api/v1/sites');
+            ->getJson('/api/v1/sites');
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -61,13 +74,11 @@ class SiteEndpointContractTest extends TestCase
 
     /**
      * Test site creation response structure
-     *
-     * @return void
      */
     public function test_site_creation_returns_correct_structure(): void
     {
         $response = $this->actingAs($this->user)
-            ->post('/api/v1/sites', [
+            ->postJson('/api/v1/sites', [
                 'domain' => 'test.com',
                 'type' => 'html',
             ]);
@@ -87,13 +98,11 @@ class SiteEndpointContractTest extends TestCase
 
     /**
      * Test error response format is consistent
-     *
-     * @return void
      */
     public function test_error_responses_follow_standard_format(): void
     {
         $response = $this->actingAs($this->user)
-            ->post('/api/v1/sites', [
+            ->postJson('/api/v1/sites', [
                 'domain' => '', // Invalid
             ]);
 

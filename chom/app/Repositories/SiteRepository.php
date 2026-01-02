@@ -18,9 +18,6 @@ class SiteRepository
 {
     /**
      * Get active sites for a tenant.
-     *
-     * @param Tenant $tenant
-     * @return Collection
      */
     public function getActiveForTenant(Tenant $tenant): Collection
     {
@@ -33,9 +30,6 @@ class SiteRepository
 
     /**
      * Get storage statistics by tenant.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function getStorageStatsByTenant(Tenant $tenant): array
     {
@@ -60,9 +54,8 @@ class SiteRepository
     /**
      * Find available VPS servers with capacity.
      *
-     * @param Tenant|null $tenant Tenant to find VPS for (optional)
-     * @param int $minimumSites Minimum number of sites the VPS should handle
-     * @return Collection
+     * @param  Tenant|null  $tenant  Tenant to find VPS for (optional)
+     * @param  int  $minimumSites  Minimum number of sites the VPS should handle
      */
     public function findAvailableVpsServers(?Tenant $tenant = null, int $minimumSites = 1): Collection
     {
@@ -86,8 +79,7 @@ class SiteRepository
     /**
      * Get sites with expiring SSL certificates.
      *
-     * @param int $days Number of days until expiry
-     * @return Collection
+     * @param  int  $days  Number of days until expiry
      */
     public function getSitesWithExpiringSsl(int $days = 14): Collection
     {
@@ -100,10 +92,6 @@ class SiteRepository
 
     /**
      * Get sites by type for a tenant.
-     *
-     * @param Tenant $tenant
-     * @param string $siteType
-     * @return Collection
      */
     public function getByTypeForTenant(Tenant $tenant, string $siteType): Collection
     {
@@ -116,9 +104,6 @@ class SiteRepository
 
     /**
      * Get sites on a specific VPS server.
-     *
-     * @param VpsServer $vps
-     * @return Collection
      */
     public function getBySiteServer(VpsServer $vps): Collection
     {
@@ -130,9 +115,6 @@ class SiteRepository
 
     /**
      * Count sites by status for a tenant.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function countByStatusForTenant(Tenant $tenant): array
     {
@@ -154,9 +136,6 @@ class SiteRepository
 
     /**
      * Count sites by type for a tenant.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function countByTypeForTenant(Tenant $tenant): array
     {
@@ -170,10 +149,6 @@ class SiteRepository
 
     /**
      * Get most recent sites for a tenant.
-     *
-     * @param Tenant $tenant
-     * @param int $limit
-     * @return Collection
      */
     public function getRecentForTenant(Tenant $tenant, int $limit = 10): Collection
     {
@@ -186,15 +161,11 @@ class SiteRepository
 
     /**
      * Search sites by domain for a tenant.
-     *
-     * @param Tenant $tenant
-     * @param string $search
-     * @return Collection
      */
     public function searchByDomain(Tenant $tenant, string $search): Collection
     {
         return Site::where('tenant_id', $tenant->id)
-            ->where('domain', 'like', '%' . $search . '%')
+            ->where('domain', 'like', '%'.$search.'%')
             ->with('vpsServer:id,hostname')
             ->orderBy('domain', 'asc')
             ->get();
@@ -202,8 +173,6 @@ class SiteRepository
 
     /**
      * Get VPS utilization statistics.
-     *
-     * @return Collection
      */
     public function getVpsUtilizationStats(): Collection
     {
@@ -225,9 +194,6 @@ class SiteRepository
 
     /**
      * Create a new site.
-     *
-     * @param array $data
-     * @return Site
      */
     public function create(array $data): Site
     {
@@ -236,10 +202,6 @@ class SiteRepository
 
     /**
      * Update a site.
-     *
-     * @param Site $site
-     * @param array $data
-     * @return bool
      */
     public function update(Site $site, array $data): bool
     {
@@ -248,9 +210,6 @@ class SiteRepository
 
     /**
      * Delete a site.
-     *
-     * @param Site $site
-     * @return bool
      */
     public function delete(Site $site): bool
     {
@@ -259,9 +218,6 @@ class SiteRepository
 
     /**
      * Find site by ID.
-     *
-     * @param string $id
-     * @return Site|null
      */
     public function findById(string $id): ?Site
     {
@@ -270,10 +226,6 @@ class SiteRepository
 
     /**
      * Find site by domain for tenant.
-     *
-     * @param Tenant $tenant
-     * @param string $domain
-     * @return Site|null
      */
     public function findByDomain(Tenant $tenant, string $domain): ?Site
     {

@@ -10,7 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
@@ -33,7 +32,7 @@ class AuthController extends Controller
                 // Create organization
                 $organization = Organization::create([
                     'name' => $validated['organization_name'],
-                    'slug' => Str::slug($validated['organization_name']) . '-' . Str::random(6),
+                    'slug' => Str::slug($validated['organization_name']).'-'.Str::random(6),
                     'billing_email' => $validated['email'],
                 ]);
 
@@ -104,7 +103,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (!Auth::attempt($validated)) {
+        if (! Auth::attempt($validated)) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -117,7 +116,7 @@ class AuthController extends Controller
         $user = Auth::user();
 
         // Check if organization is active
-        if (!$user->organization) {
+        if (! $user->organization) {
             return response()->json([
                 'success' => false,
                 'error' => [

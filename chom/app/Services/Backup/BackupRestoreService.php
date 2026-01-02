@@ -17,8 +17,6 @@ class BackupRestoreService
 {
     /**
      * Create a new backup restore service instance.
-     *
-     * @param VpsManagerInterface $vpsManager
      */
     public function __construct(
         protected VpsManagerInterface $vpsManager
@@ -30,13 +28,13 @@ class BackupRestoreService
      * This method initiates the restore process.
      * The actual restoration is handled asynchronously via job.
      *
-     * @param SiteBackup $backup The backup to restore from
+     * @param  SiteBackup  $backup  The backup to restore from
      * @return array{success: bool, message: string}
      */
     public function restoreFromBackup(SiteBackup $backup): array
     {
         // Validate backup is ready
-        if (!$backup->storage_path) {
+        if (! $backup->storage_path) {
             return [
                 'success' => false,
                 'message' => 'Backup is not yet available for restore',
@@ -81,14 +79,14 @@ class BackupRestoreService
      *
      * This method is typically called from a background job.
      *
-     * @param SiteBackup $backup The backup to restore from
+     * @param  SiteBackup  $backup  The backup to restore from
      * @return array{success: bool, message: string}
      */
     public function executeRestore(SiteBackup $backup): array
     {
         $site = $backup->site;
 
-        if (!$site->vpsServer) {
+        if (! $site->vpsServer) {
             return [
                 'success' => false,
                 'message' => 'Site has no associated VPS server',
@@ -106,7 +104,7 @@ class BackupRestoreService
                 $backup->storage_path
             );
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 Log::error('VPS restore failed', [
                     'backup_id' => $backup->id,
                     'site_id' => $site->id,
@@ -155,14 +153,14 @@ class BackupRestoreService
     /**
      * Validate that a backup can be restored.
      *
-     * @param SiteBackup $backup The backup to validate
+     * @param  SiteBackup  $backup  The backup to validate
      * @return array{valid: bool, errors: array<string>}
      */
     public function validateRestore(SiteBackup $backup): array
     {
         $errors = [];
 
-        if (!$backup->storage_path) {
+        if (! $backup->storage_path) {
             $errors[] = 'Backup file is not available';
         }
 
@@ -172,15 +170,15 @@ class BackupRestoreService
 
         $site = $backup->site;
 
-        if (!$site) {
+        if (! $site) {
             $errors[] = 'Associated site not found';
         }
 
-        if ($site && !$site->vpsServer) {
+        if ($site && ! $site->vpsServer) {
             $errors[] = 'Site has no VPS server';
         }
 
-        if ($site && !$site->vpsServer?->isAvailable()) {
+        if ($site && ! $site->vpsServer?->isAvailable()) {
             $errors[] = 'VPS server is not available';
         }
 
@@ -199,9 +197,7 @@ class BackupRestoreService
      *
      * Before restoring, create a safety backup of the current state.
      *
-     * @param Site $site The site to backup
-     * @param BackupService $backupService
-     * @return SiteBackup|null
+     * @param  Site  $site  The site to backup
      */
     public function createPreRestoreBackup(Site $site, BackupService $backupService): ?SiteBackup
     {
@@ -231,9 +227,6 @@ class BackupRestoreService
 
     /**
      * Set site to maintenance mode during restore.
-     *
-     * @param Site $site
-     * @return void
      */
     protected function setSiteToMaintenance(Site $site): void
     {
@@ -246,9 +239,6 @@ class BackupRestoreService
 
     /**
      * Set site back to active after restore.
-     *
-     * @param Site $site
-     * @return void
      */
     protected function setSiteToActive(Site $site): void
     {
@@ -262,8 +252,6 @@ class BackupRestoreService
     /**
      * Get restore history for a site.
      *
-     * @param Site $site
-     * @param int $limit
      * @return array<array{backup_id: string, restored_at: string, backup_type: string}>
      */
     public function getRestoreHistory(Site $site, int $limit = 10): array
@@ -278,7 +266,6 @@ class BackupRestoreService
     /**
      * Estimate restore time based on backup size.
      *
-     * @param SiteBackup $backup
      * @return array{estimated_minutes: int, size_formatted: string}
      */
     public function estimateRestoreTime(SiteBackup $backup): array

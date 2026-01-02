@@ -79,6 +79,7 @@ stop_existing_services() {
         alertmanager
         grafana-server
         node_exporter
+        alloy
         nginx
     )
 
@@ -96,6 +97,352 @@ stop_existing_services() {
         sleep 2  # Give ports time to release
     else
         log_info "No existing services to stop"
+    fi
+}
+
+#===============================================================================
+# Grafana Alloy (OpenTelemetry Collector)
+#===============================================================================
+
+install_alloy() {
+    log_step "Installing Grafana Alloy..."
+
+    local alloy_version="${ALLOY_VERSION:-1.5.1}"
+
+    # Idempotency check: skip if already installed with correct version
+    if binary_installed /usr/local/bin/alloy "$alloy_version"; then
+        log_info "Alloy ${alloy_version} already installed, skipping"
+        return 0
+    fi
+
+    local arch
+    arch=$(get_architecture)
+    local binary_name="alloy-linux-${arch}"
+    local download_url="https://github.com/grafana/alloy/releases/download/v${alloy_version}/${binary_name}.zip"
+
+    # Create user (idempotent)
+    ensure_system_user alloy alloy
+
+    # Stop service and verify before binary update
+    if systemctl is-active --quiet alloy 2>/dev/null; then
+        stop_and_verify_service "alloy" "/usr/local/bin/alloy" || {
+            log_error "Failed to stop alloy safely"
+            return 1
+        }
+    fi
+
+    # Create directories (idempotent)
+    ensure_directory /etc/alloy root:root 755
+    ensure_directory /var/lib/alloy alloy:alloy 755
+
+    # Download and extract
+    cd /tmp
+    download_file "$download_url" "alloy.zip"
+
+    # Download checksums for verification
+    local checksum_url="https://github.com/grafana/alloy/releases/download/v${alloy_version}/SHA256SUMS"
+    if curl -fsSL --max-time 60 -o /tmp/alloy-checksums.txt "$checksum_url" 2>/dev/null; then
+        log_info "Verifying checksum..."
+        cd /tmp
+        if grep "${binary_name}.zip" alloy-checksums.txt | sha256sum -c - 2>/dev/null; then
+            log_success "Checksum verified"
+        else
+            log_warn "Checksum verification failed, continuing with caution"
+        fi
+        rm -f /tmp/alloy-checksums.txt
+    fi
+
+    unzip -o /tmp/alloy.zip -d /tmp/alloy-extract
+
+    # Find and install binary
+    local binary_path
+    binary_path=$(find /tmp/alloy-extract -name "alloy*" -type f -executable 2>/dev/null | head -1)
+    if [[ -z "$binary_path" ]]; then
+        binary_path=$(find /tmp/alloy-extract -name "${binary_name}" -type f 2>/dev/null | head -1)
+    fi
+
+    if [[ -z "$binary_path" ]]; then
+        log_error "Could not find Alloy binary in archive"
+        rm -rf /tmp/alloy.zip /tmp/alloy-extract
+        return 1
+    fi
+
+    install -m 755 "$binary_path" /usr/local/bin/alloy
+
+    # Cleanup
+    rm -rf /tmp/alloy.zip /tmp/alloy-extract
+
+    # Create default configuration
+    generate_alloy_config
+
+    # Create systemd service with security hardening
+    cat > /etc/systemd/system/alloy.service << EOF
+[Unit]
+Description=Grafana Alloy - OpenTelemetry Collector
+Documentation=https://grafana.com/docs/alloy/latest/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alloy
+Group=alloy
+ExecStart=/usr/local/bin/alloy run \\
+    --storage.path=/var/lib/alloy \\
+    --server.http.listen-addr=0.0.0.0:12345 \\
+    /etc/alloy/config.alloy
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/alloy
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Set ownership
+    chown -R alloy:alloy /etc/alloy /var/lib/alloy
+
+    systemctl daemon-reload
+    log_success "Alloy installed"
+}
+
+generate_alloy_config() {
+    log_info "Creating Alloy configuration..."
+
+    cat > /etc/alloy/config.alloy << 'ALLOY_EOF'
+// Grafana Alloy Configuration
+// Primary telemetry collector for the observability stack
+// River configuration language - https://grafana.com/docs/alloy/latest/
+
+//=============================================================================
+// Logging Configuration
+//=============================================================================
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+//=============================================================================
+// Self-Monitoring
+//=============================================================================
+// Export Alloy's own metrics
+prometheus.exporter.self "alloy" {
+}
+
+// Scrape Alloy metrics
+prometheus.scrape "alloy_self" {
+  targets    = prometheus.exporter.self.alloy.targets
+  forward_to = [prometheus.remote_write.local.receiver]
+
+  scrape_interval = "15s"
+}
+
+//=============================================================================
+// Log Collection from Local System
+//=============================================================================
+local.file_match "system_logs" {
+  path_targets = [
+    {__path__ = "/var/log/syslog", job = "syslog"},
+    {__path__ = "/var/log/auth.log", job = "auth"},
+    {__path__ = "/var/log/nginx/*.log", job = "nginx"},
+  ]
+}
+
+loki.source.file "local_logs" {
+  targets    = local.file_match.system_logs.targets
+  forward_to = [loki.process.local.receiver]
+}
+
+// Process logs - add labels
+loki.process "local" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.static_labels {
+    values = {
+      host = env("HOSTNAME"),
+      role = "observability",
+    }
+  }
+}
+
+//=============================================================================
+// OpenTelemetry Receivers
+//=============================================================================
+// OTLP receiver for traces and metrics from applications
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+  }
+}
+
+// Batch processor for better performance
+otelcol.processor.batch "default" {
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+    logs    = [otelcol.exporter.loki.default.input]
+  }
+}
+
+//=============================================================================
+// Exporters - Send data to local backends
+//=============================================================================
+
+// Prometheus remote write for metrics
+prometheus.remote_write "local" {
+  endpoint {
+    url = "http://localhost:9090/api/v1/write"
+  }
+}
+
+// Loki push for logs
+loki.write "local" {
+  endpoint {
+    url = "http://localhost:3100/loki/api/v1/push"
+  }
+}
+
+// OpenTelemetry metrics to Prometheus
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// OpenTelemetry logs to Loki
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.local.receiver]
+}
+
+// Traces to Tempo via OTLP
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "localhost:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+ALLOY_EOF
+
+    chown alloy:alloy /etc/alloy/config.alloy
+    chmod 644 /etc/alloy/config.alloy
+    log_success "Alloy configuration created"
+}
+
+#===============================================================================
+# Health Verification
+#===============================================================================
+
+verify_service_health() {
+    log_step "Verifying service health..."
+
+    local all_healthy=true
+    local failed_services=()
+
+    # Define services with their health check endpoints
+    declare -A health_checks=(
+        ["prometheus"]="http://localhost:9090/-/healthy"
+        ["loki"]="http://localhost:3100/ready"
+        ["tempo"]="http://localhost:3200/ready"
+        ["alertmanager"]="http://localhost:9093/-/healthy"
+        ["grafana"]="http://localhost:3000/api/health"
+        ["alloy"]="http://localhost:12345/-/ready"
+    )
+
+    # Wait a moment for services to fully start
+    sleep 5
+
+    for service in "${!health_checks[@]}"; do
+        local endpoint="${health_checks[$service]}"
+
+        if ! systemctl is-active --quiet "$service" 2>/dev/null && \
+           ! systemctl is-active --quiet "${service}-server" 2>/dev/null; then
+            # Service not running, skip health check but mark as failed
+            if [[ "$service" != "alloy" ]] || [[ "${INSTALL_ALLOY:-false}" == "true" ]]; then
+                log_warn "$service: not running"
+                failed_services+=("$service")
+                all_healthy=false
+            fi
+            continue
+        fi
+
+        # Try health check with retry
+        local max_attempts=3
+        local attempt=1
+        local healthy=false
+
+        while [[ $attempt -le $max_attempts ]]; do
+            if curl -sf --max-time 5 "$endpoint" >/dev/null 2>&1; then
+                log_success "$service: healthy"
+                healthy=true
+                break
+            fi
+            sleep 2
+            ((attempt++))
+        done
+
+        if [[ "$healthy" != "true" ]]; then
+            log_warn "$service: health check failed (endpoint: $endpoint)"
+            failed_services+=("$service")
+            all_healthy=false
+        fi
+    done
+
+    # Check node_exporter separately (different endpoint format)
+    if systemctl is-active --quiet node_exporter 2>/dev/null; then
+        if curl -sf --max-time 5 "http://localhost:9100/metrics" >/dev/null 2>&1; then
+            log_success "node_exporter: healthy"
+        else
+            log_warn "node_exporter: metrics endpoint not responding"
+            failed_services+=("node_exporter")
+            all_healthy=false
+        fi
+    fi
+
+    # Check nginx
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        if curl -sf --max-time 5 "http://localhost:80" >/dev/null 2>&1 || \
+           curl -sf --max-time 5 "http://localhost:3000" >/dev/null 2>&1; then
+            log_success "nginx: healthy"
+        else
+            log_warn "nginx: not responding"
+            failed_services+=("nginx")
+            all_healthy=false
+        fi
+    fi
+
+    if [[ "$all_healthy" == "true" ]]; then
+        log_success "All services are healthy"
+        return 0
+    else
+        log_warn "Some services failed health checks: ${failed_services[*]}"
+        log_info "Check logs with: journalctl -u <service> --no-pager -n 50"
+        return 1
     fi
 }
 
@@ -123,10 +470,20 @@ install_observability_stack() {
     install_alertmanager
     install_grafana
     install_node_exporter
+
+    # Install Alloy as primary telemetry collector
+    if [[ "${INSTALL_ALLOY:-true}" == "true" ]]; then
+        install_alloy
+    fi
+
     install_nginx
     setup_ssl
     configure_all
     start_all_services
+
+    # Verify all services are healthy
+    verify_service_health || log_warn "Some services may need attention"
+
     setup_firewall_observability
     save_installation_info
 }
@@ -224,10 +581,11 @@ install_prometheus() {
     # Cleanup
     rm -rf "/tmp/prometheus-${PROMETHEUS_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
-    # Create systemd service (always update to ensure consistency)
+    # Create systemd service with security hardening
     cat > /etc/systemd/system/prometheus.service << EOF
 [Unit]
 Description=Prometheus
+Documentation=https://prometheus.io/docs/introduction/overview/
 After=network-online.target
 Wants=network-online.target
 
@@ -240,10 +598,27 @@ ExecStart=/usr/local/bin/prometheus \\
     --storage.tsdb.path=/var/lib/prometheus \\
     --storage.tsdb.retention.time=${METRICS_RETENTION_DAYS:-15}d \\
     --web.listen-address=0.0.0.0:9090 \\
-    --web.enable-lifecycle
+    --web.enable-lifecycle \\
+    --web.enable-remote-write-receiver
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/prometheus
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -304,10 +679,11 @@ install_loki() {
     # Cleanup
     rm -f /tmp/loki.zip
 
-    # Create systemd service
+    # Create systemd service with security hardening
     cat > /etc/systemd/system/loki.service << EOF
 [Unit]
-Description=Loki
+Description=Loki - Log Aggregation System
+Documentation=https://grafana.com/docs/loki/latest/
 After=network-online.target
 Wants=network-online.target
 
@@ -316,8 +692,25 @@ Type=simple
 User=loki
 Group=loki
 ExecStart=/usr/local/bin/loki -config.file=/etc/loki/loki-config.yaml
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/loki
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -417,10 +810,11 @@ EOF
     # Cleanup
     rm -f /tmp/tempo.tar.gz
 
-    # Create systemd service
+    # Create systemd service with security hardening
     cat > /etc/systemd/system/tempo.service << EOF
 [Unit]
-Description=Tempo
+Description=Tempo - Distributed Tracing Backend
+Documentation=https://grafana.com/docs/tempo/latest/
 After=network-online.target
 Wants=network-online.target
 
@@ -429,8 +823,25 @@ Type=simple
 User=tempo
 Group=tempo
 ExecStart=/usr/local/bin/tempo -config.file=/etc/tempo/tempo.yaml
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/tempo
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -507,10 +918,11 @@ install_alertmanager() {
     # Cleanup
     rm -rf "/tmp/alertmanager-${ALERTMANAGER_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
-    # Create systemd service
+    # Create systemd service with security hardening
     cat > /etc/systemd/system/alertmanager.service << EOF
 [Unit]
 Description=Alertmanager
+Documentation=https://prometheus.io/docs/alerting/latest/alertmanager/
 After=network-online.target
 Wants=network-online.target
 
@@ -520,9 +932,26 @@ User=alertmanager
 Group=alertmanager
 ExecStart=/usr/local/bin/alertmanager \\
     --config.file=/etc/alertmanager/alertmanager.yml \\
-    --storage.path=/var/lib/alertmanager
+    --storage.path=/var/lib/alertmanager \\
+    --web.listen-address=0.0.0.0:9093
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=5
+TimeoutStopSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/alertmanager
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -594,10 +1023,11 @@ install_node_exporter() {
     # Cleanup
     rm -rf "/tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
-    # Create systemd service
+    # Create systemd service with security hardening
     cat > /etc/systemd/system/node_exporter.service << EOF
 [Unit]
 Description=Node Exporter
+Documentation=https://github.com/prometheus/node_exporter
 After=network-online.target
 Wants=network-online.target
 
@@ -605,9 +1035,22 @@ Wants=network-online.target
 Type=simple
 User=node_exporter
 Group=node_exporter
-ExecStart=/usr/local/bin/node_exporter
+ExecStart=/usr/local/bin/node_exporter \\
+    --web.listen-address=0.0.0.0:9100
 Restart=always
 RestartSec=5
+TimeoutStopSec=20
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -716,6 +1159,11 @@ start_all_services() {
         nginx
     )
 
+    # Add Alloy if installed
+    if [[ "${INSTALL_ALLOY:-true}" == "true" ]] && [[ -f /etc/systemd/system/alloy.service ]]; then
+        services+=(alloy)
+    fi
+
     for svc in "${services[@]}"; do
         enable_and_start "$svc" || log_warn "Failed to start $svc"
     done
@@ -743,6 +1191,7 @@ METRICS_RETENTION_DAYS=${METRICS_RETENTION_DAYS:-15}
 LOGS_RETENTION_DAYS=${LOGS_RETENTION_DAYS:-7}
 CONFIGURE_SMTP=${CONFIGURE_SMTP:-false}
 DISABLE_IPV6=${DISABLE_IPV6:-false}
+INSTALL_ALLOY=${INSTALL_ALLOY:-true}
 
 # Credentials
 GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
@@ -754,6 +1203,7 @@ LOKI_VERSION=${LOKI_VERSION}
 TEMPO_VERSION=${TEMPO_VERSION}
 ALERTMANAGER_VERSION=${ALERTMANAGER_VERSION}
 NODE_EXPORTER_VERSION=${NODE_EXPORTER_VERSION}
+ALLOY_VERSION=${ALLOY_VERSION:-1.5.1}
 EOF
 
     chmod 600 "$STACK_DIR/.installation"

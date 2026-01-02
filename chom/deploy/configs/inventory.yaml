@@ -1,57 +1,110 @@
+# ============================================================================
 # CHOM Infrastructure Inventory
-# Configure your VPS servers here
+# ============================================================================
 #
-# IMPORTANT: Use a sudo user (not root) for better security
-# The user must have passwordless sudo configured
+# This file configures your VPS servers for deployment.
+#
+# INSTRUCTIONS:
+#   1. Replace 0.0.0.0 with your actual VPS IP addresses
+#   2. Update hostnames with your domain names
+#   3. Ensure ssh_user has passwordless sudo on each VPS
+#   4. Run: ./deploy.sh --validate to check configuration
+#
+# SECURITY NOTES:
+#   - NEVER use root as ssh_user (use a sudo-enabled user)
+#   - SSH key is auto-generated and stored in ./keys/
+#   - All passwords are auto-generated during deployment
+#
+# ============================================================================
 
 observability:
-  # OVH VPS 1 - Small instance for monitoring stack
-  hostname: obs.example.com
-  ip: 0.0.0.0  # Replace with actual IP
-  ssh_user: deploy  # Use sudo user with passwordless sudo (NOT root)
-  ssh_port: 22
+  # Monitoring Stack VPS
+  # Requirements: 1+ vCPU, 2GB+ RAM, 20GB+ disk
+  hostname: obs.example.com           # Your domain (or use IP)
+  ip: 0.0.0.0                         # REQUIRED: Replace with actual VPS IP
+  ssh_user: deploy                    # Sudo user (NOT root)
+  ssh_port: 22                        # SSH port (default: 22)
+
+  # Hardware specs (auto-detected if left empty, shown in plan)
   specs:
     cpu: 1
     memory_mb: 2048
     disk_gb: 20
+
+  # Services deployed on this VPS
   components:
-    - prometheus
-    - loki
-    - grafana
-    - alertmanager
-    - nginx
+    - prometheus      # Metrics collection (port 9090)
+    - loki           # Log aggregation (port 3100)
+    - grafana        # Dashboards (port 3000)
+    - alertmanager   # Alert routing (port 9093)
+    - nginx          # Reverse proxy (port 80/443)
+
+  # Service configuration
   config:
-    grafana_domain: grafana.example.com
+    grafana_domain: grafana.example.com  # Domain for Grafana (for SSL)
     alertmanager_email: alerts@example.com
-    retention_days: 15
+    retention_days: 15                    # How long to keep data
     smtp:
       host: smtp.example.com
       port: 587
       user: ""
       password: ""
 
+# ============================================================================
+
 vpsmanager:
-  # OVH VPS 2 - Main instance for WordPress hosting
-  hostname: wp.example.com
-  ip: 0.0.0.0  # Replace with actual IP
-  ssh_user: deploy  # Use sudo user with passwordless sudo (NOT root)
-  ssh_port: 22
+  # Application Stack VPS
+  # Requirements: 2+ vCPU, 4GB+ RAM, 40GB+ disk
+  hostname: wp.example.com            # Your domain (or use IP)
+  ip: 0.0.0.0                         # REQUIRED: Replace with actual VPS IP
+  ssh_user: deploy                    # Sudo user (NOT root)
+  ssh_port: 22                        # SSH port (default: 22)
+
+  # Hardware specs (auto-detected if left empty, shown in plan)
   specs:
     cpu: 2
     memory_mb: 4096
     disk_gb: 80
+
+  # Services deployed on this VPS
   components:
-    - nginx
-    - php-fpm
-    - mariadb
-    - redis
-    - vpsmanager
+    - nginx          # Web server (port 80/443)
+    - php-fpm        # PHP processor
+    - mariadb        # Database (localhost only)
+    - redis          # Cache (localhost only)
+    - vpsmanager     # Laravel app
+    - node_exporter  # Metrics exporter (port 9100)
+    - promtail       # Log shipper (or alloy)
+
+  # Service configuration
   config:
     php_versions:
-      - "8.2"
-      - "8.4"
+      - "8.2"        # Default/stable
+      - "8.3"        # Latest stable
+      - "8.4"        # Newest
     default_php: "8.2"
-    observability_server: obs.example.com
+    observability_server: obs.example.com  # Where to send logs/metrics
 
-# SSH key for deployment (will be generated if not exists)
+# ============================================================================
+# DEPLOYMENT SETTINGS
+# ============================================================================
+
+# SSH key for deployment (auto-generated on first run)
 ssh_key_path: ./keys/chom_deploy_key
+
+# Log collection (installed on vpsmanager VPS)
+# Choose one: promtail (traditional) or alloy (new, recommended)
+log_collector: alloy
+
+# ============================================================================
+# QUICK START CHECKLIST
+# ============================================================================
+#
+# [ ] Replace observability.ip with actual VPS IP (e.g., 51.83.x.x)
+# [ ] Replace vpsmanager.ip with actual VPS IP (e.g., 51.83.x.x)
+# [ ] Update hostnames with your domains (optional but recommended)
+# [ ] Create deploy user on VPS: see SUDO-USER-SETUP.md
+# [ ] Validate config: ./deploy.sh --validate
+# [ ] Deploy: ./deploy.sh all
+#
+# ============================================================================

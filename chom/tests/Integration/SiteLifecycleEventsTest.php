@@ -2,17 +2,11 @@
 
 namespace Tests\Integration;
 
-use App\Events\Backup\BackupCompleted;
-use App\Events\Backup\BackupFailed;
 use App\Events\Site\SiteCreated;
 use App\Events\Site\SiteDeleted;
 use App\Events\Site\SiteProvisioned;
 use App\Events\Site\SiteProvisioningFailed;
 use App\Jobs\ProvisionSiteJob;
-use App\Listeners\RecordAuditLog;
-use App\Listeners\RecordMetrics;
-use App\Listeners\SendNotification;
-use App\Listeners\UpdateTenantMetrics;
 use App\Models\Site;
 use App\Models\Tenant;
 use App\Models\TierLimit;
@@ -35,8 +29,11 @@ class SiteLifecycleEventsTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Tenant $tenant;
+
     protected VpsServer $vps;
+
     protected SiteCreationService $siteCreationService;
 
     protected function setUp(): void
@@ -45,18 +42,28 @@ class SiteLifecycleEventsTest extends TestCase
 
         // Create test data
         $this->user = User::factory()->create();
-        $this->tenant = Tenant::factory()->create(['owner_id' => $this->user->id]);
-        $this->user->tenants()->attach($this->tenant->id, ['role' => 'owner']);
+        $this->tenant = Tenant::factory()->create(['organization_id' => $this->user->organization_id]);
 
-        TierLimit::factory()->create([
-            'tier' => 'free',
-            'max_sites' => 10,
-        ]);
+        TierLimit::firstOrCreate(
+            ['tier' => 'starter'],
+            [
+                'name' => 'Starter',
+                'max_sites' => 10,
+                'max_storage_gb' => 10,
+                'max_bandwidth_gb' => 100,
+                'backup_retention_days' => 7,
+                'support_level' => 'email',
+                'dedicated_ip' => false,
+                'staging_environments' => false,
+                'white_label' => false,
+                'api_rate_limit_per_hour' => 100,
+                'price_monthly_cents' => 999,
+            ]
+        );
 
         $this->vps = VpsServer::factory()->create([
             'status' => 'active',
-            'max_sites' => 100,
-            'current_sites' => 0,
+            'health_status' => 'healthy',
         ]);
 
         $this->siteCreationService = app(SiteCreationService::class);

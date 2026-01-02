@@ -15,8 +15,7 @@ class SiteQuotaService
     /**
      * Check if tenant can create a new site.
      *
-     * @param Tenant $tenant The tenant to check
-     * @return bool
+     * @param  Tenant  $tenant  The tenant to check
      */
     public function canCreateSite(Tenant $tenant): bool
     {
@@ -33,13 +32,13 @@ class SiteQuotaService
     /**
      * Ensure tenant can create a site or throw an exception.
      *
-     * @param Tenant $tenant The tenant to check
-     * @return void
+     * @param  Tenant  $tenant  The tenant to check
+     *
      * @throws \App\Exceptions\QuotaExceededException
      */
     public function ensureCanCreateSite(Tenant $tenant): void
     {
-        if (!$this->canCreateSite($tenant)) {
+        if (! $this->canCreateSite($tenant)) {
             throw new \App\Exceptions\QuotaExceededException(
                 'Site limit exceeded',
                 [
@@ -53,7 +52,7 @@ class SiteQuotaService
     /**
      * Get the maximum number of sites allowed for the tenant.
      *
-     * @param Tenant $tenant The tenant
+     * @param  Tenant  $tenant  The tenant
      * @return int Returns -1 for unlimited
      */
     public function getMaxSites(Tenant $tenant): int
@@ -64,8 +63,7 @@ class SiteQuotaService
     /**
      * Get the current site count for the tenant.
      *
-     * @param Tenant $tenant The tenant
-     * @return int
+     * @param  Tenant  $tenant  The tenant
      */
     public function getCurrentSiteCount(Tenant $tenant): int
     {
@@ -75,7 +73,7 @@ class SiteQuotaService
     /**
      * Get the remaining site quota for the tenant.
      *
-     * @param Tenant $tenant The tenant
+     * @param  Tenant  $tenant  The tenant
      * @return int|string Returns 'unlimited' or the remaining count
      */
     public function getRemainingQuota(Tenant $tenant): int|string
@@ -87,13 +85,14 @@ class SiteQuotaService
         }
 
         $currentCount = $this->getCurrentSiteCount($tenant);
+
         return max(0, $maxSites - $currentCount);
     }
 
     /**
      * Get quota information for the tenant.
      *
-     * @param Tenant $tenant The tenant
+     * @param  Tenant  $tenant  The tenant
      * @return array{current: int, limit: int, remaining: int|string, can_create: bool}
      */
     public function getQuotaInfo(Tenant $tenant): array
@@ -109,9 +108,8 @@ class SiteQuotaService
     /**
      * Check if tenant can create multiple sites.
      *
-     * @param Tenant $tenant The tenant
-     * @param int $count Number of sites to create
-     * @return bool
+     * @param  Tenant  $tenant  The tenant
+     * @param  int  $count  Number of sites to create
      */
     public function canCreateMultipleSites(Tenant $tenant, int $count): bool
     {
@@ -122,6 +120,7 @@ class SiteQuotaService
         }
 
         $currentCount = $this->getCurrentSiteCount($tenant);
+
         return ($currentCount + $count) <= $maxSites;
     }
 }

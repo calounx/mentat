@@ -1,0 +1,325 @@
+# ============================================================================
+# CHOM Docker Test Environment
+# ============================================================================
+# Production-like multi-host test environment for CHOM SaaS platform
+#
+# Architecture:
+# - Host 1: Observability Stack (Prometheus, Loki, Tempo, Grafana, etc.)
+# - Host 2: Web Application (Nginx, PHP-FPM, MySQL, Redis, Laravel)
+#
+# Usage:
+#   docker-compose up -d           # Start all services
+#   docker-compose down            # Stop all services
+#   docker-compose logs -f web     # View web application logs
+#   docker-compose ps              # View service status
+# ============================================================================
+
+version: '3.8'
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  # Observability internal network
+  observability-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+  # Web application internal network
+  web-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+
+  # Shared monitoring network (for metrics/logs collection)
+  monitoring-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  # Observability Stack Volumes
+  prometheus-data:
+    driver: local
+  loki-data:
+    driver: local
+  tempo-data:
+    driver: local
+  grafana-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  alloy-observability-data:
+    driver: local
+
+  # Web Application Volumes
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  app-storage:
+    driver: local
+  nginx-logs:
+    driver: local
+  php-logs:
+    driver: local
+  mysql-logs:
+    driver: local
+  app-logs:
+    driver: local
+  alloy-web-data:
+    driver: local
+
+# ============================================================================
+# Services
+# ============================================================================
+services:
+  # ==========================================================================
+  # OBSERVABILITY STACK - Host 1
+  # ==========================================================================
+
+  observability:
+    container_name: chom_observability
+    build:
+      context: ./observability
+      dockerfile: Dockerfile
+    hostname: observability-stack
+    networks:
+      observability-net:
+        ipv4_address: 172.20.0.10
+      monitoring-net:
+        ipv4_address: 172.22.0.10
+    ports:
+      # Prometheus
+      - "9090:9090"
+      # Alertmanager
+      - "9093:9093"
+      # Node Exporter (mapped to 9199 to avoid conflict with host)
+      - "9199:9100"
+      # Loki
+      - "3100:3100"
+      # Tempo HTTP
+      - "3200:3200"
+      # Tempo OTLP gRPC
+      - "4317:4317"
+      # Tempo OTLP HTTP
+      - "4318:4318"
+      # Grafana
+      - "3000:3000"
+      # Alloy
+      - "12345:12345"
+    volumes:
+      # Prometheus
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/var/lib/prometheus
+
+      # Alertmanager
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/var/lib/alertmanager
+
+      # Loki
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+
+      # Tempo
+      - ./observability/tempo/tempo-config.yml:/etc/tempo/tempo-config.yml:ro
+      - tempo-data:/var/lib/tempo
+
+      # Grafana
+      - ./observability/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./observability/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+      # Alloy
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-observability-data:/var/lib/alloy
+
+      # Supervisor
+      - ./observability/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf:ro
+    environment:
+      - TZ=UTC
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    mem_limit: 4g
+    mem_reservation: 2g
+    cpus: 2.0
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==========================================================================
+  # WEB APPLICATION STACK - Host 2
+  # ==========================================================================
+
+  web:
+    container_name: chom_web
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    hostname: web-stack
+    networks:
+      web-net:
+        ipv4_address: 172.21.0.10
+      monitoring-net:
+        ipv4_address: 172.22.0.20
+    ports:
+      # Nginx HTTP
+      - "8000:80"
+      # Nginx HTTPS (optional)
+      - "8443:443"
+      # MySQL (mapped to 3316 to avoid conflict with host and other containers)
+      - "3316:3306"
+      # Redis (mapped to 6389 to avoid conflict with host and other containers)
+      - "6389:6379"
+      # Node Exporter
+      - "9101:9100"
+      # Nginx Exporter (mapped to 9114 to avoid conflict with host)
+      - "9114:9113"
+      # MySQL Exporter (mapped to 9105 to avoid conflict with host)
+      - "9105:9104"
+      # PHP-FPM Exporter (mapped to 9254 to avoid conflict with host)
+      - "9254:9253"
+      # Alloy
+      - "12346:12345"
+    volumes:
+      # Application code (mount your CHOM project here)
+      - ../../chom:/var/www/chom:cached
+
+      # Persistent data
+      - mysql-data:/var/lib/mysql
+      - redis-data:/var/lib/redis
+      - app-storage:/var/www/chom/storage
+
+      # Logs
+      - nginx-logs:/var/log/nginx
+      - php-logs:/var/log/php-fpm
+      - mysql-logs:/var/log/mysql
+      - app-logs:/var/www/chom/storage/logs
+
+      # Configurations
+      - ./web/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web/nginx/chom.conf:/etc/nginx/sites-available/chom.conf:ro
+      - ./web/php/php-fpm.conf:/etc/php/8.4/fpm/pool.d/www.conf:ro
+      - ./web/php/php.ini:/etc/php/8.4/fpm/conf.d/99-custom.ini:ro
+      - ./web/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./web/supervisor/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf:ro
+
+      # Alloy
+      - ./web/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-web-data:/var/lib/alloy
+
+      # Scripts
+      - ./web/scripts/init-app.sh:/usr/local/bin/init-app.sh:ro
+      - ./web/scripts/healthcheck.sh:/usr/local/bin/healthcheck.sh:ro
+    environment:
+      # Application
+      - APP_ENV=${APP_ENV:-local}
+      - APP_DEBUG=${APP_DEBUG:-true}
+      - APP_KEY=${APP_KEY:-}
+
+      # Database
+      - DB_CONNECTION=mysql
+      - DB_HOST=127.0.0.1
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-chom}
+      - DB_USERNAME=${DB_USERNAME:-chom}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+
+      # Redis
+      - REDIS_HOST=127.0.0.1
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+
+      # Cache & Queue
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+
+      # Observability
+      - PROMETHEUS_URL=http://chom_observability:9090
+      - LOKI_URL=http://chom_observability:3100
+      - TEMPO_URL=http://chom_observability:3200
+      - GRAFANA_URL=http://chom_observability:3000
+
+      # Timezone
+      - TZ=UTC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    mem_limit: 4g
+    mem_reservation: 2g
+    cpus: 2.0
+    depends_on:
+      - observability
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================================================
+# Additional Services (Optional - Uncomment to enable)
+# ============================================================================
+
+  # Redis Commander - Redis GUI
+  # redis-commander:
+  #   image: rediscommander/redis-commander:latest
+  #   container_name: chom-redis-commander
+  #   networks:
+  #     - web-net
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     - REDIS_HOSTS=local:web:6379
+  #   depends_on:
+  #     - web
+  #   restart: unless-stopped
+
+  # Adminer - Database Management GUI
+  # adminer:
+  #   image: adminer:latest
+  #   container_name: chom-adminer
+  #   networks:
+  #     - web-net
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - ADMINER_DEFAULT_SERVER=web
+  #   depends_on:
+  #     - web
+  #   restart: unless-stopped
+
+  # MailHog - Email Testing
+  # mailhog:
+  #   image: mailhog/mailhog:latest
+  #   container_name: chom-mailhog
+  #   networks:
+  #     - web-net
+  #   ports:
+  #     - "1025:1025"  # SMTP
+  #     - "8025:8025"  # Web UI
+  #   restart: unless-stopped

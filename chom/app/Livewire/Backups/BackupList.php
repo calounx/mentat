@@ -11,21 +11,24 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Illuminate\Support\Facades\Log;
 
 class BackupList extends Component
 {
-    use WithPagination, AuthorizesRequests;
+    use AuthorizesRequests, WithPagination;
 
     public ?string $siteFilter = '';
+
     public ?string $typeFilter = '';
 
     public ?string $creatingBackupForSite = null;
+
     public string $backupType = 'full';
 
     public ?string $restoringBackupId = null;
+
     public ?string $deletingBackupId = null;
 
     // Cache key for total backup size
@@ -59,16 +62,17 @@ class BackupList extends Component
 
     public function createBackup(): void
     {
-        if (!$this->creatingBackupForSite) {
+        if (! $this->creatingBackupForSite) {
             return;
         }
 
         $tenant = $this->getTenant();
         $site = $tenant->sites()->with('vpsServer')->find($this->creatingBackupForSite);
 
-        if (!$site || !$site->vpsServer) {
+        if (! $site || ! $site->vpsServer) {
             session()->flash('error', 'Site or server not found.');
             $this->closeCreateModal();
+
             return;
         }
 
@@ -77,6 +81,7 @@ class BackupList extends Component
         if ($response->denied()) {
             session()->flash('error', $response->message() ?: 'You do not have permission to create backups.');
             $this->closeCreateModal();
+
             return;
         }
 
@@ -91,7 +96,7 @@ class BackupList extends Component
             session()->flash('success', "Backup is being created for {$site->domain}");
         } catch (\Exception $e) {
             Log::error('Backup creation dispatch failed', ['site' => $site->domain, 'error' => $e->getMessage()]);
-            session()->flash('error', 'Failed to start backup: ' . $e->getMessage());
+            session()->flash('error', 'Failed to start backup: '.$e->getMessage());
         }
 
         $this->closeCreateModal();
@@ -109,18 +114,19 @@ class BackupList extends Component
 
     public function restoreBackup(): void
     {
-        if (!$this->restoringBackupId) {
+        if (! $this->restoringBackupId) {
             return;
         }
 
         $tenant = $this->getTenant();
-        $backup = SiteBackup::whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+        $backup = SiteBackup::whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
             ->with('site.vpsServer')
             ->find($this->restoringBackupId);
 
-        if (!$backup || !$backup->site->vpsServer) {
+        if (! $backup || ! $backup->site->vpsServer) {
             session()->flash('error', 'Backup not found.');
             $this->cancelRestore();
+
             return;
         }
 
@@ -134,7 +140,7 @@ class BackupList extends Component
             session()->flash('success', "Backup restore started for {$backup->site->domain}");
         } catch (\Exception $e) {
             Log::error('Backup restore dispatch failed', ['backup' => $backup->id, 'error' => $e->getMessage()]);
-            session()->flash('error', 'Failed to start restore: ' . $e->getMessage());
+            session()->flash('error', 'Failed to start restore: '.$e->getMessage());
         }
 
         $this->cancelRestore();
@@ -152,25 +158,27 @@ class BackupList extends Component
 
     public function deleteBackup(): void
     {
-        if (!$this->deletingBackupId) {
+        if (! $this->deletingBackupId) {
             return;
         }
 
         $tenant = $this->getTenant();
 
-        if (!$tenant) {
+        if (! $tenant) {
             session()->flash('error', 'Tenant not found.');
             $this->cancelDelete();
+
             return;
         }
 
         try {
-            $backup = SiteBackup::whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            $backup = SiteBackup::whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
                 ->find($this->deletingBackupId);
 
-            if (!$backup) {
+            if (! $backup) {
                 session()->flash('error', 'Backup not found.');
                 $this->cancelDelete();
+
                 return;
             }
 
@@ -279,7 +287,7 @@ class BackupList extends Component
         try {
             $tenant = $this->getTenant();
 
-            if (!$tenant) {
+            if (! $tenant) {
                 return view('livewire.backups.backup-list', [
                     'backups' => collect(),
                     'sites' => collect(),

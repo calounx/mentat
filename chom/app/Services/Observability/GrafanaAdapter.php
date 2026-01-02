@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 class GrafanaAdapter
 {
     private string $grafanaUrl;
+
     private ?string $grafanaApiKey;
 
     public function __construct()
@@ -25,8 +26,6 @@ class GrafanaAdapter
 
     /**
      * Get Grafana dashboards.
-     *
-     * @return array
      */
     public function getDashboards(): array
     {
@@ -40,6 +39,7 @@ class GrafanaAdapter
             return $response->json();
         } catch (\Exception $e) {
             Log::error('Failed to fetch Grafana dashboards', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
@@ -47,10 +47,7 @@ class GrafanaAdapter
     /**
      * Get embedded dashboard URL.
      *
-     * @param string $dashboardUid
-     * @param Tenant $tenant
-     * @param array $vars Additional variables
-     * @return string
+     * @param  array  $vars  Additional variables
      */
     public function getEmbeddedDashboardUrl(
         string $dashboardUid,
@@ -63,14 +60,12 @@ class GrafanaAdapter
         );
 
         $queryString = http_build_query($params);
+
         return "{$this->grafanaUrl}/d/{$dashboardUid}?{$queryString}";
     }
 
     /**
      * Get dashboard by UID.
-     *
-     * @param string $uid
-     * @return array|null
      */
     public function getDashboard(string $uid): ?array
     {
@@ -89,15 +84,13 @@ class GrafanaAdapter
                 'uid' => $uid,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
 
     /**
      * Create a dashboard.
-     *
-     * @param array $dashboard
-     * @return array|null
      */
     public function createDashboard(array $dashboard): ?array
     {
@@ -123,15 +116,13 @@ class GrafanaAdapter
             Log::error('Failed to create Grafana dashboard', [
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
 
     /**
      * Update a dashboard.
-     *
-     * @param array $dashboard
-     * @return array|null
      */
     public function updateDashboard(array $dashboard): ?array
     {
@@ -152,15 +143,13 @@ class GrafanaAdapter
             Log::error('Failed to update Grafana dashboard', [
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
 
     /**
      * Delete a dashboard.
-     *
-     * @param string $uid
-     * @return bool
      */
     public function deleteDashboard(string $uid): bool
     {
@@ -175,19 +164,19 @@ class GrafanaAdapter
                 'uid' => $uid,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
 
     /**
      * Check if Grafana is healthy.
-     *
-     * @return bool
      */
     public function isHealthy(): bool
     {
         try {
             $response = Http::timeout(5)->get("{$this->grafanaUrl}/api/health");
+
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -196,15 +185,13 @@ class GrafanaAdapter
 
     /**
      * Get Grafana headers for API calls.
-     *
-     * @return array
      */
     private function getHeaders(): array
     {
         $headers = ['Accept' => 'application/json'];
 
         if ($this->grafanaApiKey) {
-            $headers['Authorization'] = 'Bearer ' . $this->grafanaApiKey;
+            $headers['Authorization'] = 'Bearer '.$this->grafanaApiKey;
         }
 
         return $headers;

@@ -86,12 +86,12 @@ class SecurityHeaders
                 "base-uri 'self'",                       // Restrict base tag to prevent base tag injection
                 "form-action 'self'",                    // Forms can only submit to same origin
                 "object-src 'none'",                     // Disable plugins (Flash, Java, etc.)
-                "upgrade-insecure-requests",             // Automatically upgrade HTTP to HTTPS
+                'upgrade-insecure-requests',             // Automatically upgrade HTTP to HTTPS
             ];
 
             // Add report-uri in production for CSP violation monitoring
             if (app()->environment('production') && config('app.csp_report_uri')) {
-                $cspDirectives[] = 'report-uri ' . config('app.csp_report_uri');
+                $cspDirectives[] = 'report-uri '.config('app.csp_report_uri');
             }
 
             $response->headers->set('Content-Security-Policy', implode('; ', $cspDirectives));
@@ -99,13 +99,16 @@ class SecurityHeaders
 
         // SECURITY: Strict-Transport-Security (HSTS)
         // Forces browser to only connect via HTTPS for specified time period
-        // Only set in production with HTTPS enabled
-        if (app()->environment('production') && $request->secure()) {
-            $response->headers->set('Strict-Transport-Security', implode('; ', [
-                'max-age=31536000',      // 1 year in seconds
-                'includeSubDomains',     // Apply to all subdomains
-                'preload',               // Allow inclusion in browser HSTS preload lists
-            ]));
+        // Set whenever HTTPS is used (production gets longer max-age)
+        if ($request->secure()) {
+            $maxAge = app()->environment('production') ? 31536000 : 3600; // 1 year in prod, 1 hour in dev
+            $directives = ['max-age='.$maxAge, 'includeSubDomains'];
+
+            if (app()->environment('production')) {
+                $directives[] = 'preload'; // Only preload in production
+            }
+
+            $response->headers->set('Strict-Transport-Security', implode('; ', $directives));
         }
 
         // SECURITY: Remove server information disclosure headers

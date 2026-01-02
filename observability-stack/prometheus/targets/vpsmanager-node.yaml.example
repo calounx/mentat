@@ -1,0 +1,24 @@
+# VPSManager Node Exporter Targets
+# File-based service discovery for Prometheus
+# Copy this file and update with actual host IPs
+#
+# Format: Standard Prometheus file_sd_configs
+# Reference: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#file_sd_config
+
+# Example targets for landsraad_tst environment
+- targets:
+    - "10.10.100.20:9100"
+  labels:
+    host: "landsraad_tst"
+    env: "test"
+    role: "vps"
+    app: "vpsmanager"
+
+# Add more targets as VPS servers are provisioned:
+# - targets:
+#     - "10.10.100.21:9100"
+#   labels:
+#     host: "another_vps"
+#     env: "production"
+#     role: "vps"
+#     app: "vpsmanager"

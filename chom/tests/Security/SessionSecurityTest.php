@@ -11,8 +11,6 @@ use Tests\TestCase;
 
 /**
  * Test session security features
- *
- * @package Tests\Security
  */
 class SessionSecurityTest extends TestCase
 {
@@ -21,8 +19,6 @@ class SessionSecurityTest extends TestCase
 
     /**
      * Test session regeneration on login
-     *
-     * @return void
      */
     public function test_session_id_regenerates_on_login(): void
     {
@@ -31,8 +27,6 @@ class SessionSecurityTest extends TestCase
 
     /**
      * Test session has secure attributes
-     *
-     * @return void
      */
     public function test_session_cookies_have_secure_attributes(): void
     {
@@ -45,20 +39,18 @@ class SessionSecurityTest extends TestCase
 
         $cookies = $response->headers->getCookies();
         $sessionCookie = collect($cookies)->first(
-            fn($cookie) => str_contains($cookie->getName(), 'session')
+            fn ($cookie) => str_contains($cookie->getName(), 'session')
         );
 
         if ($sessionCookie) {
             $this->assertTrue($sessionCookie->isHttpOnly());
-            $this->assertTrue($sessionCookie->isSecure() || !config('app.env') === 'production');
+            $this->assertTrue($sessionCookie->isSecure() || ! config('app.env') === 'production');
             $this->assertEquals('lax', strtolower($sessionCookie->getSameSite()));
         }
     }
 
     /**
      * Test session timeout is enforced
-     *
-     * @return void
      */
     public function test_session_timeout_enforced(): void
     {
@@ -75,8 +67,6 @@ class SessionSecurityTest extends TestCase
 
     /**
      * Test concurrent session handling
-     *
-     * @return void
      */
     public function test_detects_concurrent_sessions(): void
     {

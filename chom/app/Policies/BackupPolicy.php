@@ -35,7 +35,7 @@ class BackupPolicy
      */
     public function create(User $user, Site $site): Response
     {
-        if (!$this->siteBelongsToTenant($user, $site)) {
+        if (! $this->siteBelongsToTenant($user, $site)) {
             return Response::deny('You do not have access to this site.');
         }
 
@@ -52,7 +52,7 @@ class BackupPolicy
      */
     public function restore(User $user, SiteBackup $backup): Response
     {
-        if (!$this->belongsToTenant($user, $backup)) {
+        if (! $this->belongsToTenant($user, $backup)) {
             return Response::deny('You do not have access to this backup.');
         }
 
@@ -69,7 +69,7 @@ class BackupPolicy
      */
     public function delete(User $user, SiteBackup $backup): Response
     {
-        if (!$this->belongsToTenant($user, $backup)) {
+        if (! $this->belongsToTenant($user, $backup)) {
             return Response::deny('You do not have access to this backup.');
         }
 

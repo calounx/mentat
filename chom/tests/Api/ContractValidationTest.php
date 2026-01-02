@@ -2,13 +2,14 @@
 
 namespace Tests\Api;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\Site;
-use App\Models\VpsServer;
 use App\Models\Organization;
+use App\Models\Site;
+use App\Models\Tenant;
+use App\Models\User;
+use App\Models\VpsServer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
 
 /**
  * API Contract Validation Tests
@@ -25,7 +26,10 @@ class ContractValidationTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Organization $organization;
+
+    private Tenant $tenant;
 
     protected function setUp(): void
     {
@@ -34,7 +38,12 @@ class ContractValidationTest extends TestCase
         // Create test user with organization
         $this->organization = Organization::factory()->create();
         $this->user = User::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        // Create tenant for the organization
+        $this->tenant = Tenant::factory()->create([
+            'tenant_id' => $this->tenant->id,
         ]);
 
         // Authenticate user
@@ -78,7 +87,7 @@ class ContractValidationTest extends TestCase
     {
         // Create some test sites
         Site::factory()->count(3)->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->getJson('/api/v1/sites');
@@ -114,7 +123,7 @@ class ContractValidationTest extends TestCase
     public function site_show_returns_single_resource_structure(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->getJson("/api/v1/sites/{$site->id}");
@@ -172,7 +181,7 @@ class ContractValidationTest extends TestCase
     public function site_update_returns_200_with_resource(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->putJson("/api/v1/sites/{$site->id}", [
@@ -198,7 +207,7 @@ class ContractValidationTest extends TestCase
     public function site_delete_returns_204(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->deleteJson("/api/v1/sites/{$site->id}");
@@ -314,7 +323,7 @@ class ContractValidationTest extends TestCase
     public function timestamps_are_in_iso8601_format(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->getJson("/api/v1/sites/{$site->id}");
@@ -340,7 +349,7 @@ class ContractValidationTest extends TestCase
     public function numeric_ids_are_integers(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->getJson("/api/v1/sites/{$site->id}");
@@ -371,7 +380,7 @@ class ContractValidationTest extends TestCase
     public function null_values_are_explicit_null(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
             'description' => null,
         ]);
 
@@ -390,7 +399,7 @@ class ContractValidationTest extends TestCase
     public function enum_values_match_defined_constants(): void
     {
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
             'status' => 'active',
         ]);
 
@@ -411,7 +420,7 @@ class ContractValidationTest extends TestCase
     {
         $vpsServer = VpsServer::factory()->create();
         $site = Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
             'vps_server_id' => $vpsServer->id,
         ]);
 
@@ -442,7 +451,7 @@ class ContractValidationTest extends TestCase
     public function sorting_works_consistently(): void
     {
         Site::factory()->count(3)->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         // Ascending
@@ -469,12 +478,12 @@ class ContractValidationTest extends TestCase
     public function filtering_works_consistently(): void
     {
         Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
             'status' => 'active',
         ]);
 
         Site::factory()->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
             'status' => 'inactive',
         ]);
 
@@ -495,7 +504,7 @@ class ContractValidationTest extends TestCase
     public function pagination_metadata_is_accurate(): void
     {
         Site::factory()->count(25)->create([
-            'organization_id' => $this->organization->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->getJson('/api/v1/sites?per_page=10');

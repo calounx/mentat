@@ -12,8 +12,6 @@ use Tests\TestCase;
 
 /**
  * Database query performance tests
- *
- * @package Tests\Performance
  */
 class DatabaseQueryPerformanceTest extends TestCase
 {
@@ -22,18 +20,16 @@ class DatabaseQueryPerformanceTest extends TestCase
 
     /**
      * Test dashboard loads with optimal queries
-     *
-     * @return void
      */
     public function test_dashboard_loads_within_performance_threshold(): void
     {
         $user = User::factory()->create();
-        Site::factory()->count(10)->create(['user_id' => $user->id]);
+        Site::factory()->count(10)->create(['tenant_id' => $user->currentTenant()->id]);
 
         $this->startQueryTracking();
 
         $this->assertBenchmark(
-            fn() => $this->actingAs($user)->get('/dashboard'),
+            fn () => $this->actingAs($user)->get('/dashboard'),
             'dashboard_load'
         );
 
@@ -42,23 +38,19 @@ class DatabaseQueryPerformanceTest extends TestCase
 
     /**
      * Test no N+1 queries in site listing
-     *
-     * @return void
      */
     public function test_site_listing_has_no_n1_queries(): void
     {
         $user = User::factory()->create();
 
         $this->assertNoN1Queries(
-            fn($count) => Site::factory()->count($count)->create(['user_id' => $user->id]),
-            fn($sites) => $this->actingAs($user)->get('/api/v1/sites')
+            fn ($count) => Site::factory()->count($count)->create(['tenant_id' => $user->currentTenant()->id]),
+            fn ($sites) => $this->actingAs($user)->get('/api/v1/sites')
         );
     }
 
     /**
      * Test queries use indexes
-     *
-     * @return void
      */
     public function test_site_search_uses_indexes(): void
     {

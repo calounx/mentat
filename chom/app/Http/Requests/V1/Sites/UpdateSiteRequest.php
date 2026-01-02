@@ -20,7 +20,7 @@ class UpdateSiteRequest extends FormRequest
         $tenant = $this->user()->currentTenant();
         $site = $tenant->sites()->find($this->route('id'));
 
-        if (!$site) {
+        if (! $site) {
             return false;
         }
 

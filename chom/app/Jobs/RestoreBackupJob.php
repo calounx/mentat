@@ -40,21 +40,23 @@ class RestoreBackupJob implements ShouldQueue
         $backup = $this->backup;
         $site = $backup->site;
 
-        if (!$site) {
+        if (! $site) {
             Log::error('RestoreBackupJob: No site associated with backup', [
                 'backup_id' => $backup->id,
             ]);
+
             return;
         }
 
         $vps = $site->vpsServer;
 
-        if (!$vps) {
+        if (! $vps) {
             Log::error('RestoreBackupJob: No VPS server associated with site', [
                 'backup_id' => $backup->id,
                 'site_id' => $site->id,
                 'domain' => $site->domain,
             ]);
+
             return;
         }
 

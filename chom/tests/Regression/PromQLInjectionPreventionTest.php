@@ -14,8 +14,6 @@ use Tests\TestCase;
  * Regression test for PromQL injection vulnerability
  *
  * Ensures the PromQL injection vulnerability remains fixed
- *
- * @package Tests\Regression
  */
 class PromQLInjectionPreventionTest extends TestCase
 {
@@ -24,13 +22,11 @@ class PromQLInjectionPreventionTest extends TestCase
 
     /**
      * Test PromQL injection is prevented (Regression for VULN-2024-001)
-     *
-     * @return void
      */
     public function test_promql_injection_is_sanitized(): void
     {
         $user = User::factory()->create();
-        $site = Site::factory()->create(['user_id' => $user->id]);
+        $site = Site::factory()->create(['tenant_id' => $user->currentTenant()->id]);
 
         $this->setUpObservabilityMocks();
 

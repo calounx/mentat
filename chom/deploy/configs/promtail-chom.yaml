@@ -1,0 +1,273 @@
+# ============================================================================
+# Promtail Configuration for CHOM Application
+# ============================================================================
+#
+# This configuration file is deployed automatically by the CHOM deployment
+# scripts to collect application logs and forward them to Loki.
+#
+# AUTOMATIC CONFIGURATION:
+#   The placeholder MENTAT_TST_IP is automatically replaced with the actual
+#   observability server IP during deployment.
+#
+# MANUAL INSTALLATION:
+#   1. Install Promtail: apt-get install promtail
+#   2. Copy this file to /etc/promtail/promtail.yaml
+#   3. Replace MENTAT_TST_IP with your Loki server IP
+#   4. Restart Promtail: systemctl restart promtail
+#
+# ============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  # Loki server (IP is auto-configured during deployment)
+  - url: http://MENTAT_TST_IP:3100/loki/api/v1/push
+
+    # Tenant ID for multi-tenant Loki
+    tenant_id: chom
+
+    # Batching configuration for performance
+    batchwait: 1s
+    batchsize: 1048576  # 1MB
+
+    # Retry configuration
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+    # Timeout for push requests
+    timeout: 10s
+
+scrape_configs:
+  # ============================================================================
+  # CHOM Application Logs (JSON format)
+  # ============================================================================
+  - job_name: chom-app
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          environment: production
+          instance: landsraad-tst
+          __path__: /var/www/chom/storage/logs/app.json
+
+    pipeline_stages:
+      # Parse JSON log entries
+      - json:
+          expressions:
+            level: level
+            message: message
+            context: context
+            channel: channel
+            datetime: datetime
+            extra: extra
+
+      # Extract labels from JSON
+      - labels:
+          level:
+          channel:
+
+      # Timestamp from the log entry
+      - timestamp:
+          source: datetime
+          format: RFC3339Nano
+          fallback_formats:
+            - "2006-01-02T15:04:05.999999999Z07:00"
+            - "2006-01-02 15:04:05"
+
+      # Map log levels to Loki severity
+      - match:
+          selector: '{job="chom"}'
+          stages:
+            - template:
+                source: level_label
+                template: '{{ ToLower .level }}'
+            - labels:
+                severity: level_label
+
+      # Output formatting
+      - output:
+          source: message
+
+  # ============================================================================
+  # CHOM Laravel Daily Logs (fallback, standard format)
+  # ============================================================================
+  - job_name: chom-laravel
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          log_type: laravel
+          environment: production
+          instance: landsraad-tst
+          __path__: /var/www/chom/storage/logs/laravel*.log
+
+    pipeline_stages:
+      # Match Laravel log format: [YYYY-MM-DD HH:MM:SS] environment.LEVEL: message
+      - regex:
+          expression: '^\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (?P<env>\w+)\.(?P<level>\w+): (?P<message>.*)$'
+
+      - labels:
+          level:
+
+      - timestamp:
+          source: timestamp
+          format: "2006-01-02 15:04:05"
+
+      - output:
+          source: message
+
+  # ============================================================================
+  # CHOM Performance Logs
+  # ============================================================================
+  - job_name: chom-performance
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          log_type: performance
+          environment: production
+          instance: landsraad-tst
+          __path__: /var/www/chom/storage/logs/performance*.log
+
+    pipeline_stages:
+      - regex:
+          expression: '^\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (?P<env>\w+)\.(?P<level>\w+): (?P<message>.*)$'
+
+      - labels:
+          level:
+
+      - timestamp:
+          source: timestamp
+          format: "2006-01-02 15:04:05"
+
+  # ============================================================================
+  # CHOM Security Logs (important for audit)
+  # ============================================================================
+  - job_name: chom-security
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          log_type: security
+          environment: production
+          instance: landsraad-tst
+          __path__: /var/www/chom/storage/logs/security*.log
+
+    pipeline_stages:
+      - regex:
+          expression: '^\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (?P<env>\w+)\.(?P<level>\w+): (?P<message>.*)$'
+
+      - labels:
+          level:
+
+      - timestamp:
+          source: timestamp
+          format: "2006-01-02 15:04:05"
+
+  # ============================================================================
+  # CHOM Audit Logs (compliance/legal retention)
+  # ============================================================================
+  - job_name: chom-audit
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          log_type: audit
+          environment: production
+          instance: landsraad-tst
+          __path__: /var/www/chom/storage/logs/audit*.log
+
+    pipeline_stages:
+      - regex:
+          expression: '^\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (?P<env>\w+)\.(?P<level>\w+): (?P<message>.*)$'
+
+      - labels:
+          level:
+
+      - timestamp:
+          source: timestamp
+          format: "2006-01-02 15:04:05"
+
+  # ============================================================================
+  # Nginx Access Logs (optional, if CHOM uses nginx)
+  # ============================================================================
+  - job_name: chom-nginx-access
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          log_type: nginx-access
+          environment: production
+          instance: landsraad-tst
+          __path__: /var/log/nginx/chom-access.log
+
+    pipeline_stages:
+      # Common nginx log format
+      - regex:
+          expression: '^(?P<remote_addr>[\d\.]+) - (?P<remote_user>\S+) \[(?P<time_local>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+
+      - labels:
+          status:
+
+      - timestamp:
+          source: time_local
+          format: "02/Jan/2006:15:04:05 -0700"
+
+  # ============================================================================
+  # Nginx Error Logs
+  # ============================================================================
+  - job_name: chom-nginx-error
+
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: chom
+          log_type: nginx-error
+          environment: production
+          instance: landsraad-tst
+          level: error
+          __path__: /var/log/nginx/chom-error.log
+
+# ============================================================================
+# Example Loki queries for CHOM logs:
+# ============================================================================
+#
+# All CHOM application logs:
+#   {job="chom"}
+#
+# Error logs only:
+#   {job="chom", level="error"} or {job="chom", level="ERROR"}
+#
+# Security-related logs:
+#   {job="chom", log_type="security"}
+#
+# Performance issues (slow requests):
+#   {job="chom", log_type="performance"} |= "Slow request"
+#
+# Logs from specific time range:
+#   {job="chom"} | json | line_format "{{.message}}"
+#
+# Search for specific error:
+#   {job="chom"} |= "QueryException"
+#
+# ============================================================================

@@ -65,18 +65,20 @@ class LaravelSiteProvisioner implements SiteProvisionerInterface
                 'site_id' => $site->id,
                 'domain' => $site->domain,
             ]);
+
             return false;
         }
 
         // Validate PHP version is supported (Laravel requires 8.2+)
         $supportedVersions = ['8.2', '8.4'];
-        if (!in_array($site->php_version, $supportedVersions, true)) {
+        if (! in_array($site->php_version, $supportedVersions, true)) {
             Log::warning('Laravel site has unsupported PHP version', [
                 'site_id' => $site->id,
                 'domain' => $site->domain,
                 'php_version' => $site->php_version,
                 'supported' => $supportedVersions,
             ]);
+
             return false;
         }
 
@@ -85,9 +87,6 @@ class LaravelSiteProvisioner implements SiteProvisionerInterface
 
     /**
      * Build provisioning options from site configuration.
-     *
-     * @param Site $site
-     * @return array
      */
     private function buildProvisioningOptions(Site $site): array
     {

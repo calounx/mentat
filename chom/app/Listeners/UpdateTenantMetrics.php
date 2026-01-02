@@ -18,8 +18,6 @@ use Illuminate\Support\Facades\Log;
  * - Decouple cache logic from model code
  * - Can queue the update for better performance
  * - Have a single place to manage tenant metric updates
- *
- * @package App\Listeners
  */
 class UpdateTenantMetrics implements ShouldQueue
 {
@@ -48,9 +46,6 @@ class UpdateTenantMetrics implements ShouldQueue
      * Handle site created event.
      *
      * When a new site is created, increment the tenant's cached site count.
-     *
-     * @param SiteCreated $event
-     * @return void
      */
     public function handleSiteCreated(SiteCreated $event): void
     {
@@ -72,9 +67,6 @@ class UpdateTenantMetrics implements ShouldQueue
      * Handle site deleted event.
      *
      * When a site is deleted, decrement the tenant's cached site count.
-     *
-     * @param SiteDeleted $event
-     * @return void
      */
     public function handleSiteDeleted(SiteDeleted $event): void
     {
@@ -95,9 +87,7 @@ class UpdateTenantMetrics implements ShouldQueue
     /**
      * Handle a job failure.
      *
-     * @param mixed $event
-     * @param \Throwable $exception
-     * @return void
+     * @param  mixed  $event
      */
     public function failed($event, \Throwable $exception): void
     {

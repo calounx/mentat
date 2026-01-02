@@ -22,8 +22,9 @@ class DebugAuthCommand extends Command
         // Find user
         $user = User::where('email', $email)->first();
 
-        if (!$user) {
+        if (! $user) {
             $this->components->error("User not found: {$email}");
+
             return self::FAILURE;
         }
 
@@ -94,8 +95,8 @@ class DebugAuthCommand extends Command
         if ($tokens->count() > 0) {
             $this->table(
                 ['ID', 'Name', 'Abilities', 'Last Used', 'Expires At'],
-                $tokens->map(fn($token) => [
-                    substr($token->id, 0, 8) . '...',
+                $tokens->map(fn ($token) => [
+                    substr($token->id, 0, 8).'...',
                     $token->name,
                     implode(', ', $token->abilities),
                     $token->last_used_at ?? 'Never',
@@ -110,15 +111,15 @@ class DebugAuthCommand extends Command
 
         $issues = [];
 
-        if (!$user->email_verified_at) {
+        if (! $user->email_verified_at) {
             $issues[] = 'Email not verified - user may not be able to reset password';
         }
 
-        if (!$user->organization_id) {
+        if (! $user->organization_id) {
             $issues[] = 'No organization assigned - user may not have access to resources';
         }
 
-        if ($user->requires2FA() && !$user->two_factor_enabled && !$user->isIn2FAGracePeriod()) {
+        if ($user->requires2FA() && ! $user->two_factor_enabled && ! $user->isIn2FAGracePeriod()) {
             $issues[] = '2FA is required but not enabled - user may be blocked from sensitive operations';
         }
 

@@ -24,6 +24,7 @@ Route::get('/', function () {
     if (auth()->check()) {
         return redirect()->route('dashboard');
     }
+
     return view('welcome');
 })->name('home');
 
@@ -41,6 +42,7 @@ Route::middleware('guest')->group(function () {
 
         if (auth()->attempt($credentials, request()->boolean('remember'))) {
             request()->session()->regenerate();
+
             return redirect()->intended(route('dashboard'));
         }
 
@@ -63,7 +65,7 @@ Route::middleware('guest')->group(function () {
 
         $organization = \App\Models\Organization::create([
             'name' => $validated['organization_name'],
-            'slug' => \Illuminate\Support\Str::slug($validated['organization_name']) . '-' . \Illuminate\Support\Str::random(6),
+            'slug' => \Illuminate\Support\Str::slug($validated['organization_name']).'-'.\Illuminate\Support\Str::random(6),
             'billing_email' => $validated['email'],
         ]);
 
@@ -75,24 +77,57 @@ Route::middleware('guest')->group(function () {
             'status' => 'active',
         ]);
 
+        $organization->update(['default_tenant_id' => $tenant->id]);
+
         $user = \App\Models\User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
             'organization_id' => $organization->id,
             'role' => 'owner',
+            'email_verified_at' => null,
         ]);
 
         auth()->login($user);
 
-        return redirect()->route('dashboard');
+        return redirect()->route('verification.notice');
     });
+});
+
+// Email Verification routes
+Route::middleware('auth')->group(function () {
+    Route::get('/email/verify', function () {
+        return view('auth.verify-email');
+    })->name('verification.notice');
+
+    Route::get('/email/verify/{id}/{hash}', function ($id, $hash) {
+        $user = \App\Models\User::findOrFail($id);
+
+        if (! hash_equals((string) $hash, sha1($user->email))) {
+            abort(403);
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return redirect()->route('dashboard');
+        }
+
+        $user->markEmailAsVerified();
+
+        return redirect()->route('dashboard');
+    })->name('verification.verify');
+
+    Route::post('/email/verification-notification', function () {
+        request()->user()->sendEmailVerificationNotification();
+
+        return back()->with('status', 'verification-link-sent');
+    })->name('verification.send');
 });
 
 Route::post('/logout', function () {
     auth()->logout();
     request()->session()->invalidate();
     request()->session()->regenerateToken();
+
     return redirect('/');
 })->name('logout');
 
@@ -115,4 +150,24 @@ Route::middleware('auth')->group(function () {
 
     // Team Management
     Route::get('/team', TeamManager::class)->name('team.index');
+
+    // API Tokens
+    Route::prefix('user')->name('user.')->group(function () {
+        Route::post('/api-tokens', function () {
+            $validated = request()->validate([
+                'name' => 'required|string|max:255',
+                'abilities' => 'array',
+            ]);
+
+            $token = request()->user()->createToken(
+                $validated['name'],
+                $validated['abilities'] ?? ['*']
+            );
+
+            return response()->json([
+                'token' => $token,
+                'plainTextToken' => $token->plainTextToken,
+            ]);
+        })->name('api-tokens.store');
+    });
 });

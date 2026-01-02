@@ -13,7 +13,6 @@ use App\Services\Sites\SiteCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
 /**
@@ -30,8 +29,11 @@ class EventPerformanceTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Tenant $tenant;
+
     protected VpsServer $vps;
+
     protected SiteCreationService $siteCreationService;
 
     protected function setUp(): void
@@ -40,18 +42,28 @@ class EventPerformanceTest extends TestCase
 
         // Create test data
         $this->user = User::factory()->create();
-        $this->tenant = Tenant::factory()->create(['owner_id' => $this->user->id]);
-        $this->user->tenants()->attach($this->tenant->id, ['role' => 'owner']);
+        $this->tenant = Tenant::factory()->create(['organization_id' => $this->user->organization_id]);
 
-        TierLimit::factory()->create([
-            'tier' => 'free',
-            'max_sites' => 1000, // High limit for load testing
-        ]);
+        TierLimit::firstOrCreate(
+            ['tier' => 'starter'],
+            [
+                'name' => 'Starter',
+                'max_sites' => 1000, // High limit for load testing
+                'max_storage_gb' => 10,
+                'max_bandwidth_gb' => 100,
+                'backup_retention_days' => 7,
+                'support_level' => 'email',
+                'dedicated_ip' => false,
+                'staging_environments' => false,
+                'white_label' => false,
+                'api_rate_limit_per_hour' => 100,
+                'price_monthly_cents' => 999,
+            ]
+        );
 
         $this->vps = VpsServer::factory()->create([
             'status' => 'active',
-            'max_sites' => 1000,
-            'current_sites' => 0,
+            'health_status' => 'healthy',
         ]);
 
         $this->siteCreationService = app(SiteCreationService::class);
@@ -88,9 +100,9 @@ class EventPerformanceTest extends TestCase
         // Log performance metrics
         echo "\n";
         echo "Event Dispatch Performance:\n";
-        echo "  Total time: " . round($totalTime, 2) . "ms\n";
+        echo '  Total time: '.round($totalTime, 2)."ms\n";
         echo "  Iterations: {$iterations}\n";
-        echo "  Average per event: " . round($averageTime, 3) . "ms\n";
+        echo '  Average per event: '.round($averageTime, 3)."ms\n";
         echo "  Target: <1ms\n";
         echo "\n";
 
@@ -134,9 +146,9 @@ class EventPerformanceTest extends TestCase
         echo "\n";
         echo "Queued Listener Blocking Test:\n";
         echo "  Iterations: {$iterations}\n";
-        echo "  Average time: " . round($averageTime, 2) . "ms\n";
-        echo "  Min time: " . round($minTime, 2) . "ms\n";
-        echo "  Max time: " . round($maxTime, 2) . "ms\n";
+        echo '  Average time: '.round($averageTime, 2)."ms\n";
+        echo '  Min time: '.round($minTime, 2)."ms\n";
+        echo '  Max time: '.round($maxTime, 2)."ms\n";
         echo "  Target: <100ms (non-blocking)\n";
         echo "\n";
 
@@ -173,7 +185,7 @@ class EventPerformanceTest extends TestCase
                 ]);
             } catch (\Exception $e) {
                 $errors++;
-                echo "Error creating site {$i}: " . $e->getMessage() . "\n";
+                echo "Error creating site {$i}: ".$e->getMessage()."\n";
             }
         }
 
@@ -184,10 +196,10 @@ class EventPerformanceTest extends TestCase
         echo "\n";
         echo "Load Test Results:\n";
         echo "  Total sites: {$siteCount}\n";
-        echo "  Successful: " . ($siteCount - $errors) . "\n";
+        echo '  Successful: '.($siteCount - $errors)."\n";
         echo "  Errors: {$errors}\n";
-        echo "  Total time: " . round($totalTime, 2) . "s\n";
-        echo "  Throughput: " . round($throughput, 2) . " sites/second\n";
+        echo '  Total time: '.round($totalTime, 2)."s\n";
+        echo '  Throughput: '.round($throughput, 2)." sites/second\n";
         echo "\n";
 
         // Assert no errors occurred
@@ -240,7 +252,7 @@ class EventPerformanceTest extends TestCase
 
         // Queue depth is proportional to site count (linear, not exponential)
         // This is expected behavior - each site creates 2 queued jobs
-        $this->assertTrue(true, "Queue depth should scale linearly with site creations");
+        $this->assertTrue(true, 'Queue depth should scale linearly with site creations');
     }
 
     /**
@@ -270,8 +282,8 @@ class EventPerformanceTest extends TestCase
         echo "\n";
         echo "Event Metadata Generation:\n";
         echo "  Iterations: {$iterations}\n";
-        echo "  Total time: " . round($totalTime, 2) . "ms\n";
-        echo "  Average per call: " . round($averageTime, 4) . "ms\n";
+        echo '  Total time: '.round($totalTime, 2)."ms\n";
+        echo '  Average per call: '.round($averageTime, 4)."ms\n";
         echo "  Target: <0.1ms\n";
         echo "\n";
 
@@ -307,10 +319,10 @@ class EventPerformanceTest extends TestCase
         echo "\n";
         echo "Memory Usage Analysis:\n";
         echo "  Iterations: {$iterations} events\n";
-        echo "  Memory start: " . round($memoryStart / 1024 / 1024, 2) . "MB\n";
-        echo "  Memory end: " . round($memoryEnd / 1024 / 1024, 2) . "MB\n";
-        echo "  Memory delta: " . round($memoryDelta, 2) . "MB\n";
-        echo "  Per event: " . round($memoryDelta / $iterations * 1024, 2) . "KB\n";
+        echo '  Memory start: '.round($memoryStart / 1024 / 1024, 2)."MB\n";
+        echo '  Memory end: '.round($memoryEnd / 1024 / 1024, 2)."MB\n";
+        echo '  Memory delta: '.round($memoryDelta, 2)."MB\n";
+        echo '  Per event: '.round($memoryDelta / $iterations * 1024, 2)."KB\n";
         echo "\n";
 
         // Memory increase should be reasonable (<50MB for 1000 events)
@@ -361,9 +373,9 @@ class EventPerformanceTest extends TestCase
         echo "\n";
         echo "Full Site Lifecycle Benchmark:\n";
         echo "  Cycles: {$cycles}\n";
-        echo "  Average time: " . round($averageTime, 2) . "ms\n";
-        echo "  Min time: " . round($minTime, 2) . "ms\n";
-        echo "  Max time: " . round($maxTime, 2) . "ms\n";
+        echo '  Average time: '.round($averageTime, 2)."ms\n";
+        echo '  Min time: '.round($minTime, 2)."ms\n";
+        echo '  Max time: '.round($maxTime, 2)."ms\n";
         echo "  Target: <200ms per cycle\n";
         echo "\n";
 

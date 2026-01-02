@@ -57,7 +57,7 @@ class RotateVpsCredentialsJob implements ShouldQueue
      */
     public function handle(SecretsRotationService $rotationService): void
     {
-        Log::info("VPS credentials rotation job started", [
+        Log::info('VPS credentials rotation job started', [
             'vps_id' => $this->vps->id,
             'vps_name' => $this->vps->name,
             'action' => $this->action,
@@ -67,20 +67,20 @@ class RotateVpsCredentialsJob implements ShouldQueue
             if ($this->action === 'rotate') {
                 $result = $rotationService->rotateVpsCredentials($this->vps);
 
-                Log::info("VPS credentials rotated successfully", [
+                Log::info('VPS credentials rotated successfully', [
                     'vps_id' => $this->vps->id,
                     'result' => $result,
                 ]);
             } elseif ($this->action === 'cleanup_old_key') {
                 $rotationService->cleanupOldKey($this->vps);
 
-                Log::info("Old VPS key cleaned up successfully", [
+                Log::info('Old VPS key cleaned up successfully', [
                     'vps_id' => $this->vps->id,
                 ]);
             }
 
         } catch (\Exception $e) {
-            Log::error("VPS credentials rotation job failed", [
+            Log::error('VPS credentials rotation job failed', [
                 'vps_id' => $this->vps->id,
                 'action' => $this->action,
                 'error' => $e->getMessage(),
@@ -96,7 +96,7 @@ class RotateVpsCredentialsJob implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::critical("VPS credentials rotation job failed permanently", [
+        Log::critical('VPS credentials rotation job failed permanently', [
             'vps_id' => $this->vps->id,
             'action' => $this->action,
             'error' => $exception->getMessage(),

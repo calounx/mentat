@@ -23,11 +23,6 @@ class LokiAdapter
 
     /**
      * Query Loki logs with tenant isolation.
-     *
-     * @param Tenant $tenant
-     * @param string $query
-     * @param array $options
-     * @return array
      */
     public function queryLogs(Tenant $tenant, string $query, array $options = []): array
     {
@@ -61,13 +56,6 @@ class LokiAdapter
 
     /**
      * Query logs with time range.
-     *
-     * @param Tenant $tenant
-     * @param string $query
-     * @param string $start
-     * @param string $end
-     * @param int $limit
-     * @return array
      */
     public function queryRange(
         Tenant $tenant,
@@ -85,41 +73,32 @@ class LokiAdapter
 
     /**
      * Get recent logs for a site.
-     *
-     * @param Tenant $tenant
-     * @param string $domain
-     * @param int $limit
-     * @return array
      */
     public function getSiteLogs(Tenant $tenant, string $domain, int $limit = 100): array
     {
-        $query = '{domain="' . $this->escapeLogQLString($domain) . '"}';
+        $query = '{domain="'.$this->escapeLogQLString($domain).'"}';
+
         return $this->queryLogs($tenant, $query, ['limit' => $limit]);
     }
 
     /**
      * Search logs by keyword.
-     *
-     * @param Tenant $tenant
-     * @param string $search
-     * @param array $options
-     * @return array
      */
     public function searchLogs(Tenant $tenant, string $search, array $options = []): array
     {
-        $query = '{} |~ "' . $this->escapeLogQLString($search) . '"';
+        $query = '{} |~ "'.$this->escapeLogQLString($search).'"';
+
         return $this->queryLogs($tenant, $query, $options);
     }
 
     /**
      * Check if Loki is healthy.
-     *
-     * @return bool
      */
     public function isHealthy(): bool
     {
         try {
             $response = Http::timeout(5)->get("{$this->lokiUrl}/ready");
+
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -129,9 +108,6 @@ class LokiAdapter
     /**
      * Escape a string for safe use in LogQL queries.
      * Prevents LogQL injection by escaping special characters.
-     *
-     * @param string $value
-     * @return string
      */
     private function escapeLogQLString(string $value): string
     {

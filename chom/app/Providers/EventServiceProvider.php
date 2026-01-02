@@ -14,8 +14,6 @@ use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvi
  * - Clear event→listener mapping in one place
  * - Slightly better performance (no directory scanning)
  * - Easier debugging and understanding of event flow
- *
- * @package App\Providers
  */
 class EventServiceProvider extends ServiceProvider
 {
@@ -33,27 +31,27 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         // Site Events
         \App\Events\Site\SiteCreated::class => [
-            \App\Listeners\UpdateTenantMetrics::class . '@handleSiteCreated',
+            \App\Listeners\UpdateTenantMetrics::class.'@handleSiteCreated',
             \App\Listeners\RecordAuditLog::class,
-            \App\Listeners\RecordMetrics::class . '@handleSiteCreated',
+            \App\Listeners\RecordMetrics::class.'@handleSiteCreated',
         ],
 
         \App\Events\Site\SiteProvisioned::class => [
             \App\Listeners\RecordAuditLog::class,
-            \App\Listeners\SendNotification::class . '@handleSiteProvisioned',
-            \App\Listeners\RecordMetrics::class . '@handleSiteProvisioned',
+            \App\Listeners\SendNotification::class.'@handleSiteProvisioned',
+            \App\Listeners\RecordMetrics::class.'@handleSiteProvisioned',
         ],
 
         \App\Events\Site\SiteProvisioningFailed::class => [
             \App\Listeners\RecordAuditLog::class,
-            \App\Listeners\SendNotification::class . '@handleSiteProvisioningFailed',
-            \App\Listeners\RecordMetrics::class . '@handleSiteProvisioningFailed',
+            \App\Listeners\SendNotification::class.'@handleSiteProvisioningFailed',
+            \App\Listeners\RecordMetrics::class.'@handleSiteProvisioningFailed',
         ],
 
         \App\Events\Site\SiteDeleted::class => [
-            \App\Listeners\UpdateTenantMetrics::class . '@handleSiteDeleted',
+            \App\Listeners\UpdateTenantMetrics::class.'@handleSiteDeleted',
             \App\Listeners\RecordAuditLog::class,
-            \App\Listeners\RecordMetrics::class . '@handleSiteDeleted',
+            \App\Listeners\RecordMetrics::class.'@handleSiteDeleted',
         ],
 
         // Backup Events
@@ -63,14 +61,14 @@ class EventServiceProvider extends ServiceProvider
 
         \App\Events\Backup\BackupCompleted::class => [
             \App\Listeners\RecordAuditLog::class,
-            \App\Listeners\SendNotification::class . '@handleBackupCompleted',
-            \App\Listeners\RecordMetrics::class . '@handleBackupCompleted',
+            \App\Listeners\SendNotification::class.'@handleBackupCompleted',
+            \App\Listeners\RecordMetrics::class.'@handleBackupCompleted',
         ],
 
         \App\Events\Backup\BackupFailed::class => [
             \App\Listeners\RecordAuditLog::class,
-            \App\Listeners\SendNotification::class . '@handleBackupFailed',
-            \App\Listeners\RecordMetrics::class . '@handleBackupFailed',
+            \App\Listeners\SendNotification::class.'@handleBackupFailed',
+            \App\Listeners\RecordMetrics::class.'@handleBackupFailed',
         ],
 
         // Future Events:
@@ -92,8 +90,6 @@ class EventServiceProvider extends ServiceProvider
      * Determine if events and listeners should be automatically discovered.
      *
      * We use explicit registration for better control and IDE support.
-     *
-     * @return bool
      */
     public function shouldDiscoverEvents(): bool
     {

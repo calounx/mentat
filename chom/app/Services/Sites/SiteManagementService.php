@@ -17,8 +17,6 @@ class SiteManagementService
 {
     /**
      * Create a new site management service instance.
-     *
-     * @param VpsManagerInterface $vpsManager
      */
     public function __construct(
         protected VpsManagerInterface $vpsManager
@@ -27,7 +25,7 @@ class SiteManagementService
     /**
      * Enable a site.
      *
-     * @param Site $site The site to enable
+     * @param  Site  $site  The site to enable
      * @return array{success: bool, message: string}
      */
     public function enableSite(Site $site): array
@@ -39,7 +37,7 @@ class SiteManagementService
             ];
         }
 
-        if (!$site->vpsServer) {
+        if (! $site->vpsServer) {
             return [
                 'success' => false,
                 'message' => 'Site has no associated VPS server',
@@ -90,7 +88,7 @@ class SiteManagementService
     /**
      * Disable a site.
      *
-     * @param Site $site The site to disable
+     * @param  Site  $site  The site to disable
      * @return array{success: bool, message: string}
      */
     public function disableSite(Site $site): array
@@ -102,7 +100,7 @@ class SiteManagementService
             ];
         }
 
-        if (!$site->vpsServer) {
+        if (! $site->vpsServer) {
             return [
                 'success' => false,
                 'message' => 'Site has no associated VPS server',
@@ -153,8 +151,8 @@ class SiteManagementService
     /**
      * Update site settings.
      *
-     * @param Site $site The site to update
-     * @param array<string, mixed> $data Update data
+     * @param  Site  $site  The site to update
+     * @param  array<string, mixed>  $data  Update data
      * @return Site Updated site
      */
     public function updateSite(Site $site, array $data): Site
@@ -170,7 +168,7 @@ class SiteManagementService
             }
         }
 
-        if (!empty($updateData)) {
+        if (! empty($updateData)) {
             $site->update($updateData);
 
             Log::info('Site updated', [
@@ -187,8 +185,8 @@ class SiteManagementService
      *
      * This performs both VPS cleanup and database soft delete.
      *
-     * @param Site $site The site to delete
-     * @param bool $force Force deletion even if VPS cleanup fails
+     * @param  Site  $site  The site to delete
+     * @param  bool  $force  Force deletion even if VPS cleanup fails
      * @return array{success: bool, message: string}
      */
     public function deleteSite(Site $site, bool $force = false): array
@@ -202,7 +200,7 @@ class SiteManagementService
                     force: true
                 );
 
-                if (!$result['success'] && !$force) {
+                if (! $result['success'] && ! $force) {
                     Log::warning('VPS site deletion failed', [
                         'site_id' => $site->id,
                         'domain' => $site->domain,
@@ -245,12 +243,12 @@ class SiteManagementService
     /**
      * Issue SSL certificate for a site.
      *
-     * @param Site $site The site
+     * @param  Site  $site  The site
      * @return array{success: bool, message: string}
      */
     public function issueSSL(Site $site): array
     {
-        if (!$site->vpsServer) {
+        if (! $site->vpsServer) {
             return [
                 'success' => false,
                 'message' => 'Site has no associated VPS server',
@@ -287,7 +285,7 @@ class SiteManagementService
     /**
      * Get site health status.
      *
-     * @param Site $site The site
+     * @param  Site  $site  The site
      * @return array{healthy: bool, issues: array<string>}
      */
     public function getSiteHealth(Site $site): array
@@ -295,7 +293,7 @@ class SiteManagementService
         $issues = [];
 
         // Check VPS availability
-        if (!$site->vpsServer || !$site->vpsServer->isAvailable()) {
+        if (! $site->vpsServer || ! $site->vpsServer->isAvailable()) {
             $issues[] = 'VPS server is not available';
         }
 

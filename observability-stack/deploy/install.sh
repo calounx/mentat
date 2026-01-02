@@ -45,19 +45,19 @@ select_role() {
     echo "${CYAN}===============================================================${NC}"
     echo
     echo "  1) ${GREEN}Observability VPS${NC}"
-    echo "     - Prometheus, Loki, Tempo, Grafana, Alertmanager"
+    echo "     - Prometheus, Loki, Tempo, Grafana, Alertmanager, Alloy"
     echo "     - Central monitoring for all your servers"
     echo "     - Recommended: 1-2 vCPU, 2GB RAM, 20GB disk"
     echo
     echo "  2) ${BLUE}VPSManager${NC} (Laravel Application)"
     echo "     - Full LEMP stack: Nginx, PHP-FPM, MariaDB, Redis"
     echo "     - Laravel application deployment"
-    echo "     - All monitoring exporters + Promtail"
+    echo "     - Alloy + all monitoring exporters"
     echo "     - Recommended: 2+ vCPU, 4GB RAM, 40GB disk"
     echo
     echo "  3) ${YELLOW}Monitored Host${NC} (Exporters only)"
     echo "     - For existing servers with apps already installed"
-    echo "     - Node exporter, Promtail, service exporters"
+    echo "     - Alloy (telemetry collector), Node exporter, service exporters"
     echo
     echo "  4) ${RED}Exit${NC}"
     echo
@@ -378,7 +378,11 @@ collect_monitored_config() {
 detect_services() {
     DETECTED_SERVICES=()
 
-    # Always include node_exporter
+    # Always include Alloy as primary telemetry collector
+    DETECTED_SERVICES+=("alloy")
+    log_info "  Will install: Alloy (telemetry collector for metrics, logs, traces)"
+
+    # Always include node_exporter for host metrics
     DETECTED_SERVICES+=("node_exporter")
 
     # Nginx
@@ -405,11 +409,8 @@ detect_services() {
         log_info "  Detected: Fail2ban"
     fi
 
-    # Always include promtail for logs
-    DETECTED_SERVICES+=("promtail")
-
     if [[ ${#DETECTED_SERVICES[@]} -eq 2 ]]; then
-        log_info "  No additional services detected (will install node_exporter + promtail)"
+        log_info "  No additional services detected (will install alloy + node_exporter)"
     fi
 }
 
@@ -498,11 +499,13 @@ show_observability_summary() {
     echo "  Email Alerts:      ${CONFIGURE_SMTP}"
     echo
     echo "  Components:"
-    echo "    - Prometheus (metrics)"
-    echo "    - Loki (logs)"
-    echo "    - Tempo (traces)"
+    echo "    - Prometheus (metrics storage)"
+    echo "    - Loki (logs storage)"
+    echo "    - Tempo (traces storage)"
     echo "    - Grafana (visualization)"
     echo "    - Alertmanager (alerts)"
+    echo "    - Alloy (telemetry collector)"
+    echo "    - Node Exporter (host metrics)"
     echo
 }
 
@@ -538,11 +541,11 @@ show_vpsmanager_summary() {
     echo "    - Let's Encrypt SSL"
     echo
     echo "  Monitoring:"
+    echo "    - Alloy (telemetry collector)"
     echo "    - node_exporter"
     echo "    - nginx_exporter"
     echo "    - mysqld_exporter"
     echo "    - phpfpm_exporter"
-    echo "    - promtail (logs)"
     echo
 }
 
@@ -630,11 +633,13 @@ show_completion() {
             echo "    - Loki:          http://localhost:3100"
             echo "    - Tempo:         http://localhost:3200"
             echo "    - Alertmanager:  http://localhost:9093"
+            echo "    - Alloy:         http://localhost:12345"
             echo
             echo "  Next Steps:"
             echo "    1. Access Grafana and change the admin password"
             echo "    2. Run the installer on VPSManager VPS (option 2)"
             echo "    3. Import dashboards from grafana/dashboards/library/"
+            echo "    4. Verify Alloy health: curl http://localhost:12345/-/ready"
             ;;
 
         vpsmanager)

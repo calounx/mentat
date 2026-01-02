@@ -40,7 +40,7 @@ class ProvisionSiteJob implements ShouldQueue
         $site = $this->site;
         $vps = $site->vpsServer;
 
-        if (!$vps) {
+        if (! $vps) {
             Log::error('ProvisionSiteJob: No VPS server associated with site', [
                 'site_id' => $site->id,
                 'domain' => $site->domain,
@@ -71,7 +71,7 @@ class ProvisionSiteJob implements ShouldQueue
             $provisioner = $provisionerFactory->make($site->site_type);
 
             // Validate site configuration
-            if (!$provisioner->validate($site)) {
+            if (! $provisioner->validate($site)) {
                 throw new \InvalidArgumentException(
                     "Site configuration is invalid for type: {$site->site_type}"
                 );

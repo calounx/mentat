@@ -2,18 +2,23 @@
 
 namespace App\Services\Integration;
 
+use App\Contracts\ObservabilityInterface;
+use App\Models\Site;
 use App\Models\Tenant;
 use App\Models\VpsServer;
 use GuzzleHttp\Promise;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 
-class ObservabilityAdapter
+class ObservabilityAdapter implements ObservabilityInterface
 {
     private string $prometheusUrl;
+
     private string $lokiUrl;
+
     private string $grafanaUrl;
+
     private ?string $grafanaApiKey;
 
     public function __construct()
@@ -97,9 +102,9 @@ class ObservabilityAdapter
      * Execute multiple Prometheus queries in parallel for better performance.
      * Reduces dashboard load time by 50-70%.
      *
-     * @param Tenant $tenant Tenant for scoping queries
-     * @param array $queries Associative array of query name => query string
-     * @param array $options Optional parameters (start, end, step)
+     * @param  Tenant  $tenant  Tenant for scoping queries
+     * @param  array  $queries  Associative array of query name => query string
+     * @param  array  $options  Optional parameters (start, end, step)
      * @return array Associative array of results keyed by query name
      */
     public function queryMetricsParallel(Tenant $tenant, array $queries, array $options = []): array
@@ -161,7 +166,7 @@ class ObservabilityAdapter
         try {
             $response = Http::timeout(15)->get("{$this->prometheusUrl}/api/v1/alerts");
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [];
             }
 
@@ -173,6 +178,7 @@ class ObservabilityAdapter
             });
         } catch (\Exception $e) {
             Log::error('Failed to fetch alerts', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
@@ -243,6 +249,7 @@ class ObservabilityAdapter
         if ($result && isset($result['value'][1])) {
             return round((float) $result['value'][1], 2);
         }
+
         return null;
     }
 
@@ -259,7 +266,7 @@ class ObservabilityAdapter
         // This is a simplified approach - production would need proper PromQL parsing
         return preg_replace(
             '/(\w+)\{/',
-            '$1{tenant_id="' . $escapedTenantId . '",',
+            '$1{tenant_id="'.$escapedTenantId.'",',
             $query
         );
     }
@@ -302,20 +309,12 @@ class ObservabilityAdapter
     }
 
     /**
-     * Get recent logs for a site.
-     */
-    public function getSiteLogs(Tenant $tenant, string $domain, int $limit = 100): array
-    {
-        $query = '{domain="' . $this->escapeLogQLString($domain) . '"}';
-        return $this->queryLogs($tenant, $query, ['limit' => $limit]);
-    }
-
-    /**
      * Search logs by keyword.
      */
     public function searchLogs(Tenant $tenant, string $search, array $options = []): array
     {
-        $query = '{} |~ "' . $this->escapeLogQLString($search) . '"';
+        $query = '{} |~ "'.$this->escapeLogQLString($search).'"';
+
         return $this->queryLogs($tenant, $query, $options);
     }
 
@@ -354,6 +353,7 @@ class ObservabilityAdapter
             return $response->json();
         } catch (\Exception $e) {
             Log::error('Failed to fetch Grafana dashboards', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
@@ -374,7 +374,7 @@ class ObservabilityAdapter
         $headers = ['Accept' => 'application/json'];
 
         if ($this->grafanaApiKey) {
-            $headers['Authorization'] = 'Bearer ' . $this->grafanaApiKey;
+            $headers['Authorization'] = 'Bearer '.$this->grafanaApiKey;
         }
 
         return $headers;
@@ -445,6 +445,7 @@ class ObservabilityAdapter
     {
         try {
             $response = Http::timeout(5)->get("{$this->prometheusUrl}/-/healthy");
+
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -458,6 +459,7 @@ class ObservabilityAdapter
     {
         try {
             $response = Http::timeout(5)->get("{$this->lokiUrl}/ready");
+
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -471,6 +473,7 @@ class ObservabilityAdapter
     {
         try {
             $response = Http::timeout(5)->get("{$this->grafanaUrl}/api/health");
+
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -523,5 +526,139 @@ class ObservabilityAdapter
 
         // Convert to GB
         return round($bytes / (1024 * 1024 * 1024), 2);
+    }
+
+    // =========================================================================
+    // OBSERVABILITY INTERFACE IMPLEMENTATION
+    // =========================================================================
+
+    /**
+     * Increment a Prometheus counter.
+     */
+    public function incrementCounter(string $metricName, float $value, array $tags = []): void
+    {
+        // In production, this would push to Prometheus Pushgateway
+        // For now, we log the metric
+        Log::debug("Counter incremented: {$metricName}", [
+            'value' => $value,
+            'tags' => $tags,
+        ]);
+    }
+
+    /**
+     * Record a histogram value.
+     */
+    public function recordHistogram(string $metricName, float $value, array $tags = []): void
+    {
+        // In production, this would push to Prometheus Pushgateway
+        // For now, we log the metric
+        Log::debug("Histogram recorded: {$metricName}", [
+            'value' => $value,
+            'tags' => $tags,
+        ]);
+    }
+
+    /**
+     * Send a custom metric.
+     */
+    public function sendMetric(string $metricName, float $value, array $tags = []): void
+    {
+        $this->incrementCounter($metricName, $value, $tags);
+    }
+
+    /**
+     * Get site performance metrics.
+     */
+    public function getSiteMetrics(Site $site, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        $escapedDomain = $this->escapePromQLLabelValue($site->domain);
+        $start = $from->getTimestamp();
+        $end = $to->getTimestamp();
+
+        $queries = [
+            'requests_per_minute' => "rate(http_requests_total{domain=\"{$escapedDomain}\"}[5m]) * 60",
+            'response_time_ms' => "histogram_quantile(0.95, http_request_duration_seconds{domain=\"{$escapedDomain}\"})",
+            'error_rate' => "rate(http_requests_total{domain=\"{$escapedDomain}\",status=~\"5..\"}[5m])",
+        ];
+
+        $results = [];
+        foreach ($queries as $key => $query) {
+            $response = $this->queryMetricsDirect($query);
+            $results[$key] = $this->extractValue($response);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Get VPS server metrics.
+     */
+    public function getVpsMetrics(VpsServer $vps, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->getVpsSummary($vps);
+    }
+
+    /**
+     * Get recent logs for a site.
+     */
+    public function getSiteLogs(Site $site, int $limit = 100, ?string $level = null): array
+    {
+        $tenant = $site->tenant;
+        if (! $tenant) {
+            return [];
+        }
+
+        $query = '{domain="'.$this->escapeLogQLString($site->domain).'"}';
+        if ($level) {
+            $query .= ' | level="'.$this->escapeLogQLString($level).'"';
+        }
+
+        $response = $this->queryLogs($tenant, $query, ['limit' => $limit]);
+
+        // Parse Loki response into expected format
+        $logs = [];
+        $streams = $response['data']['result'] ?? [];
+        foreach ($streams as $stream) {
+            foreach ($stream['values'] ?? [] as $entry) {
+                $logs[] = [
+                    'timestamp' => date('Y-m-d H:i:s', (int) ($entry[0] / 1000000000)),
+                    'level' => $level ?? 'info',
+                    'message' => $entry[1],
+                ];
+            }
+        }
+
+        return array_slice($logs, 0, $limit);
+    }
+
+    /**
+     * Log an event for audit purposes.
+     */
+    public function logEvent(string $eventType, string $entityType, string $entityId, array $metadata = []): void
+    {
+        Log::info("Observability event: {$eventType}", [
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * Create an alert/notification.
+     */
+    public function createAlert(string $severity, string $title, string $message, array $context = []): void
+    {
+        Log::channel('alerts')->log($severity, $title, [
+            'message' => $message,
+            'context' => $context,
+        ]);
+    }
+
+    /**
+     * Check if observability is configured and working.
+     */
+    public function isConfigured(): bool
+    {
+        return $this->isPrometheusHealthy() || $this->isLokiHealthy();
     }
 }

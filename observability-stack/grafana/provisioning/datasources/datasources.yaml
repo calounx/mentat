@@ -1,4 +1,5 @@
 # Grafana Datasources - Auto-provisioned
+# Production configuration for the full observability stack
 apiVersion: 1
 
 # Delete existing datasources to allow re-provisioning with correct UIDs
@@ -7,11 +8,13 @@ deleteDatasources:
     orgId: 1
   - name: Loki
     orgId: 1
+  - name: Tempo
+    orgId: 1
   - name: Alertmanager
     orgId: 1
 
 datasources:
-  # Prometheus - Metrics
+  # Prometheus - Metrics (default datasource)
   - name: Prometheus
     type: prometheus
     uid: prometheus
@@ -22,8 +25,12 @@ datasources:
     jsonData:
       timeInterval: "15s"
       httpMethod: POST
+      # Enable exemplars for trace correlation
+      exemplarTraceIdDestinations:
+        - name: traceID
+          datasourceUid: tempo
 
-  # Loki - Logs
+  # Loki - Logs with trace correlation
   - name: Loki
     type: loki
     uid: loki
@@ -32,8 +39,46 @@ datasources:
     editable: false
     jsonData:
       maxLines: 1000
+      # Derive trace IDs from log lines for Tempo correlation
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: "(?:trace_id|traceID|TraceId)[=:]\\s*([a-fA-F0-9]+)"
+          name: TraceID
+          url: "${__value.raw}"
 
-  # Alertmanager
+  # Tempo - Distributed Tracing
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://localhost:3200
+    editable: false
+    jsonData:
+      httpMethod: GET
+      # Link to Loki for logs-to-traces correlation
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ['host', 'job', 'service.name']
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: true
+        filterBySpanID: false
+      # Link to Prometheus for metrics correlation
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: service.name
+            value: job
+      # Search configuration
+      nodeGraph:
+        enabled: true
+      # Tempo native search is enabled by default
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+
+  # Alertmanager - Alert management
   - name: Alertmanager
     type: alertmanager
     uid: alertmanager
@@ -42,3 +87,4 @@ datasources:
     editable: false
     jsonData:
       implementation: prometheus
+      handleGrafanaManagedAlerts: true

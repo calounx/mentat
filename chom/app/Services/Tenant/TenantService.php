@@ -18,8 +18,7 @@ class TenantService
     /**
      * Create a new tenant.
      *
-     * @param array<string, mixed> $data Tenant data
-     * @return Tenant
+     * @param  array<string, mixed>  $data  Tenant data
      */
     public function createTenant(array $data): Tenant
     {
@@ -47,9 +46,7 @@ class TenantService
     /**
      * Update tenant settings.
      *
-     * @param Tenant $tenant
-     * @param array<string, mixed> $data
-     * @return Tenant
+     * @param  array<string, mixed>  $data
      */
     public function updateTenant(Tenant $tenant, array $data): Tenant
     {
@@ -62,7 +59,7 @@ class TenantService
             }
         }
 
-        if (!empty($updateData)) {
+        if (! empty($updateData)) {
             $tenant->update($updateData);
 
             Log::info('Tenant updated', [
@@ -77,7 +74,6 @@ class TenantService
     /**
      * Activate a tenant.
      *
-     * @param Tenant $tenant
      * @return array{success: bool, message: string}
      */
     public function activateTenant(Tenant $tenant): array
@@ -106,8 +102,6 @@ class TenantService
      *
      * This will prevent the tenant from creating new resources.
      *
-     * @param Tenant $tenant
-     * @param string|null $reason
      * @return array{success: bool, message: string}
      */
     public function suspendTenant(Tenant $tenant, ?string $reason = null): array
@@ -135,7 +129,6 @@ class TenantService
     /**
      * Get tenant usage metrics.
      *
-     * @param Tenant $tenant
      * @return array{sites: array, storage: array, backups: array}
      */
     public function getTenantMetrics(Tenant $tenant): array
@@ -159,9 +152,6 @@ class TenantService
 
     /**
      * Get tenant resource summary.
-     *
-     * @param Tenant $tenant
-     * @return array
      */
     public function getResourceSummary(Tenant $tenant): array
     {
@@ -183,7 +173,7 @@ class TenantService
             ],
             'vps' => [
                 'allocated_count' => $vpsAllocations->count(),
-                'servers' => $vpsAllocations->map(fn($alloc) => [
+                'servers' => $vpsAllocations->map(fn ($alloc) => [
                     'id' => $alloc->vpsServer->id,
                     'hostname' => $alloc->vpsServer->hostname,
                     'site_count' => $alloc->vpsServer->sites()->where('tenant_id', $tenant->id)->count(),
@@ -195,7 +185,6 @@ class TenantService
     /**
      * Validate tenant can be deleted.
      *
-     * @param Tenant $tenant
      * @return array{can_delete: bool, blockers: array<string>}
      */
     public function canDelete(Tenant $tenant): array
@@ -214,9 +203,6 @@ class TenantService
 
     /**
      * Get tenant from user context.
-     *
-     * @param User $user
-     * @return Tenant|null
      */
     public function getTenantForUser(User $user): ?Tenant
     {
@@ -226,12 +212,11 @@ class TenantService
     /**
      * Validate tenant is active.
      *
-     * @param Tenant $tenant
      * @throws \RuntimeException
      */
     public function ensureActive(Tenant $tenant): void
     {
-        if (!$tenant->isActive()) {
+        if (! $tenant->isActive()) {
             throw new \RuntimeException('Tenant is not active');
         }
     }

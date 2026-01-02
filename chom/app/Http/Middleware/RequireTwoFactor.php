@@ -60,7 +60,7 @@ class RequireTwoFactor
         $user = $request->user();
 
         // Skip if no authenticated user
-        if (!$user) {
+        if (! $user) {
             return $next($request);
         }
 
@@ -70,19 +70,20 @@ class RequireTwoFactor
         }
 
         // Check if 2FA is required for this user's role
-        if (!$user->requires2FA()) {
+        if (! $user->requires2FA()) {
             return $next($request);
         }
 
         // SECURITY CHECK 1: Is 2FA enabled?
-        if (!$user->two_factor_enabled) {
+        if (! $user->two_factor_enabled) {
             // Check if user is within grace period
             if ($user->isIn2FAGracePeriod()) {
                 // Within grace period - allow access but warn user
                 $gracePeriodDays = config('auth.two_factor_authentication.grace_period_days', 7);
+
                 return $next($request)->header(
                     'X-2FA-Required-Soon',
-                    'Two-factor authentication will be required after ' .
+                    'Two-factor authentication will be required after '.
                     $user->created_at->addDays($gracePeriodDays)->toIso8601String()
                 );
             }
@@ -100,7 +101,7 @@ class RequireTwoFactor
         }
 
         // SECURITY CHECK 2: Is 2FA verified in this session?
-        if (!$request->session()->get('2fa_verified', false)) {
+        if (! $request->session()->get('2fa_verified', false)) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -140,7 +141,7 @@ class RequireTwoFactor
     {
         $routeName = $request->route()?->getName();
 
-        if (!$routeName) {
+        if (! $routeName) {
             return false;
         }
 
@@ -153,7 +154,7 @@ class RequireTwoFactor
         foreach ($this->except as $pattern) {
             if (str_contains($pattern, '*')) {
                 $pattern = str_replace('*', '.*', $pattern);
-                if (preg_match('/^' . $pattern . '$/', $routeName)) {
+                if (preg_match('/^'.$pattern.'$/', $routeName)) {
                     return true;
                 }
             }

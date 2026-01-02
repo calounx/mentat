@@ -17,7 +17,6 @@ final class Domain
     /**
      * Create a new Domain value object.
      *
-     * @param string $value
      * @throws InvalidArgumentException
      */
     private function __construct(string $value)
@@ -29,8 +28,6 @@ final class Domain
     /**
      * Create domain from string.
      *
-     * @param string $value
-     * @return self
      * @throws InvalidArgumentException
      */
     public static function fromString(string $value): self
@@ -40,8 +37,6 @@ final class Domain
 
     /**
      * Get the domain as a string.
-     *
-     * @return string
      */
     public function toString(): string
     {
@@ -50,8 +45,6 @@ final class Domain
 
     /**
      * Get the domain as a string (magic method).
-     *
-     * @return string
      */
     public function __toString(): string
     {
@@ -60,31 +53,27 @@ final class Domain
 
     /**
      * Get the top-level domain (TLD).
-     *
-     * @return string
      */
     public function getTld(): string
     {
         $parts = explode('.', $this->value);
+
         return end($parts);
     }
 
     /**
      * Get the domain without the TLD.
-     *
-     * @return string
      */
     public function getWithoutTld(): string
     {
         $parts = explode('.', $this->value);
         array_pop($parts);
+
         return implode('.', $parts);
     }
 
     /**
      * Get subdomain (if any).
-     *
-     * @return string|null
      */
     public function getSubdomain(): ?string
     {
@@ -92,15 +81,15 @@ final class Domain
         if (count($parts) > 2) {
             array_pop($parts); // Remove TLD
             array_pop($parts); // Remove domain
+
             return implode('.', $parts);
         }
+
         return null;
     }
 
     /**
      * Check if this is a subdomain.
-     *
-     * @return bool
      */
     public function isSubdomain(): bool
     {
@@ -109,9 +98,6 @@ final class Domain
 
     /**
      * Check if domain equals another domain.
-     *
-     * @param Domain $other
-     * @return bool
      */
     public function equals(Domain $other): bool
     {
@@ -121,7 +107,6 @@ final class Domain
     /**
      * Validate domain format.
      *
-     * @param string $value
      * @throws InvalidArgumentException
      */
     private function validate(string $value): void
@@ -135,10 +120,14 @@ final class Domain
             throw new InvalidArgumentException('Domain name too short (min 3 characters)');
         }
 
-        // Check format using regex
-        $pattern = '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/i';
-        if (!preg_match($pattern, $value)) {
-            throw new InvalidArgumentException('Invalid domain format: ' . $value);
+        // Check for localhost or reserved domains BEFORE format validation
+        $reserved = ['localhost', 'localhost.localdomain', 'test', 'invalid', 'example'];
+        $lowerValue = strtolower($value);
+
+        foreach ($reserved as $reservedDomain) {
+            if (str_contains($lowerValue, $reservedDomain)) {
+                throw new InvalidArgumentException('Reserved domain name: '.$value);
+            }
         }
 
         // Check for SQL injection patterns
@@ -146,7 +135,7 @@ final class Domain
             "/'--/i",
             "/'#/i",
             "/'\/\*/i",
-            "/;/",
+            '/;/',
             "/\bor\b.*=/i",
             "/\band\b.*=/i",
             "/\bunion\b/i",
@@ -159,31 +148,25 @@ final class Domain
 
         foreach ($suspiciousPatterns as $pattern) {
             if (preg_match($pattern, $value)) {
-                throw new InvalidArgumentException('Domain contains suspicious characters or patterns');
+                throw new InvalidArgumentException('Invalid domain format: '.$value);
             }
         }
 
-        // Check for localhost or reserved domains
-        $reserved = ['localhost', 'localhost.localdomain', 'test', 'invalid', 'example'];
-        $lowerValue = strtolower($value);
-
-        foreach ($reserved as $reservedDomain) {
-            if (str_contains($lowerValue, $reservedDomain)) {
-                throw new InvalidArgumentException('Reserved domain name: ' . $value);
-            }
+        // Check format using regex
+        $pattern = '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/i';
+        if (! preg_match($pattern, $value)) {
+            throw new InvalidArgumentException('Invalid domain format: '.$value);
         }
     }
 
     /**
      * Check if domain passes basic validation without throwing exception.
-     *
-     * @param string $value
-     * @return bool
      */
     public static function isValid(string $value): bool
     {
         try {
             new self($value);
+
             return true;
         } catch (InvalidArgumentException $e) {
             return false;
@@ -192,8 +175,6 @@ final class Domain
 
     /**
      * Serialize for JSON.
-     *
-     * @return string
      */
     public function jsonSerialize(): string
     {

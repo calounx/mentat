@@ -109,7 +109,7 @@ class TierLimit extends Model
      */
     public function getFormattedMonthlyPrice(): string
     {
-        return '$' . number_format($this->getPriceMonthlyInDollars(), 2);
+        return '$'.number_format($this->getPriceMonthlyInDollars(), 2);
     }
 
     /**
@@ -130,8 +130,7 @@ class TierLimit extends Model
      * Get cached tier limits for a specific tier.
      * Caches for 1 hour to reduce database queries.
      *
-     * @param string $tier The tier name (starter, pro, enterprise)
-     * @return TierLimit|null
+     * @param  string  $tier  The tier name (starter, pro, enterprise)
      */
     public static function getCached(string $tier): ?TierLimit
     {
@@ -145,12 +144,10 @@ class TierLimit extends Model
     /**
      * Get all cached tier limits.
      * Caches for 1 hour to reduce database queries.
-     *
-     * @return \Illuminate\Support\Collection
      */
     public static function getAllCached(): \Illuminate\Support\Collection
     {
-        $cacheKey = "tier_limits:all";
+        $cacheKey = 'tier_limits:all';
 
         return Cache::remember($cacheKey, 3600, function () {
             return static::all();
@@ -160,13 +157,11 @@ class TierLimit extends Model
     /**
      * Invalidate cache for a specific tier.
      * Call this when tier limits are updated.
-     *
-     * @param string $tier
      */
     public static function invalidateCache(string $tier): void
     {
         Cache::forget("tier_limit:{$tier}");
-        Cache::forget("tier_limits:all");
+        Cache::forget('tier_limits:all');
     }
 
     /**

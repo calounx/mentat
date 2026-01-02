@@ -4,15 +4,15 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PragmaRX\Google2FA\Google2FA;
-use BaconQrCode\Renderer\ImageRenderer;
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
-use BaconQrCode\Renderer\RendererStyle\RendererStyle;
-use BaconQrCode\Writer;
 
 /**
  * SECURITY: Two-Factor Authentication Management
@@ -38,7 +38,7 @@ class TwoFactorController extends Controller
 
     public function __construct()
     {
-        $this->google2fa = new Google2FA();
+        $this->google2fa = new Google2FA;
     }
 
     /**
@@ -56,7 +56,7 @@ class TwoFactorController extends Controller
         $user = $request->user();
 
         // SECURITY: Prevent 2FA reset without password confirmation
-        if ($user->two_factor_enabled && !$user->hasRecentPasswordConfirmation()) {
+        if ($user->two_factor_enabled && ! $user->hasRecentPasswordConfirmation()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -129,7 +129,7 @@ class TwoFactorController extends Controller
         // Retrieve temporary secret from session
         $secret = $request->session()->get('2fa_setup_secret');
 
-        if (!$secret) {
+        if (! $secret) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -143,7 +143,7 @@ class TwoFactorController extends Controller
         // Window of 1 = accept codes from 1 period before/after (30 sec tolerance)
         $valid = $this->google2fa->verifyKey($secret, $code, 1);
 
-        if (!$valid) {
+        if (! $valid) {
             // AUDIT: Log failed verification attempt
             AuditLog::log(
                 'user.2fa_setup_failed',
@@ -161,7 +161,7 @@ class TwoFactorController extends Controller
 
         // Generate backup codes (8 codes, 10 characters each)
         $backupCodes = $this->generateBackupCodes();
-        $hashedBackupCodes = array_map(fn($code) => Hash::make($code), $backupCodes);
+        $hashedBackupCodes = array_map(fn ($code) => Hash::make($code), $backupCodes);
 
         // SECURITY: Save 2FA configuration to database (encrypted)
         $user->update([
@@ -220,7 +220,7 @@ class TwoFactorController extends Controller
         $user = $request->user();
         $code = $request->input('code');
 
-        if (!$user->two_factor_enabled) {
+        if (! $user->two_factor_enabled) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -300,7 +300,7 @@ class TwoFactorController extends Controller
         $user = $request->user();
 
         // SECURITY: Require password confirmation for sensitive operation
-        if (!$user->hasRecentPasswordConfirmation()) {
+        if (! $user->hasRecentPasswordConfirmation()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -310,7 +310,7 @@ class TwoFactorController extends Controller
             ], 403);
         }
 
-        if (!$user->two_factor_enabled) {
+        if (! $user->two_factor_enabled) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -322,7 +322,7 @@ class TwoFactorController extends Controller
 
         // Generate new backup codes
         $backupCodes = $this->generateBackupCodes();
-        $hashedBackupCodes = array_map(fn($code) => Hash::make($code), $backupCodes);
+        $hashedBackupCodes = array_map(fn ($code) => Hash::make($code), $backupCodes);
 
         $user->update(['two_factor_backup_codes' => $hashedBackupCodes]);
 
@@ -361,7 +361,7 @@ class TwoFactorController extends Controller
         $user = $request->user();
 
         // SECURITY: Require password confirmation
-        if (!$user->hasRecentPasswordConfirmation()) {
+        if (! $user->hasRecentPasswordConfirmation()) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -465,7 +465,7 @@ class TwoFactorController extends Controller
         if ($method === 'backup' && $backupCodesRemaining !== null) {
             $response['data']['backup_codes_remaining'] = $backupCodesRemaining;
             if ($backupCodesRemaining <= 2) {
-                $response['data']['warning'] = 'You have only ' . $backupCodesRemaining . ' backup codes remaining. Consider regenerating them.';
+                $response['data']['warning'] = 'You have only '.$backupCodesRemaining.' backup codes remaining. Consider regenerating them.';
             }
         }
 
@@ -482,6 +482,7 @@ class TwoFactorController extends Controller
             // Generate 10-character alphanumeric code (excluding ambiguous characters)
             $codes[] = strtoupper(Str::random(10));
         }
+
         return $codes;
     }
 
@@ -492,10 +493,11 @@ class TwoFactorController extends Controller
     {
         $renderer = new ImageRenderer(
             new RendererStyle(200),
-            new SvgImageBackEnd()
+            new SvgImageBackEnd
         );
 
         $writer = new Writer($renderer);
+
         return $writer->writeString($url);
     }
 }

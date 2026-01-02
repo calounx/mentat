@@ -119,6 +119,7 @@ class Tenant extends Model
         if ($maxSites === -1) {
             return true; // Unlimited
         }
+
         return $this->sites()->count() < $maxSites;
     }
 
@@ -170,8 +171,6 @@ class Tenant extends Model
      * Called automatically when:
      * - Sites are created, updated, or deleted (via model events)
      * - Cache is older than 5 minutes (staleness check)
-     *
-     * @return void
      */
     public function updateCachedStats(): void
     {
@@ -195,6 +194,6 @@ class Tenant extends Model
     private function isCacheStale(): bool
     {
         // Cache is stale if it doesn't exist or is older than 5 minutes
-        return !$this->cached_at || $this->cached_at->diffInMinutes(now()) > 5;
+        return ! $this->cached_at || $this->cached_at->diffInMinutes(now()) > 5;
     }
 }

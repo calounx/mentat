@@ -19,7 +19,7 @@ class CreateBackupRequest extends FormRequest
     {
         $tenant = $this->user()->currentTenant();
 
-        if (!$tenant || !$tenant->isActive()) {
+        if (! $tenant || ! $tenant->isActive()) {
             return false;
         }
 
@@ -27,7 +27,7 @@ class CreateBackupRequest extends FormRequest
         $siteId = $this->input('site_id');
         if ($siteId) {
             $site = $tenant->sites()->find($siteId);
-            if (!$site) {
+            if (! $site) {
                 return false;
             }
 
@@ -112,7 +112,7 @@ class CreateBackupRequest extends FormRequest
     public function site()
     {
         $tenant = $this->tenant();
-        if (!$tenant) {
+        if (! $tenant) {
             return null;
         }
 

@@ -1,0 +1,11 @@
+# VPSManager MySQL Exporter Targets
+# File-based service discovery for Prometheus
+
+# Example targets for landsraad_tst environment
+- targets:
+    - "10.10.100.20:9104"
+  labels:
+    host: "landsraad_tst"
+    env: "test"
+    role: "vps"
+    app: "vpsmanager"

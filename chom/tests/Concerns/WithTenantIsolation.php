@@ -17,9 +17,6 @@ trait WithTenantIsolation
     /**
      * Create a tenant with an organization and user.
      *
-     * @param array $tenantAttributes
-     * @param array $userAttributes
-     * @param string $userRole
      * @return array{tenant: Tenant, organization: Organization, user: User}
      */
     protected function createTenantWithUser(
@@ -50,9 +47,6 @@ trait WithTenantIsolation
 
     /**
      * Create multiple tenants with users for testing cross-tenant isolation.
-     *
-     * @param int $count
-     * @return array
      */
     protected function createMultipleTenants(int $count = 2): array
     {
@@ -70,11 +64,6 @@ trait WithTenantIsolation
 
     /**
      * Assert that a model query only returns records for the specified tenant.
-     *
-     * @param string $modelClass
-     * @param Tenant $tenant
-     * @param User $user
-     * @return void
      */
     protected function assertModelFiltersByTenant(string $modelClass, Tenant $tenant, User $user): void
     {
@@ -93,10 +82,6 @@ trait WithTenantIsolation
 
     /**
      * Assert that a user cannot access a specific record from another tenant.
-     *
-     * @param User $user
-     * @param object $record
-     * @return void
      */
     protected function assertCannotAccessCrossTenant(User $user, object $record): void
     {
@@ -113,10 +98,6 @@ trait WithTenantIsolation
 
     /**
      * Assert that a user can access a specific record from their own tenant.
-     *
-     * @param User $user
-     * @param object $record
-     * @return void
      */
     protected function assertCanAccessSameTenant(User $user, object $record): void
     {
@@ -132,16 +113,12 @@ trait WithTenantIsolation
         $this->assertEquals(
             $record->id,
             $found->id,
-            "Found record ID does not match expected record"
+            'Found record ID does not match expected record'
         );
     }
 
     /**
      * Create test data in multiple tenants and verify isolation.
-     *
-     * @param string $modelClass
-     * @param array $attributes
-     * @return array
      */
     protected function createCrossTenantData(string $modelClass, array $attributes = []): array
     {
@@ -165,10 +142,6 @@ trait WithTenantIsolation
 
     /**
      * Assert that queries cannot leak data across tenants.
-     *
-     * @param string $modelClass
-     * @param array $crossTenantData
-     * @return void
      */
     protected function assertNoDataLeakage(string $modelClass, array $crossTenantData): void
     {
@@ -207,12 +180,11 @@ trait WithTenantIsolation
     /**
      * Test that a specific endpoint enforces tenant isolation.
      *
-     * @param string $method HTTP method (get, post, put, delete)
-     * @param string $uri Endpoint URI
-     * @param User $authenticatedUser User making the request
-     * @param string $expectedTenantId Expected tenant ID in response data
-     * @param array $payload Optional request payload
-     * @return void
+     * @param  string  $method  HTTP method (get, post, put, delete)
+     * @param  string  $uri  Endpoint URI
+     * @param  User  $authenticatedUser  User making the request
+     * @param  string  $expectedTenantId  Expected tenant ID in response data
+     * @param  array  $payload  Optional request payload
      */
     protected function assertEndpointEnforcesTenantIsolation(
         string $method,
@@ -223,7 +195,7 @@ trait WithTenantIsolation
     ): void {
         $this->actingAs($authenticatedUser);
 
-        $response = match(strtolower($method)) {
+        $response = match (strtolower($method)) {
             'get' => $this->getJson($uri),
             'post' => $this->postJson($uri, $payload),
             'put' => $this->putJson($uri, $payload),
@@ -261,11 +233,6 @@ trait WithTenantIsolation
 
     /**
      * Assert that an endpoint returns 404 for cross-tenant resource access.
-     *
-     * @param string $method
-     * @param string $uri
-     * @param User $authenticatedUser
-     * @return void
      */
     protected function assertEndpointRejectsCrossTenantAccess(
         string $method,
@@ -274,7 +241,7 @@ trait WithTenantIsolation
     ): void {
         $this->actingAs($authenticatedUser);
 
-        $response = match(strtolower($method)) {
+        $response = match (strtolower($method)) {
             'get' => $this->getJson($uri),
             'post' => $this->postJson($uri),
             'put' => $this->putJson($uri),
@@ -292,10 +259,6 @@ trait WithTenantIsolation
 
     /**
      * Create users with different roles for a tenant.
-     *
-     * @param Tenant $tenant
-     * @param Organization $organization
-     * @return array
      */
     protected function createUsersWithRoles(Tenant $tenant, Organization $organization): array
     {
@@ -321,11 +284,6 @@ trait WithTenantIsolation
 
     /**
      * Assert that a callback runs without cross-tenant data leakage.
-     *
-     * @param callable $callback
-     * @param User $user
-     * @param Tenant $tenant
-     * @return void
      */
     protected function assertIsolatedExecution(callable $callback, User $user, Tenant $tenant): void
     {
@@ -340,7 +298,7 @@ trait WithTenantIsolation
                     $this->assertEquals(
                         $tenant->id,
                         $item->tenant_id,
-                        "Callback returned data from wrong tenant"
+                        'Callback returned data from wrong tenant'
                     );
                 }
             }
@@ -351,7 +309,7 @@ trait WithTenantIsolation
             $this->assertEquals(
                 $tenant->id,
                 $result->tenant_id,
-                "Callback returned model from wrong tenant"
+                'Callback returned model from wrong tenant'
             );
         }
     }

@@ -15,16 +15,14 @@ use App\Models\SiteBackup;
  *
  * NOTE: This is fired when the backup JOB starts, not when it completes.
  * See BackupCompleted for the completion event.
- *
- * @package App\Events\Backup
  */
 class BackupCreated extends AbstractDomainEvent
 {
     /**
      * Create a new BackupCreated event instance.
      *
-     * @param SiteBackup $backup The newly created backup record
-     * @param string|null $actorId The ID of the user who initiated the backup
+     * @param  SiteBackup  $backup  The newly created backup record
+     * @param  string|null  $actorId  The ID of the user who initiated the backup
      */
     public function __construct(
         public readonly SiteBackup $backup,

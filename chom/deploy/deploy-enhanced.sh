@@ -2157,6 +2157,39 @@ confirm_deployment() {
 # Deployment Functions
 #===============================================================================
 
+# Prepare remote environment (copy library and configs)
+prepare_remote_env() {
+    local host=$1
+    local user=$2
+    local port=$3
+
+    log_info "Preparing remote environment..."
+
+    # Create remote directories
+    remote_exec "$host" "$user" "$port" "mkdir -p /tmp/chom-deploy/lib /tmp/chom-deploy/configs"
+
+    # Copy common library
+    local lib_path="${SCRIPT_DIR}/lib/deploy-common.sh"
+    if [[ -f "$lib_path" ]]; then
+        remote_copy "$host" "$user" "$port" "$lib_path" "/tmp/chom-deploy/lib/deploy-common.sh"
+        log_success "Common library copied"
+    else
+        log_error "Common library not found: $lib_path"
+        return 1
+    fi
+
+    # Copy config files
+    local configs_dir="${SCRIPT_DIR}/configs"
+    if [[ -f "${configs_dir}/promtail-chom.yaml" ]]; then
+        remote_copy "$host" "$user" "$port" "${configs_dir}/promtail-chom.yaml" "/tmp/chom-deploy/configs/"
+    fi
+    if [[ -f "${configs_dir}/alloy-chom.alloy" ]]; then
+        remote_copy "$host" "$user" "$port" "${configs_dir}/alloy-chom.alloy" "/tmp/chom-deploy/configs/"
+    fi
+
+    log_success "Remote environment prepared"
+}
+
 deploy_observability() {
     local is_plan
     is_plan=$1
@@ -2174,20 +2207,26 @@ deploy_observability() {
     user=$(get_config '.observability.ssh_user')
     local port
     port=$(get_config '.observability.ssh_port')
-    # local hostname  # Reserved for future use
-    # hostname=$(get_config '.observability.hostname')
+    local hostname
+    hostname=$(get_config '.observability.hostname')
+    local domain
+    domain=$(get_config '.observability.config.grafana_domain')
 
     log_info "Target: ${user}@${ip}:${port}"
 
+    # Prepare remote environment with library
+    prepare_remote_env "$ip" "$user" "$port"
+
     # Copy setup script
     log_info "Copying setup script..."
-    remote_copy "$ip" "$user" "$port" "${SCRIPTS_DIR}/setup-observability-vps.sh" "/tmp/setup-observability-vps.sh"
+    remote_copy "$ip" "$user" "$port" "${SCRIPTS_DIR}/setup-observability-vps.sh" "/tmp/chom-deploy/setup-observability-vps.sh"
 
-    # Execute setup
+    # Execute setup with environment variables
     log_info "Executing setup (this may take 5-10 minutes)..."
     echo ""
 
-    if remote_exec "$ip" "$user" "$port" "chmod +x /tmp/setup-observability-vps.sh && /tmp/setup-observability-vps.sh"; then
+    local env_vars="DOMAIN=${domain:-$hostname}"
+    if remote_exec "$ip" "$user" "$port" "cd /tmp/chom-deploy && chmod +x setup-observability-vps.sh && ${env_vars} ./setup-observability-vps.sh"; then
         echo ""
         log_success "Observability Stack deployed successfully!"
         log_info "Grafana: http://${ip}:3000"
@@ -2197,6 +2236,7 @@ deploy_observability() {
     else
         echo ""
         log_error "Observability Stack deployment failed!"
+        log_warn "Check logs: ssh ${user}@${ip} -p ${port} 'journalctl -xeu prometheus grafana-server loki'"
         update_state "observability" "failed"
         return 1
     fi
@@ -2219,30 +2259,51 @@ deploy_vpsmanager() {
     user=$(get_config '.vpsmanager.ssh_user')
     local port
     port=$(get_config '.vpsmanager.ssh_port')
-    # local hostname  # Reserved for future use
-    # hostname=$(get_config '.vpsmanager.hostname')
+    local hostname
+    hostname=$(get_config '.vpsmanager.hostname')
     local obs_ip
     obs_ip=$(get_config '.observability.ip')
 
     log_info "Target: ${user}@${ip}:${port}"
 
+    # Prepare remote environment with library
+    prepare_remote_env "$ip" "$user" "$port"
+
     # Copy setup script
     log_info "Copying setup script..."
-    remote_copy "$ip" "$user" "$port" "${SCRIPTS_DIR}/setup-vpsmanager-vps.sh" "/tmp/setup-vpsmanager-vps.sh"
+    remote_copy "$ip" "$user" "$port" "${SCRIPTS_DIR}/setup-vpsmanager-vps.sh" "/tmp/chom-deploy/setup-vpsmanager-vps.sh"
+
+    # Update config files with actual observability IP
+    if [[ "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
+        log_info "Configuring log forwarding to observability server..."
+        remote_exec "$ip" "$user" "$port" \
+            "sed -i 's/MENTAT_TST_IP/${obs_ip}/g' /tmp/chom-deploy/configs/promtail-chom.yaml 2>/dev/null || true"
+        remote_exec "$ip" "$user" "$port" \
+            "sed -i 's/OBSERVABILITY_IP/${obs_ip}/g' /tmp/chom-deploy/configs/alloy-chom.alloy 2>/dev/null || true"
+    fi
 
     # Execute setup with observability server IP
     log_info "Executing setup (this may take 10-15 minutes)..."
     echo ""
 
-    if remote_exec "$ip" "$user" "$port" "chmod +x /tmp/setup-vpsmanager-vps.sh && OBSERVABILITY_IP=${obs_ip} /tmp/setup-vpsmanager-vps.sh"; then
+    local env_vars="OBSERVABILITY_IP=${obs_ip} DOMAIN=${hostname}"
+    if remote_exec "$ip" "$user" "$port" "cd /tmp/chom-deploy && chmod +x setup-vpsmanager-vps.sh && ${env_vars} ./setup-vpsmanager-vps.sh"; then
         echo ""
         log_success "VPSManager deployed successfully!"
         log_info "Dashboard: http://${ip}:8080"
+
+        # Show integration status
+        if [[ "$obs_ip" != "0.0.0.0" && "$obs_ip" != "null" ]]; then
+            log_info "Metrics forwarding to: http://${obs_ip}:9090"
+            log_info "Logs forwarding to: http://${obs_ip}:3100"
+        fi
+
         update_state "vpsmanager" "completed"
         return 0
     else
         echo ""
         log_error "VPSManager deployment failed!"
+        log_warn "Check logs: ssh ${user}@${ip} -p ${port} 'journalctl -xeu nginx php8.2-fpm mariadb'"
         update_state "vpsmanager" "failed"
         return 1
     fi

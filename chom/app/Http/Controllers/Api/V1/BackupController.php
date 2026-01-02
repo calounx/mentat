@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\HasTenantScoping;
+use App\Http\Controllers\Controller;
 use App\Models\Site;
 use App\Models\SiteBackup;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 class BackupController extends Controller
 {
     use HasTenantScoping;
+
     /**
      * List all backups for the current tenant.
      */
@@ -22,7 +23,7 @@ class BackupController extends Controller
         $tenant = $this->getTenant($request);
 
         $query = SiteBackup::query()
-            ->whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
             ->with('site:id,domain')
             ->orderBy('created_at', 'desc');
 
@@ -40,7 +41,7 @@ class BackupController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => collect($backups->items())->map(fn($backup) => $this->formatBackup($backup)),
+            'data' => collect($backups->items())->map(fn ($backup) => $this->formatBackup($backup)),
             'meta' => [
                 'pagination' => [
                     'current_page' => $backups->currentPage(),
@@ -66,7 +67,7 @@ class BackupController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => collect($backups->items())->map(fn($backup) => $this->formatBackup($backup)),
+            'data' => collect($backups->items())->map(fn ($backup) => $this->formatBackup($backup)),
             'meta' => [
                 'pagination' => [
                     'current_page' => $backups->currentPage(),
@@ -86,7 +87,7 @@ class BackupController extends Controller
         $tenant = $this->getTenant($request);
 
         $backup = SiteBackup::query()
-            ->whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
             ->with('site:id,domain,site_type')
             ->findOrFail($id);
 
@@ -159,7 +160,7 @@ class BackupController extends Controller
         $tenant = $this->getTenant($request);
 
         $backup = SiteBackup::query()
-            ->whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
             ->findOrFail($id);
 
         try {
@@ -199,10 +200,10 @@ class BackupController extends Controller
         $tenant = $this->getTenant($request);
 
         $backup = SiteBackup::query()
-            ->whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
             ->findOrFail($id);
 
-        if (!$backup->storage_path) {
+        if (! $backup->storage_path) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -233,11 +234,11 @@ class BackupController extends Controller
         $tenant = $this->getTenant($request);
 
         $backup = SiteBackup::query()
-            ->whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            ->whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id))
             ->with('site')
             ->findOrFail($id);
 
-        if (!$backup->storage_path) {
+        if (! $backup->storage_path) {
             return response()->json([
                 'success' => false,
                 'error' => [
@@ -299,7 +300,7 @@ class BackupController extends Controller
             'backup_type' => $backup->backup_type,
             'size' => $backup->getSizeFormatted(),
             'size_bytes' => $backup->size_bytes,
-            'is_ready' => !empty($backup->storage_path),
+            'is_ready' => ! empty($backup->storage_path),
             'is_expired' => $backup->isExpired(),
             'expires_at' => $backup->expires_at?->toIso8601String(),
             'created_at' => $backup->created_at->toIso8601String(),

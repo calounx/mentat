@@ -14,8 +14,6 @@ use Illuminate\Queue\SerializesModels;
  * - Timestamp tracking: Every event knows when it occurred
  * - Actor tracking: Records who/what triggered the event (user ID or system)
  * - Metadata support: Provides structured event data for logging and auditing
- *
- * @package App\Events
  */
 abstract class AbstractDomainEvent
 {
@@ -24,23 +22,23 @@ abstract class AbstractDomainEvent
     /**
      * The timestamp when this event occurred.
      */
-    public readonly \DateTimeInterface $occurredAt;
+    public \DateTimeInterface $occurredAt;
 
     /**
      * The ID of the actor who triggered this event (user ID or null for system).
      */
-    public readonly ?string $actorId;
+    public ?string $actorId;
 
     /**
      * The type of actor ('user' or 'system').
      */
-    public readonly string $actorType;
+    public string $actorType;
 
     /**
      * Create a new domain event instance.
      *
-     * @param string|null $actorId The ID of the user/actor, or null for system events
-     * @param string $actorType The type of actor ('user' or 'system')
+     * @param  string|null  $actorId  The ID of the user/actor, or null for system events
+     * @param  string  $actorType  The type of actor ('user' or 'system')
      */
     public function __construct(
         ?string $actorId = null,
@@ -73,8 +71,6 @@ abstract class AbstractDomainEvent
      * Get the human-readable event name.
      *
      * Returns the class basename (e.g., "SiteCreated" from "App\Events\Site\SiteCreated").
-     *
-     * @return string
      */
     public function getEventName(): string
     {

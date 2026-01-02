@@ -180,11 +180,12 @@ class Operation extends Model
      */
     public function getDurationInSeconds(): ?int
     {
-        if (!$this->started_at) {
+        if (! $this->started_at) {
             return null;
         }
 
         $endTime = $this->completed_at ?? now();
+
         return $this->started_at->diffInSeconds($endTime);
     }
 

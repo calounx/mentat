@@ -17,7 +17,7 @@ class MakeValueObjectCommand extends GeneratorCommand
      */
     protected function getStub(): string
     {
-        return __DIR__ . '/stubs/value-object.stub';
+        return __DIR__.'/stubs/value-object.stub';
     }
 
     /**
@@ -25,7 +25,7 @@ class MakeValueObjectCommand extends GeneratorCommand
      */
     protected function getDefaultNamespace($rootNamespace): string
     {
-        return $rootNamespace . '\ValueObjects';
+        return $rootNamespace.'\ValueObjects';
     }
 
     /**
@@ -34,14 +34,14 @@ class MakeValueObjectCommand extends GeneratorCommand
     public function handle(): int
     {
         // Create stub directory if it doesn't exist
-        $stubDir = __DIR__ . '/stubs';
-        if (!is_dir($stubDir)) {
+        $stubDir = __DIR__.'/stubs';
+        if (! is_dir($stubDir)) {
             mkdir($stubDir, 0755, true);
         }
 
         // Create the stub file if it doesn't exist
-        $stubFile = $stubDir . '/value-object.stub';
-        if (!file_exists($stubFile)) {
+        $stubFile = $stubDir.'/value-object.stub';
+        if (! file_exists($stubFile)) {
             file_put_contents($stubFile, $this->getValueObjectStub());
         }
 
@@ -51,7 +51,7 @@ class MakeValueObjectCommand extends GeneratorCommand
             $this->components->info("Value Object [{$this->argument('name')}] created successfully.");
             $this->newLine();
             $this->components->info('Example usage:');
-            $this->line('  $valueObject = new ' . class_basename($this->argument('name')) . '(\'value\');');
+            $this->line('  $valueObject = new '.class_basename($this->argument('name')).'(\'value\');');
             $this->line('  $stringValue = $valueObject->toString();');
         }
 

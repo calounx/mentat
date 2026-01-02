@@ -20,9 +20,6 @@ class SiteCreationService
 {
     /**
      * Create a new site creation service instance.
-     *
-     * @param SiteQuotaService $quotaService
-     * @param VpsAllocationService $vpsAllocationService
      */
     public function __construct(
         protected SiteQuotaService $quotaService,
@@ -38,9 +35,9 @@ class SiteCreationService
      * 3. Creates site database record
      * 4. Dispatches async provisioning job
      *
-     * @param Tenant $tenant The tenant creating the site
-     * @param array<string, mixed> $data Site creation data
-     * @return Site
+     * @param  Tenant  $tenant  The tenant creating the site
+     * @param  array<string, mixed>  $data  Site creation data
+     *
      * @throws QuotaExceededException If tenant has exceeded site quota
      * @throws \RuntimeException If no VPS server is available
      */
@@ -57,7 +54,7 @@ class SiteCreationService
             // Find available VPS
             $vps = $this->vpsAllocationService->findAvailableVps($tenant);
 
-            if (!$vps) {
+            if (! $vps) {
                 throw new \RuntimeException(
                     'No available VPS server found. Please contact support.'
                 );
@@ -102,8 +99,8 @@ class SiteCreationService
     /**
      * Prepare and sanitize site data.
      *
-     * @param Tenant $tenant The tenant
-     * @param array<string, mixed> $data Raw site data
+     * @param  Tenant  $tenant  The tenant
+     * @param  array<string, mixed>  $data  Raw site data
      * @return array<string, mixed> Sanitized site data
      */
     protected function prepareSiteData(Tenant $tenant, array $data): array
@@ -123,8 +120,8 @@ class SiteCreationService
      * This is an additional layer of validation beyond form requests.
      * Useful for programmatic site creation.
      *
-     * @param Tenant $tenant The tenant
-     * @param array<string, mixed> $data Site data
+     * @param  Tenant  $tenant  The tenant
+     * @param  array<string, mixed>  $data  Site data
      * @return array{valid: bool, errors: array<string, string>}
      */
     public function validateSiteData(Tenant $tenant, array $data): array
@@ -134,7 +131,7 @@ class SiteCreationService
         // Validate domain
         if (empty($data['domain'])) {
             $errors['domain'] = 'Domain is required';
-        } elseif (!$this->isValidDomain($data['domain'])) {
+        } elseif (! $this->isValidDomain($data['domain'])) {
             $errors['domain'] = 'Invalid domain format';
         } elseif ($this->domainExistsForTenant($tenant, $data['domain'])) {
             $errors['domain'] = 'Domain already exists for this tenant';
@@ -142,13 +139,13 @@ class SiteCreationService
 
         // Validate site type
         $validTypes = ['wordpress', 'html', 'laravel'];
-        if (isset($data['site_type']) && !in_array($data['site_type'], $validTypes)) {
+        if (isset($data['site_type']) && ! in_array($data['site_type'], $validTypes)) {
             $errors['site_type'] = 'Invalid site type';
         }
 
         // Validate PHP version
         $validPhpVersions = ['8.2', '8.4'];
-        if (isset($data['php_version']) && !in_array($data['php_version'], $validPhpVersions)) {
+        if (isset($data['php_version']) && ! in_array($data['php_version'], $validPhpVersions)) {
             $errors['php_version'] = 'Invalid PHP version';
         }
 
@@ -161,21 +158,20 @@ class SiteCreationService
     /**
      * Check if domain format is valid.
      *
-     * @param string $domain The domain to validate
-     * @return bool
+     * @param  string  $domain  The domain to validate
      */
     protected function isValidDomain(string $domain): bool
     {
         $pattern = '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/i';
+
         return (bool) preg_match($pattern, $domain);
     }
 
     /**
      * Check if domain already exists for tenant.
      *
-     * @param Tenant $tenant The tenant
-     * @param string $domain The domain to check
-     * @return bool
+     * @param  Tenant  $tenant  The tenant
+     * @param  string  $domain  The domain to check
      */
     protected function domainExistsForTenant(Tenant $tenant, string $domain): bool
     {
@@ -190,7 +186,7 @@ class SiteCreationService
      * Useful for showing users whether they can create sites
      * and what's blocking them if they can't.
      *
-     * @param Tenant $tenant The tenant
+     * @param  Tenant  $tenant  The tenant
      * @return array{can_create: bool, quota_info: array, vps_available: bool, blockers: array<string>}
      */
     public function getCreationStatus(Tenant $tenant): array
@@ -200,15 +196,15 @@ class SiteCreationService
 
         $blockers = [];
 
-        if (!$quotaInfo['can_create']) {
+        if (! $quotaInfo['can_create']) {
             $blockers[] = 'Site quota limit reached';
         }
 
-        if (!$vpsAvailable) {
+        if (! $vpsAvailable) {
             $blockers[] = 'No VPS servers available';
         }
 
-        if (!$tenant->isActive()) {
+        if (! $tenant->isActive()) {
             $blockers[] = 'Tenant is not active';
         }
 

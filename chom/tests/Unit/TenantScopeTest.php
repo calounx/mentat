@@ -6,8 +6,8 @@ use App\Models\Operation;
 use App\Models\Organization;
 use App\Models\Site;
 use App\Models\Tenant;
-use App\Models\User;
 use App\Models\UsageRecord;
+use App\Models\User;
 use App\Models\VpsAllocation;
 use App\Models\VpsServer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,8 +18,11 @@ class TenantScopeTest extends TestCase
     use RefreshDatabase;
 
     private User $userTenant1;
+
     private User $userTenant2;
+
     private Tenant $tenant1;
+
     private Tenant $tenant2;
 
     protected function setUp(): void

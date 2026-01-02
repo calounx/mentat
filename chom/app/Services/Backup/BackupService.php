@@ -19,8 +19,6 @@ class BackupService
 {
     /**
      * Create a new backup service instance.
-     *
-     * @param VpsManagerInterface $vpsManager
      */
     public function __construct(
         protected VpsManagerInterface $vpsManager
@@ -32,10 +30,9 @@ class BackupService
      * This creates the backup record and initiates the actual backup process.
      * The actual backup is handled asynchronously via job.
      *
-     * @param Site $site The site to backup
-     * @param string $backupType Type of backup (full, database, files)
-     * @param int $retentionDays How long to keep the backup
-     * @return SiteBackup
+     * @param  Site  $site  The site to backup
+     * @param  string  $backupType  Type of backup (full, database, files)
+     * @param  int  $retentionDays  How long to keep the backup
      */
     public function createBackup(
         Site $site,
@@ -72,14 +69,14 @@ class BackupService
      *
      * This method is typically called from a background job.
      *
-     * @param SiteBackup $backup The backup record
+     * @param  SiteBackup  $backup  The backup record
      * @return array{success: bool, message: string, path?: string, size?: int}
      */
     public function executeBackup(SiteBackup $backup): array
     {
         $site = $backup->site;
 
-        if (!$site->vpsServer) {
+        if (! $site->vpsServer) {
             return [
                 'success' => false,
                 'message' => 'Site has no associated VPS server',
@@ -94,7 +91,7 @@ class BackupService
                 $backup->backup_type
             );
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 Log::error('VPS backup failed', [
                     'backup_id' => $backup->id,
                     'site_id' => $site->id,
@@ -146,7 +143,7 @@ class BackupService
     /**
      * Delete a backup.
      *
-     * @param SiteBackup $backup The backup to delete
+     * @param  SiteBackup  $backup  The backup to delete
      * @return array{success: bool, message: string}
      */
     public function deleteBackup(SiteBackup $backup): array
@@ -186,13 +183,13 @@ class BackupService
     /**
      * Generate a temporary download URL for a backup.
      *
-     * @param SiteBackup $backup The backup
-     * @param int $expiryMinutes URL expiry time in minutes
+     * @param  SiteBackup  $backup  The backup
+     * @param  int  $expiryMinutes  URL expiry time in minutes
      * @return array{success: bool, url?: string, expires_at?: string, message?: string}
      */
     public function getDownloadUrl(SiteBackup $backup, int $expiryMinutes = 15): array
     {
-        if (!$backup->storage_path) {
+        if (! $backup->storage_path) {
             return [
                 'success' => false,
                 'message' => 'Backup is not yet available for download',
@@ -232,14 +229,14 @@ class BackupService
     /**
      * Clean up expired backups for a site or tenant.
      *
-     * @param Site|Tenant $entity The site or tenant
+     * @param  Site|Tenant  $entity  The site or tenant
      * @return int Number of backups cleaned up
      */
     public function cleanupExpiredBackups(Site|Tenant $entity): int
     {
         $query = $entity instanceof Site
             ? $entity->backups()
-            : SiteBackup::whereHas('site', fn($q) => $q->where('tenant_id', $entity->id));
+            : SiteBackup::whereHas('site', fn ($q) => $q->where('tenant_id', $entity->id));
 
         $expiredBackups = $query->where('expires_at', '<=', now())->get();
 
@@ -265,25 +262,21 @@ class BackupService
     /**
      * Validate backup type.
      *
-     * @param string $backupType
      * @throws \InvalidArgumentException
      */
     protected function validateBackupType(string $backupType): void
     {
         $validTypes = ['full', 'database', 'files'];
 
-        if (!in_array($backupType, $validTypes)) {
+        if (! in_array($backupType, $validTypes)) {
             throw new \InvalidArgumentException(
-                "Invalid backup type: {$backupType}. Must be one of: " . implode(', ', $validTypes)
+                "Invalid backup type: {$backupType}. Must be one of: ".implode(', ', $validTypes)
             );
         }
     }
 
     /**
      * Update site storage metrics after backup operations.
-     *
-     * @param Site $site
-     * @return void
      */
     protected function updateSiteStorageMetrics(Site $site): void
     {
@@ -298,12 +291,11 @@ class BackupService
     /**
      * Get backup statistics for a tenant.
      *
-     * @param Tenant $tenant
      * @return array{total_backups: int, total_size_bytes: int, total_size_formatted: string, oldest?: string, newest?: string}
      */
     public function getBackupStats(Tenant $tenant): array
     {
-        $backups = SiteBackup::whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id));
+        $backups = SiteBackup::whereHas('site', fn ($q) => $q->where('tenant_id', $tenant->id));
 
         $totalSize = $backups->sum('size_bytes');
         $oldest = $backups->orderBy('created_at', 'asc')->first();
@@ -320,18 +312,16 @@ class BackupService
 
     /**
      * Format bytes to human-readable size.
-     *
-     * @param int $bytes
-     * @return string
      */
     protected function formatBytes(int $bytes): string
     {
         if ($bytes >= 1073741824) {
-            return round($bytes / 1073741824, 2) . ' GB';
+            return round($bytes / 1073741824, 2).' GB';
         }
         if ($bytes >= 1048576) {
-            return round($bytes / 1048576, 2) . ' MB';
+            return round($bytes / 1048576, 2).' MB';
         }
-        return round($bytes / 1024, 2) . ' KB';
+
+        return round($bytes / 1024, 2).' KB';
     }
 }

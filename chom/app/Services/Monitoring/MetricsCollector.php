@@ -2,14 +2,14 @@
 
 namespace App\Services\Monitoring;
 
-use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
 use Exception;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Redis;
 
 class MetricsCollector
 {
     protected string $prefix;
+
     protected string $driver;
 
     public function __construct()
@@ -23,7 +23,7 @@ class MetricsCollector
      */
     public function increment(string $metric, array $labels = [], int $value = 1): void
     {
-        if (!config('monitoring.enabled')) {
+        if (! config('monitoring.enabled')) {
             return;
         }
 
@@ -48,7 +48,7 @@ class MetricsCollector
      */
     public function gauge(string $metric, float $value, array $labels = []): void
     {
-        if (!config('monitoring.enabled')) {
+        if (! config('monitoring.enabled')) {
             return;
         }
 
@@ -74,7 +74,7 @@ class MetricsCollector
      */
     public function histogram(string $metric, float $value, array $labels = []): void
     {
-        if (!config('monitoring.enabled')) {
+        if (! config('monitoring.enabled')) {
             return;
         }
 
@@ -106,7 +106,7 @@ class MetricsCollector
         int $memoryUsed,
         int $queryCount
     ): void {
-        if (!config('monitoring.metrics.request_metrics.enabled')) {
+        if (! config('monitoring.metrics.request_metrics.enabled')) {
             return;
         }
 
@@ -143,7 +143,7 @@ class MetricsCollector
      */
     public function recordQuery(string $sql, float $duration): void
     {
-        if (!config('monitoring.performance.log_slow_queries')) {
+        if (! config('monitoring.performance.log_slow_queries')) {
             return;
         }
 
@@ -171,7 +171,7 @@ class MetricsCollector
      */
     public function recordCacheHit(string $key): void
     {
-        if (!config('monitoring.metrics.application_metrics.track_cache_hits')) {
+        if (! config('monitoring.metrics.application_metrics.track_cache_hits')) {
             return;
         }
 
@@ -180,7 +180,7 @@ class MetricsCollector
 
     public function recordCacheMiss(string $key): void
     {
-        if (!config('monitoring.metrics.application_metrics.track_cache_hits')) {
+        if (! config('monitoring.metrics.application_metrics.track_cache_hits')) {
             return;
         }
 
@@ -204,7 +204,7 @@ class MetricsCollector
 
     public function recordQueueDepth(string $queue, int $depth): void
     {
-        if (!config('monitoring.metrics.application_metrics.track_queue_depth')) {
+        if (! config('monitoring.metrics.application_metrics.track_queue_depth')) {
             return;
         }
 
@@ -216,7 +216,7 @@ class MetricsCollector
      */
     public function recordSiteCreated(string $tier): void
     {
-        if (!config('monitoring.metrics.business_metrics.track_sites_created')) {
+        if (! config('monitoring.metrics.business_metrics.track_sites_created')) {
             return;
         }
 
@@ -225,7 +225,7 @@ class MetricsCollector
 
     public function recordBackupCompleted(string $type, bool $success): void
     {
-        if (!config('monitoring.metrics.business_metrics.track_backups_run')) {
+        if (! config('monitoring.metrics.business_metrics.track_backups_run')) {
             return;
         }
 
@@ -237,7 +237,7 @@ class MetricsCollector
 
     public function recordDeployment(string $environment, bool $success): void
     {
-        if (!config('monitoring.metrics.business_metrics.track_deployments')) {
+        if (! config('monitoring.metrics.business_metrics.track_deployments')) {
             return;
         }
 
@@ -252,7 +252,7 @@ class MetricsCollector
      */
     public function recordSystemMetrics(): void
     {
-        if (!config('monitoring.metrics.system_metrics.enabled')) {
+        if (! config('monitoring.metrics.system_metrics.enabled')) {
             return;
         }
 
@@ -298,7 +298,7 @@ class MetricsCollector
      */
     public function getAll(string $pattern = '*'): array
     {
-        $fullPattern = $this->prefix . $pattern;
+        $fullPattern = $this->prefix.$pattern;
 
         return match ($this->driver) {
             'redis' => $this->getFromRedis($fullPattern),
@@ -331,7 +331,7 @@ class MetricsCollector
         $highResRetention = config('monitoring.retention.high_resolution', 24) * 3600;
 
         if ($this->driver === 'redis') {
-            $keys = Redis::keys($this->prefix . '*');
+            $keys = Redis::keys($this->prefix.'*');
 
             foreach ($keys as $key) {
                 $ttl = Redis::ttl($key);
@@ -351,12 +351,12 @@ class MetricsCollector
      */
     protected function buildKey(string $metric, array $labels = []): string
     {
-        $key = $this->prefix . $metric;
+        $key = $this->prefix.$metric;
 
-        if (!empty($labels)) {
+        if (! empty($labels)) {
             ksort($labels);
             $labelString = http_build_query($labels, '', ',');
-            $key .= '{' . $labelString . '}';
+            $key .= '{'.$labelString.'}';
         }
 
         return $key;
@@ -392,7 +392,7 @@ class MetricsCollector
     protected function addToHistogram(string $key, float $value): void
     {
         if ($this->driver === 'redis') {
-            $histogramKey = $key . ':histogram';
+            $histogramKey = $key.':histogram';
             Redis::zadd($histogramKey, $value, microtime(true));
 
             // Keep only recent data

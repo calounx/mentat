@@ -1,0 +1,294 @@
+// ============================================================================
+// CHOM Grafana Alloy Configuration - Web Application Host
+// ============================================================================
+// Collects metrics and logs from web application and ships to observability stack
+// ============================================================================
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// ============================================================================
+// Prometheus Metrics Collection & Forwarding
+// ============================================================================
+
+// Self-monitoring
+prometheus.exporter.self "alloy" { }
+
+prometheus.scrape "alloy" {
+  targets    = prometheus.exporter.self.alloy.targets
+  forward_to = [prometheus.remote_write.observability.receiver]
+}
+
+// Scrape local exporters
+prometheus.scrape "node_exporter" {
+  targets = [{
+    __address__ = "localhost:9100",
+    job         = "node-exporter",
+    tier        = "application",
+    host        = "web-stack",
+  }]
+  forward_to = [prometheus.remote_write.observability.receiver]
+}
+
+prometheus.scrape "nginx_exporter" {
+  targets = [{
+    __address__ = "localhost:9113",
+    job         = "nginx",
+    tier        = "application",
+    component   = "webserver",
+  }]
+  forward_to = [prometheus.remote_write.observability.receiver]
+}
+
+prometheus.scrape "mysql_exporter" {
+  targets = [{
+    __address__ = "localhost:9104",
+    job         = "mysql",
+    tier        = "application",
+    component   = "database",
+  }]
+  forward_to = [prometheus.remote_write.observability.receiver]
+}
+
+prometheus.scrape "phpfpm_exporter" {
+  targets = [{
+    __address__ = "localhost:9253",
+    job         = "php-fpm",
+    tier        = "application",
+    component   = "runtime",
+  }]
+  forward_to = [prometheus.remote_write.observability.receiver]
+}
+
+// Remote write to observability stack Prometheus
+prometheus.remote_write "observability" {
+  endpoint {
+    url = "http://chom_observability:9090/api/v1/write"
+
+    queue_config {
+      capacity             = 10000
+      max_shards           = 10
+      min_shards           = 1
+      max_samples_per_send = 5000
+      batch_send_deadline  = "5s"
+      min_backoff          = "30ms"
+      max_backoff          = "5s"
+    }
+  }
+}
+
+// ============================================================================
+// Loki Log Collection & Forwarding
+// ============================================================================
+
+// Collect Nginx access logs (JSON format)
+local.file_match "nginx_access_logs" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/chom-access.log",
+  }]
+}
+
+loki.source.file "nginx_access" {
+  targets    = local.file_match.nginx_access_logs.targets
+  forward_to = [loki.process.nginx.receiver]
+}
+
+loki.process "nginx" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.json {
+    expressions = {
+      timestamp = "time_local",
+      status    = "status",
+      method    = "",
+      path      = "",
+    }
+  }
+
+  stage.static_labels {
+    values = {
+      job       = "nginx",
+      tier      = "application",
+      component = "webserver",
+      host      = "web-stack",
+    }
+  }
+
+  stage.labels {
+    values = {
+      status = "",
+    }
+  }
+}
+
+// Collect Nginx error logs
+local.file_match "nginx_error_logs" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/chom-error.log",
+  }]
+}
+
+loki.source.file "nginx_error" {
+  targets    = local.file_match.nginx_error_logs.targets
+  forward_to = [loki.process.nginx_error.receiver]
+}
+
+loki.process "nginx_error" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      job       = "nginx-error",
+      tier      = "application",
+      component = "webserver",
+      host      = "web-stack",
+      level     = "error",
+    }
+  }
+}
+
+// Collect PHP-FPM logs
+local.file_match "phpfpm_logs" {
+  path_targets = [{
+    __path__ = "/var/log/php-fpm/*.log",
+  }]
+}
+
+loki.source.file "phpfpm" {
+  targets    = local.file_match.phpfpm_logs.targets
+  forward_to = [loki.process.phpfpm.receiver]
+}
+
+loki.process "phpfpm" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      job       = "php-fpm",
+      tier      = "application",
+      component = "runtime",
+      host      = "web-stack",
+    }
+  }
+}
+
+// Collect Laravel application logs
+local.file_match "laravel_logs" {
+  path_targets = [{
+    __path__ = "/var/www/chom/storage/logs/*.log",
+  }]
+}
+
+loki.source.file "laravel" {
+  targets    = local.file_match.laravel_logs.targets
+  forward_to = [loki.process.laravel.receiver]
+}
+
+loki.process "laravel" {
+  forward_to = [loki.write.observability.receiver]
+
+  // Parse Laravel log format
+  stage.regex {
+    expression = "\\[(?P<timestamp>.*?)\\] (?P<environment>\\w+)\\.(?P<level>\\w+): (?P<message>.*)"
+  }
+
+  stage.static_labels {
+    values = {
+      job       = "laravel",
+      tier      = "application",
+      component = "app",
+      host      = "web-stack",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level       = "",
+      environment = "",
+    }
+  }
+}
+
+// Collect MySQL logs
+local.file_match "mysql_logs" {
+  path_targets = [{
+    __path__ = "/var/log/mysql/*.log",
+  }]
+}
+
+loki.source.file "mysql" {
+  targets    = local.file_match.mysql_logs.targets
+  forward_to = [loki.process.mysql.receiver]
+}
+
+loki.process "mysql" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      job       = "mysql",
+      tier      = "application",
+      component = "database",
+      host      = "web-stack",
+    }
+  }
+}
+
+// Collect supervisor logs
+local.file_match "supervisor_logs" {
+  path_targets = [{
+    __path__ = "/var/log/supervisor/*.log",
+  }]
+}
+
+loki.source.file "supervisor" {
+  targets    = local.file_match.supervisor_logs.targets
+  forward_to = [loki.process.supervisor.receiver]
+}
+
+loki.process "supervisor" {
+  forward_to = [loki.write.observability.receiver]
+
+  stage.static_labels {
+    values = {
+      job       = "supervisor",
+      tier      = "application",
+      component = "process-manager",
+      host      = "web-stack",
+    }
+  }
+}
+
+// Write logs to observability stack Loki
+loki.write "observability" {
+  endpoint {
+    url = "http://chom_observability:3100/loki/api/v1/push"
+  }
+}
+
+// ============================================================================
+// OpenTelemetry Traces Collection & Forwarding (optional)
+// ============================================================================
+
+// Uncomment to enable trace collection
+// otelcol.receiver.otlp "default" {
+//   grpc {
+//     endpoint = "0.0.0.0:4317"
+//   }
+//
+//   http {
+//     endpoint = "0.0.0.0:4318"
+//   }
+//
+//   output {
+//     traces  = [otelcol.exporter.otlp.tempo.input]
+//   }
+// }
+//
+// otelcol.exporter.otlp "tempo" {
+//   client {
+//     endpoint = "chom_observability:4317"
+//   }
+// }

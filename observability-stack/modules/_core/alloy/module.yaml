@@ -1,28 +1,52 @@
-# Grafana Alloy - Modern OpenTelemetry Collector
-# Unified collection for metrics, logs, and traces
-# Replaces Grafana Agent with River configuration language
+# ============================================================================
+# Grafana Alloy Module Configuration
+# ============================================================================
+# Unified telemetry collector for metrics, logs, and traces
+# Replaces Promtail and Grafana Agent with a single, modern collector
+# ============================================================================
 
 name: alloy
 display_name: Grafana Alloy
 description: |
-  OpenTelemetry-compatible telemetry collector for metrics, logs, and traces.
+  OpenTelemetry-compatible unified telemetry collector for metrics, logs, and traces.
   Features programmable pipelines using River configuration language.
+  Replaces Promtail for log collection and can replace Grafana Agent for metrics.
+
 category: core
 version: "1.5.1"
 
-# Component type configuration
+# Component type and network configuration
 type: collector
-port: 12345  # Default HTTP port
+ports:
+  http: 12345           # Alloy HTTP server (metrics, health, UI)
+  otlp_grpc: 4317       # OTLP gRPC receiver
+  otlp_http: 4318       # OTLP HTTP receiver
+
 metrics_path: /metrics
+health_endpoint: /-/ready
 
+# ============================================================================
+# Dependencies
+# ============================================================================
 dependencies:
-  required: []
+  required: []           # Alloy can run standalone
   optional:
-    - prometheus   # For remote_write metrics
-    - loki         # For log forwarding
-    - tempo        # For trace forwarding
+    - prometheus         # For remote_write metrics destination
+    - loki               # For log forwarding destination
+    - tempo              # For trace forwarding destination
+    - node_exporter      # To scrape local system metrics
+    - nginx_exporter     # To scrape web server metrics
+    - mysql_exporter     # To scrape database metrics
+    - phpfpm_exporter    # To scrape PHP runtime metrics
+    - fail2ban_exporter  # To scrape security metrics
 
-# Installation configuration
+  replaces:
+    - promtail           # Alloy replaces Promtail for log collection
+    - grafana_agent      # Alloy replaces Grafana Agent
+
+# ============================================================================
+# Installation Configuration
+# ============================================================================
 install:
   method: binary
   binary_name: alloy
@@ -32,66 +56,371 @@ install:
 
   download:
     base_url: "https://github.com/grafana/alloy/releases/download"
+    archive_format: zip
     architectures:
-      amd64: "alloy-linux-amd64"
-      arm64: "alloy-linux-arm64"
+      amd64: "alloy-linux-amd64.zip"
+      arm64: "alloy-linux-arm64.zip"
+      arm: "alloy-linux-arm.zip"
+    checksum_file: "SHA256SUMS"
 
-# Service configuration
+  directories:
+    config: /etc/alloy
+    data: /var/lib/alloy
+    log: /var/log/alloy
+
+  permissions:
+    config_dir: "755"
+    data_dir: "750"
+    log_dir: "750"
+    config_file: "644"
+
+# ============================================================================
+# Service Configuration
+# ============================================================================
 service:
-  exec_start: "/usr/local/bin/alloy run /etc/alloy/config.alloy"
+  type: simple
+  exec_start: |
+    /usr/local/bin/alloy run \
+      --storage.path=/var/lib/alloy \
+      --server.http.listen-addr=0.0.0.0:12345 \
+      /etc/alloy/config.alloy
+  exec_reload: "/bin/kill -HUP $MAINPID"
   restart: always
   restart_sec: 5
+  timeout_stop_sec: 30
 
-# Default configuration
+  # Resource limits
+  limits:
+    nofile: 65536
+    nproc: 32768
+
+  # Systemd security hardening
+  hardening:
+    no_new_privileges: true
+    protect_system: strict
+    protect_home: true
+    private_tmp: true
+    private_devices: true
+    protect_kernel_tunables: true
+    protect_kernel_modules: true
+    protect_kernel_logs: true
+    protect_control_groups: true
+    restrict_namespaces: true
+    lock_personality: true
+    restrict_realtime: true
+    restrict_suid_sgid: true
+    memory_deny_write_execute: false
+    restrict_address_families:
+      - AF_INET
+      - AF_INET6
+      - AF_UNIX
+      - AF_NETLINK
+    system_call_filter:
+      - "@system-service"
+      - "~@privileged"
+    capabilities:
+      bounding_set:
+        - CAP_DAC_READ_SEARCH
+        - CAP_NET_BIND_SERVICE
+        - CAP_SYS_PTRACE
+      ambient:
+        - CAP_DAC_READ_SEARCH
+        - CAP_NET_BIND_SERVICE
+
+# ============================================================================
+# Deployment Roles
+# ============================================================================
+roles:
+  observability:
+    description: |
+      Central observability stack configuration.
+      Scrapes local stack components and receives telemetry from remote nodes.
+    config_template: configs/observability.alloy
+    features:
+      - metrics_scraping      # Scrape local Prometheus, Loki, Tempo, Grafana
+      - log_collection        # Collect stack component logs
+      - otlp_receiver         # Accept OTLP from remote nodes
+      - journal_collection    # Collect systemd journal
+    ports_exposed:
+      - 12345                 # HTTP UI and metrics
+      - 4317                  # OTLP gRPC
+      - 4318                  # OTLP HTTP
+    firewall:
+      - allow: all            # Accept from any (use security groups)
+        ports: [12345, 4317, 4318]
+
+  monitored:
+    description: |
+      Standard monitored node configuration.
+      Collects local metrics and logs, ships to central observability.
+    config_template: configs/monitored.alloy
+    features:
+      - metrics_scraping      # Scrape local exporters
+      - log_collection        # Collect application and system logs
+      - otlp_receiver_local   # Accept OTLP from local apps only
+      - remote_write          # Ship to central Prometheus
+      - log_forwarding        # Ship to central Loki
+      - trace_forwarding      # Ship to central Tempo
+    ports_exposed:
+      - 12345                 # HTTP metrics (restricted)
+    firewall:
+      - allow: observability_ip
+        ports: [12345]
+
+  vpsmanager:
+    description: |
+      VPSManager/CHOM node configuration.
+      Full telemetry for Laravel hosting with enhanced log parsing.
+    config_template: configs/vpsmanager.alloy
+    features:
+      - metrics_scraping      # Scrape all local exporters
+      - log_collection        # Comprehensive log collection
+      - laravel_logs          # Parse Laravel log format
+      - horizon_logs          # Parse Horizon queue logs
+      - fail2ban_logs         # Security monitoring
+      - otlp_receiver_local   # Accept traces from Laravel
+      - remote_write
+      - log_forwarding
+      - trace_forwarding
+    ports_exposed:
+      - 12345                 # HTTP metrics (restricted)
+    firewall:
+      - allow: observability_ip
+        ports: [12345]
+
+# ============================================================================
+# Configuration Options
+# ============================================================================
 config:
   file: /etc/alloy/config.alloy
-  template: |
-    // Grafana Alloy Configuration
-    // River configuration language
+  format: river
 
-    logging {
-      level  = "info"
-      format = "logfmt"
-    }
+  # Environment variables for configuration
+  environment:
+    MODULE_PORT:
+      description: HTTP server listen port
+      default: "12345"
+      type: port
 
-    // Self-monitoring - expose Alloy metrics
-    prometheus.exporter.self "alloy" {
-    }
+    OTLP_GRPC_PORT:
+      description: OTLP gRPC receiver port
+      default: "4317"
+      type: port
 
-    prometheus.scrape "self" {
-      targets    = prometheus.exporter.self.alloy.targets
-      forward_to = [prometheus.remote_write.default.receiver]
-    }
+    OTLP_HTTP_PORT:
+      description: OTLP HTTP receiver port
+      default: "4318"
+      type: port
 
-    // Prometheus remote write endpoint
-    prometheus.remote_write "default" {
-      endpoint {
-        url = "http://localhost:9090/api/v1/write"
-      }
-    }
+    PROMETHEUS_URL:
+      description: Prometheus remote_write URL
+      default: "http://localhost:9090"
+      type: url
+      required_for: [monitored, vpsmanager]
 
-# Health check
+    LOKI_URL:
+      description: Loki push URL
+      default: "http://localhost:3100"
+      type: url
+      required_for: [monitored, vpsmanager]
+
+    TEMPO_URL:
+      description: Tempo OTLP endpoint
+      default: "localhost:4317"
+      type: endpoint
+      required_for: [monitored, vpsmanager]
+
+    HOST_NAME:
+      description: Hostname for telemetry labels
+      default: "$(hostname -f)"
+      type: string
+
+    ENVIRONMENT:
+      description: Environment label (production, staging, etc.)
+      default: "production"
+      type: string
+
+    DEPLOYMENT_ROLE:
+      description: Deployment role configuration
+      default: "monitored"
+      type: enum
+      values: [observability, monitored, vpsmanager]
+
+    OBSERVABILITY_IP:
+      description: IP address of observability stack (for firewall)
+      type: ip
+      required_for: [monitored, vpsmanager]
+
+# ============================================================================
+# Health Check Configuration
+# ============================================================================
 health_check:
   endpoint: "http://localhost:12345/-/ready"
   interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
 
-# Upgrade notes
+  checks:
+    - name: ready
+      endpoint: "/-/ready"
+      expected_status: 200
+
+    - name: metrics
+      endpoint: "/metrics"
+      expected_status: 200
+      contains: "alloy_build_info"
+
+# ============================================================================
+# Monitoring Configuration
+# ============================================================================
+monitoring:
+  self_scrape: true
+  metrics_prefix: alloy_
+
+  key_metrics:
+    - alloy_build_info
+    - alloy_component_dependencies_wait_seconds
+    - alloy_component_evaluation_seconds
+    - alloy_component_controller_running_components
+    - prometheus_remote_write_samples_total
+    - prometheus_remote_write_samples_failed_total
+    - loki_write_sent_bytes_total
+    - loki_write_dropped_bytes_total
+    - otelcol_receiver_accepted_spans
+    - otelcol_exporter_sent_spans
+
+  alerts:
+    - name: AlloyDown
+      expr: up{job="alloy"} == 0
+      for: 5m
+      severity: critical
+
+    - name: AlloyRemoteWriteFailures
+      expr: rate(prometheus_remote_write_samples_failed_total[5m]) > 0
+      for: 5m
+      severity: warning
+
+    - name: AlloyLokiDroppedLogs
+      expr: rate(loki_write_dropped_bytes_total[5m]) > 0
+      for: 5m
+      severity: warning
+
+# ============================================================================
+# Migration from Promtail
+# ============================================================================
+migration:
+  from_promtail:
+    description: |
+      Alloy replaces Promtail for log collection with these advantages:
+      - Single binary for metrics, logs, and traces
+      - River configuration language (more powerful than YAML)
+      - Built-in OpenTelemetry support
+      - Better performance and lower resource usage
+
+    automatic_conversion: true
+    conversion_command: |
+      alloy convert --source-format=promtail \
+        --output=/etc/alloy/config.alloy.migrated \
+        /etc/promtail/promtail.yaml
+
+    manual_steps:
+      - "1. Install Alloy alongside Promtail"
+      - "2. Convert Promtail config or use provided templates"
+      - "3. Validate config: alloy fmt /etc/alloy/config.alloy"
+      - "4. Test with: alloy run --dry-run /etc/alloy/config.alloy"
+      - "5. Start Alloy and verify logs are being collected"
+      - "6. Disable Promtail: systemctl stop promtail && systemctl disable promtail"
+
+    rollback_steps:
+      - "1. Stop Alloy: systemctl stop alloy"
+      - "2. Re-enable Promtail: systemctl start promtail"
+      - "3. Verify logs are flowing to Loki"
+
+# ============================================================================
+# Upgrade Notes
+# ============================================================================
 upgrade:
-  from_grafana_agent: |
-    Alloy replaces Grafana Agent with these key changes:
-    - New River configuration language (not YAML)
-    - Component-based architecture
-    - Native OpenTelemetry support
-    - Programmable pipelines
+  pre_checks:
+    - "Verify current version: alloy --version"
+    - "Backup configuration: cp -r /etc/alloy /etc/alloy.backup"
+    - "Check for breaking changes in release notes"
 
-  migration_steps:
-    - "Convert YAML config to River format"
-    - "Update service files"
-    - "Test configuration with 'alloy fmt'"
-    - "Validate with 'alloy run --dry-run'"
+  breaking_changes:
+    "1.5.0":
+      - "River syntax updates - run 'alloy fmt' on configs"
+    "1.4.0":
+      - "otelcol.* component API changes"
+    "1.3.0":
+      - "prometheus.remote_write queue_config changes"
 
+  post_checks:
+    - "Verify service running: systemctl status alloy"
+    - "Check health: curl -s http://localhost:12345/-/ready"
+    - "Verify metrics: curl -s http://localhost:12345/metrics | grep alloy_build_info"
+    - "Check logs: journalctl -u alloy -n 50"
+
+# ============================================================================
 # Documentation
+# ============================================================================
 documentation:
   official: "https://grafana.com/docs/alloy/latest/"
   configuration: "https://grafana.com/docs/alloy/latest/reference/config-blocks/"
+  components: "https://grafana.com/docs/alloy/latest/reference/components/"
   migration: "https://grafana.com/docs/alloy/latest/set-up/migrate/"
+  river_language: "https://grafana.com/docs/alloy/latest/concepts/configuration-syntax/"
+
+  internal:
+    install_script: "./install.sh"
+    config_templates: "./configs/"
+    examples:
+      observability: "./configs/observability.alloy"
+      monitored: "./configs/monitored.alloy"
+      vpsmanager: "./configs/vpsmanager.alloy"
+
+# ============================================================================
+# Troubleshooting
+# ============================================================================
+troubleshooting:
+  common_issues:
+    - problem: "Alloy not starting"
+      solutions:
+        - "Check config syntax: alloy fmt /etc/alloy/config.alloy"
+        - "Check permissions: ls -la /etc/alloy /var/lib/alloy"
+        - "Check logs: journalctl -u alloy -n 100"
+        - "Verify binary: /usr/local/bin/alloy --version"
+
+    - problem: "Metrics not being scraped"
+      solutions:
+        - "Check target status in Alloy UI: http://localhost:12345"
+        - "Verify exporter is running: curl http://localhost:9100/metrics"
+        - "Check scrape config in /etc/alloy/config.alloy"
+
+    - problem: "Logs not forwarding to Loki"
+      solutions:
+        - "Check Loki connectivity: curl http://LOKI_URL/ready"
+        - "Verify file permissions for log directories"
+        - "Check loki.write status in Alloy UI"
+        - "Verify user 'alloy' has read access to log files"
+
+    - problem: "Traces not reaching Tempo"
+      solutions:
+        - "Check OTLP receiver status in Alloy UI"
+        - "Verify Tempo endpoint: curl http://TEMPO_URL/ready"
+        - "Check application OTLP SDK configuration"
+        - "Verify firewall allows OTLP ports"
+
+    - problem: "High memory usage"
+      solutions:
+        - "Reduce batch sizes in processor configs"
+        - "Increase WAL truncation frequency"
+        - "Check for cardinality explosion in metrics"
+        - "Review log volume and filtering"
+
+  debug_commands:
+    - "alloy --version"
+    - "alloy fmt /etc/alloy/config.alloy"
+    - "curl -s http://localhost:12345/-/ready"
+    - "curl -s http://localhost:12345/metrics | head -50"
+    - "journalctl -u alloy -f"
+    - "systemctl status alloy"

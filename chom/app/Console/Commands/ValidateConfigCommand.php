@@ -2,11 +2,10 @@
 
 namespace App\Console\Commands;
 
+use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\Storage;
-use Exception;
 
 class ValidateConfigCommand extends Command
 {
@@ -17,7 +16,9 @@ class ValidateConfigCommand extends Command
     protected $description = 'Validate application configuration and dependencies';
 
     protected int $errors = 0;
+
     protected int $warnings = 0;
+
     protected array $fixes = [];
 
     public function handle(): int
@@ -49,17 +50,19 @@ class ValidateConfigCommand extends Command
 
         if ($this->errors === 0 && $this->warnings === 0) {
             $this->info('✓ All checks passed!');
+
             return Command::SUCCESS;
         }
 
         if ($this->errors === 0) {
             $this->warn("✓ Passed with {$this->warnings} warning(s)");
+
             return $this->option('strict') ? Command::FAILURE : Command::SUCCESS;
         }
 
         $this->error("✗ Failed with {$this->errors} error(s) and {$this->warnings} warning(s)");
 
-        if (!empty($this->fixes)) {
+        if (! empty($this->fixes)) {
             $this->newLine();
             $this->info('Suggested fixes:');
             foreach ($this->fixes as $fix) {
@@ -80,7 +83,7 @@ class ValidateConfigCommand extends Command
         if (version_compare($currentVersion, $requiredVersion, '>=')) {
             $this->success("PHP version: {$currentVersion}");
         } else {
-            $this->error("PHP version {$currentVersion} is too old (requires >= {$requiredVersion})");
+            $this->reportError("PHP version {$currentVersion} is too old (requires >= {$requiredVersion})");
             $this->fixes[] = "Upgrade PHP to version {$requiredVersion} or higher";
         }
     }
@@ -96,7 +99,7 @@ class ValidateConfigCommand extends Command
             if (extension_loaded($ext)) {
                 $this->success("Required extension: {$ext}");
             } else {
-                $this->error("Missing required extension: {$ext}");
+                $this->reportError("Missing required extension: {$ext}");
                 $this->fixes[] = "Install PHP extension: {$ext}";
             }
         }
@@ -105,7 +108,7 @@ class ValidateConfigCommand extends Command
             if (extension_loaded($ext)) {
                 $this->success("Optional extension: {$ext}");
             } else {
-                $this->warn("Missing optional extension: {$ext}");
+                $this->reportWarning("Missing optional extension: {$ext}");
             }
         }
     }
@@ -127,20 +130,20 @@ class ValidateConfigCommand extends Command
         foreach ($required as $var) {
             $value = config(strtolower(str_replace('_', '.', $var)));
 
-            if (!empty($value)) {
+            if (! empty($value)) {
                 // Don't display sensitive values
                 $displayValue = in_array($var, ['APP_KEY', 'DB_PASSWORD']) ? '****' : $value;
                 $this->success("{$var}: {$displayValue}");
             } else {
-                $this->error("Missing or empty: {$var}");
+                $this->reportError("Missing or empty: {$var}");
                 $this->fixes[] = "Set {$var} in .env file";
             }
         }
 
         // Check APP_KEY format
         $appKey = config('app.key');
-        if ($appKey && !str_starts_with($appKey, 'base64:')) {
-            $this->warn('APP_KEY should be base64 encoded');
+        if ($appKey && ! str_starts_with($appKey, 'base64:')) {
+            $this->reportWarning('APP_KEY should be base64 encoded');
             $this->fixes[] = 'Run: php artisan key:generate';
         }
     }
@@ -157,13 +160,13 @@ class ValidateConfigCommand extends Command
             // Check tables exist
             $tables = DB::connection()->getDoctrineSchemaManager()->listTableNames();
             if (count($tables) > 0) {
-                $this->success('Found ' . count($tables) . ' table(s)');
+                $this->success('Found '.count($tables).' table(s)');
             } else {
-                $this->warn('No tables found - database may not be migrated');
+                $this->reportWarning('No tables found - database may not be migrated');
                 $this->fixes[] = 'Run: php artisan migrate';
             }
         } catch (Exception $e) {
-            $this->error('Cannot connect to database: ' . $e->getMessage());
+            $this->reportError('Cannot connect to database: '.$e->getMessage());
             $this->fixes[] = 'Check database credentials in .env file';
         }
     }
@@ -179,10 +182,10 @@ class ValidateConfigCommand extends Command
             // Check Redis info
             $info = Redis::info();
             if (isset($info['used_memory_human'])) {
-                $this->success('Redis memory usage: ' . $info['used_memory_human']);
+                $this->success('Redis memory usage: '.$info['used_memory_human']);
             }
         } catch (Exception $e) {
-            $this->error('Cannot connect to Redis: ' . $e->getMessage());
+            $this->reportError('Cannot connect to Redis: '.$e->getMessage());
             $this->fixes[] = 'Check Redis configuration in .env file';
             $this->fixes[] = 'Ensure Redis server is running';
         }
@@ -204,7 +207,7 @@ class ValidateConfigCommand extends Command
             if (is_writable($path)) {
                 $this->success("Writable: {$path}");
             } else {
-                $this->error("Not writable: {$path}");
+                $this->reportError("Not writable: {$path}");
                 $this->fixes[] = "chmod -R 775 {$path}";
                 $this->fixes[] = "chown -R www-data:www-data {$path}";
             }
@@ -234,7 +237,7 @@ class ValidateConfigCommand extends Command
                     mkdir($path, 0755, true);
                     $this->success("Created directory: storage/{$dir}");
                 } else {
-                    $this->warn("Directory missing: storage/{$dir}");
+                    $this->reportWarning("Directory missing: storage/{$dir}");
                     $this->fixes[] = "mkdir -p {$path}";
                 }
             }
@@ -256,10 +259,10 @@ class ValidateConfigCommand extends Command
             if ($value === 'test') {
                 $this->success('Cache read/write working');
             } else {
-                $this->error('Cache read/write failed');
+                $this->reportError('Cache read/write failed');
             }
         } catch (Exception $e) {
-            $this->error('Cache error: ' . $e->getMessage());
+            $this->reportError('Cache error: '.$e->getMessage());
         }
     }
 
@@ -275,9 +278,9 @@ class ValidateConfigCommand extends Command
             exec('ps aux | grep "queue:work" | grep -v grep', $output);
 
             if (count($output) > 0) {
-                $this->success('Queue workers running: ' . count($output));
+                $this->success('Queue workers running: '.count($output));
             } else {
-                $this->warn('No queue workers found');
+                $this->reportWarning('No queue workers found');
                 $this->fixes[] = 'Start queue workers: php artisan queue:work';
             }
         }
@@ -289,21 +292,21 @@ class ValidateConfigCommand extends Command
 
         // Check debug mode
         if (config('app.debug') && config('app.env') === 'production') {
-            $this->error('Debug mode is enabled in production');
+            $this->reportError('Debug mode is enabled in production');
             $this->fixes[] = 'Set APP_DEBUG=false in .env';
         } else {
             $this->success('Debug mode properly configured');
         }
 
         // Check HTTPS
-        if (config('app.env') === 'production' && !str_starts_with(config('app.url'), 'https://')) {
-            $this->warn('APP_URL should use HTTPS in production');
+        if (config('app.env') === 'production' && ! str_starts_with(config('app.url'), 'https://')) {
+            $this->reportWarning('APP_URL should use HTTPS in production');
             $this->fixes[] = 'Set APP_URL to https:// in .env';
         }
 
         // Check session security
         if (config('session.secure') === false && config('app.env') === 'production') {
-            $this->warn('Session cookies should be secure in production');
+            $this->reportWarning('Session cookies should be secure in production');
             $this->fixes[] = 'Set SESSION_SECURE_COOKIE=true in .env';
         } else {
             $this->success('Session security configured');
@@ -316,12 +319,14 @@ class ValidateConfigCommand extends Command
 
         if (config('app.env') !== 'production') {
             $this->success('SSL check skipped (not production)');
+
             return;
         }
 
         $url = config('app.url');
-        if (!str_starts_with($url, 'https://')) {
-            $this->warn('SSL not configured');
+        if (! str_starts_with($url, 'https://')) {
+            $this->reportWarning('SSL not configured');
+
             return;
         }
 
@@ -356,12 +361,12 @@ class ValidateConfigCommand extends Command
                     $daysUntilExpiry = ($expiryDate - time()) / 86400;
 
                     if ($daysUntilExpiry > 30) {
-                        $this->success("SSL certificate valid for " . round($daysUntilExpiry) . " days");
+                        $this->success('SSL certificate valid for '.round($daysUntilExpiry).' days');
                     } elseif ($daysUntilExpiry > 0) {
-                        $this->warn("SSL certificate expires in " . round($daysUntilExpiry) . " days");
+                        $this->reportWarning('SSL certificate expires in '.round($daysUntilExpiry).' days');
                         $this->fixes[] = 'Renew SSL certificate soon';
                     } else {
-                        $this->error('SSL certificate has expired');
+                        $this->reportError('SSL certificate has expired');
                         $this->fixes[] = 'Renew SSL certificate immediately';
                     }
                 } else {
@@ -369,7 +374,7 @@ class ValidateConfigCommand extends Command
                 }
             }
         } catch (Exception $e) {
-            $this->warn('Could not check SSL certificate: ' . $e->getMessage());
+            $this->warn('Could not check SSL certificate: '.$e->getMessage());
         }
     }
 
@@ -390,13 +395,13 @@ class ValidateConfigCommand extends Command
         $this->line("  <fg=green>✓</> {$message}");
     }
 
-    protected function error(string $message): void
+    protected function reportError(string $message): void
     {
         $this->errors++;
         $this->line("  <fg=red>✗</> {$message}");
     }
 
-    protected function warn(string $message): void
+    protected function reportWarning(string $message): void
     {
         $this->warnings++;
         $this->line("  <fg=yellow>⚠</> {$message}");

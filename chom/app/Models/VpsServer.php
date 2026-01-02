@@ -108,6 +108,7 @@ class VpsServer extends Model
     public function getAvailableMemoryMb(): int
     {
         $allocated = $this->allocations()->sum('memory_mb_allocated');
+
         return max(0, $this->spec_memory_mb - $allocated);
     }
 
@@ -128,6 +129,7 @@ class VpsServer extends Model
             return 0;
         }
         $allocated = $this->allocations()->sum('memory_mb_allocated');
+
         return round(($allocated / $this->spec_memory_mb) * 100, 2);
     }
 

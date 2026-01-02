@@ -8,7 +8,15 @@
 # - Redis
 # - Supervisor (queues)
 # - Let's Encrypt SSL
-# - All monitoring exporters + Promtail
+# - All monitoring exporters + Promtail/Alloy
+#
+# Exporter Ports:
+# - node_exporter:    9100
+# - nginx_exporter:   9113
+# - mysqld_exporter:  9104
+# - phpfpm_exporter:  9253
+# - promtail:         9080 (if using Promtail)
+# - alloy:            12345 (if using Alloy)
 #===============================================================================
 
 set -euo pipefail
@@ -26,12 +34,24 @@ VPSMANAGER_USER="www-data"
 # PHP Version
 PHP_VERSION="${PHP_VERSION:-8.2}"
 
+# Telemetry collector choice: promtail or alloy
+TELEMETRY_COLLECTOR="${TELEMETRY_COLLECTOR:-promtail}"
+
 # Exporter versions
 NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-1.7.0}"
 PROMTAIL_VERSION="${PROMTAIL_VERSION:-3.0.0}"
+ALLOY_VERSION="${ALLOY_VERSION:-1.0.0}"
 NGINX_EXPORTER_VERSION="${NGINX_EXPORTER_VERSION:-1.1.0}"
 MYSQLD_EXPORTER_VERSION="${MYSQLD_EXPORTER_VERSION:-0.15.1}"
 PHPFPM_EXPORTER_VERSION="${PHPFPM_EXPORTER_VERSION:-0.6.0}"
+
+# Standard exporter ports
+readonly NODE_EXPORTER_PORT=9100
+readonly NGINX_EXPORTER_PORT=9113
+readonly MYSQLD_EXPORTER_PORT=9104
+readonly PHPFPM_EXPORTER_PORT=9253
+readonly PROMTAIL_PORT=9080
+readonly ALLOY_PORT=12345
 
 #===============================================================================
 # Main Installation Function
@@ -55,18 +75,30 @@ install_vpsmanager() {
     configure_supervisor
     set_permissions
 
-    # Install monitoring
+    # Install monitoring exporters
     install_node_exporter
     install_nginx_exporter
     install_mysqld_exporter
     install_phpfpm_exporter
-    install_promtail
+
+    # Install telemetry collector based on choice
+    case "${TELEMETRY_COLLECTOR,,}" in
+        alloy)
+            install_alloy
+            ;;
+        promtail|*)
+            install_promtail
+            ;;
+    esac
 
     setup_firewall_vpsmanager
     start_all_services
 
     # Run comprehensive health checks
     run_health_checks || log_warn "Some health checks failed - review above"
+
+    # Generate Prometheus targets file
+    generate_prometheus_targets
 
     save_installation_info
 
@@ -89,6 +121,27 @@ validate_config() {
     if [[ -z "${VPSMANAGER_DOMAIN:-}" ]]; then
         log_error "Domain is required for VPSManager"
         exit 1
+    fi
+
+    if [[ -z "${HOST_NAME:-}" ]]; then
+        log_error "HOST_NAME is required"
+        exit 1
+    fi
+
+    if [[ -z "${HOST_IP:-}" ]]; then
+        log_error "HOST_IP is required"
+        exit 1
+    fi
+
+    if [[ -z "${OBSERVABILITY_IP:-}" ]]; then
+        log_error "OBSERVABILITY_IP is required"
+        exit 1
+    fi
+
+    # Validate telemetry collector choice
+    if [[ "${TELEMETRY_COLLECTOR,,}" != "promtail" ]] && [[ "${TELEMETRY_COLLECTOR,,}" != "alloy" ]]; then
+        log_warn "Unknown TELEMETRY_COLLECTOR: ${TELEMETRY_COLLECTOR}, defaulting to promtail"
+        TELEMETRY_COLLECTOR="promtail"
     fi
 
     log_success "Configuration validated"
@@ -115,7 +168,8 @@ install_system_packages() {
         htop \
         ncdu \
         vim \
-        cron
+        cron \
+        dnsutils
 
     log_success "System packages installed"
 }
@@ -160,6 +214,10 @@ install_php() {
 
     # Add PHP repository
     apt-get install -y -qq apt-transport-https lsb-release ca-certificates
+
+    # Create keyrings directory if it doesn't exist
+    mkdir -p /etc/apt/keyrings
+
     curl -sSL https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /etc/apt/keyrings/php.gpg
     echo "deb [signed-by=/etc/apt/keyrings/php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
 
@@ -184,18 +242,41 @@ install_php() {
         php${PHP_VERSION}-readline \
         php${PHP_VERSION}-opcache \
         php${PHP_VERSION}-soap \
-        php${PHP_VERSION}-tokenizer
+        php${PHP_VERSION}-tokenizer || true
 
     # Configure PHP-FPM
+    configure_phpfpm_for_monitoring
+
+    log_success "PHP ${PHP_VERSION} installed"
+}
+
+configure_phpfpm_for_monitoring() {
+    log_step "Configuring PHP-FPM for monitoring..."
+
     local fpm_conf="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
 
-    # Enable status page for monitoring
-    sed -i 's/^;pm.status_path/pm.status_path/' "$fpm_conf"
-    sed -i 's|^pm.status_path = .*|pm.status_path = /fpm-status|' "$fpm_conf"
-    sed -i 's/^;ping.path/ping.path/' "$fpm_conf"
+    if [[ ! -f "$fpm_conf" ]]; then
+        log_warn "PHP-FPM pool config not found at $fpm_conf"
+        return 1
+    fi
+
+    # Enable status page for monitoring (required for phpfpm_exporter)
+    # Uncomment and set pm.status_path
+    if grep -q "^;pm.status_path" "$fpm_conf"; then
+        sed -i 's/^;pm.status_path.*/pm.status_path = \/fpm-status/' "$fpm_conf"
+    elif ! grep -q "^pm.status_path" "$fpm_conf"; then
+        echo "pm.status_path = /fpm-status" >> "$fpm_conf"
+    fi
+
+    # Uncomment and set ping.path
+    if grep -q "^;ping.path" "$fpm_conf"; then
+        sed -i 's/^;ping.path.*/ping.path = \/fpm-ping/' "$fpm_conf"
+    elif ! grep -q "^ping.path" "$fpm_conf"; then
+        echo "ping.path = /fpm-ping" >> "$fpm_conf"
+    fi
 
     # Performance tuning
-    sed -i 's/^pm = dynamic/pm = dynamic/' "$fpm_conf"
+    sed -i 's/^pm = .*/pm = dynamic/' "$fpm_conf"
     sed -i 's/^pm.max_children = .*/pm.max_children = 20/' "$fpm_conf"
     sed -i 's/^pm.start_servers = .*/pm.start_servers = 5/' "$fpm_conf"
     sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 3/' "$fpm_conf"
@@ -203,14 +284,16 @@ install_php() {
 
     # PHP.ini optimization
     local php_ini="/etc/php/${PHP_VERSION}/fpm/php.ini"
-    sed -i 's/^upload_max_filesize = .*/upload_max_filesize = 100M/' "$php_ini"
-    sed -i 's/^post_max_size = .*/post_max_size = 100M/' "$php_ini"
-    sed -i 's/^memory_limit = .*/memory_limit = 256M/' "$php_ini"
-    sed -i 's/^max_execution_time = .*/max_execution_time = 120/' "$php_ini"
-    sed -i 's/^;opcache.enable=.*/opcache.enable=1/' "$php_ini"
-    sed -i 's/^;opcache.memory_consumption=.*/opcache.memory_consumption=256/' "$php_ini"
+    if [[ -f "$php_ini" ]]; then
+        sed -i 's/^upload_max_filesize = .*/upload_max_filesize = 100M/' "$php_ini"
+        sed -i 's/^post_max_size = .*/post_max_size = 100M/' "$php_ini"
+        sed -i 's/^memory_limit = .*/memory_limit = 256M/' "$php_ini"
+        sed -i 's/^max_execution_time = .*/max_execution_time = 120/' "$php_ini"
+        sed -i 's/^;opcache.enable=.*/opcache.enable=1/' "$php_ini"
+        sed -i 's/^;opcache.memory_consumption=.*/opcache.memory_consumption=256/' "$php_ini"
+    fi
 
-    log_success "PHP ${PHP_VERSION} installed"
+    log_success "PHP-FPM configured for monitoring"
 }
 
 #===============================================================================
@@ -256,6 +339,10 @@ install_mariadb() {
                 log_success "Existing credentials validated"
             else
                 log_error "Credentials file exists but password is incorrect"
+                if [[ "${NON_INTERACTIVE:-false}" == "true" ]]; then
+                    log_error "Cannot prompt for password in non-interactive mode"
+                    return 1
+                fi
                 read -s -p "Enter MariaDB root password: " DB_ROOT_PASS
                 echo
 
@@ -266,6 +353,10 @@ install_mariadb() {
             fi
         else
             log_warn "No credentials file found"
+            if [[ "${NON_INTERACTIVE:-false}" == "true" ]]; then
+                log_error "Cannot prompt for password in non-interactive mode"
+                return 1
+            fi
             read -s -p "Enter existing MariaDB root password: " DB_ROOT_PASS
             echo
 
@@ -309,7 +400,7 @@ GRANT ALL PRIVILEGES ON vpsmanager.* TO 'vpsmanager'@'localhost';
 FLUSH PRIVILEGES;
 EOF
 
-    # Create exporter user
+    # Create exporter user for monitoring
     if [[ -z "${MYSQL_EXPORTER_PASS:-}" ]]; then
         MYSQL_EXPORTER_PASS=$(generate_password)
     fi
@@ -408,7 +499,7 @@ install_nodejs() {
     log_info "Node.js version: $installed_version"
 
     # Pin npm version for consistency
-    npm install -g "npm@${NPM_VERSION}"
+    npm install -g "npm@${NPM_VERSION}" || true
 
     log_success "Node.js $(node --version) installed and version pinned"
     log_info "To upgrade: apt-mark unhold nodejs && apt-get install nodejs"
@@ -644,6 +735,19 @@ EOF
 setup_ssl() {
     log_step "Setting up SSL certificate..."
 
+    # Skip SSL for IP-based domains
+    if [[ "$VPSMANAGER_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log_warn "Domain is an IP address - SSL certificates not available for IP addresses"
+        log_info "Application will be accessible via HTTP only"
+        return 0
+    fi
+
+    # Skip if explicitly requested
+    if [[ "${SKIP_SSL:-false}" == "true" ]]; then
+        log_info "Skipping SSL setup (SKIP_SSL=true)"
+        return 0
+    fi
+
     # Get server's public IP
     local server_ip
     server_ip=$(curl -s4 https://ifconfig.me)
@@ -663,14 +767,19 @@ setup_ssl() {
     if [[ "$domain_ip" != "$server_ip" ]]; then
         log_warn "DNS mismatch: domain points to $domain_ip but server IP is $server_ip"
         log_warn "SSL certificate acquisition may fail"
-        read -p "Continue anyway? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log_warn "Skipping SSL setup"
+        if [[ "${NON_INTERACTIVE:-false}" != "true" ]]; then
+            read -p "Continue anyway? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                log_warn "Skipping SSL setup"
+                return 1
+            fi
+        else
+            log_warn "Non-interactive mode: skipping SSL setup due to DNS mismatch"
             return 1
         fi
     else
-        log_success "DNS validated: ${VPSMANAGER_DOMAIN} → ${server_ip}"
+        log_success "DNS validated: ${VPSMANAGER_DOMAIN} -> ${server_ip}"
     fi
 
     # Start nginx for ACME challenge
@@ -795,11 +904,11 @@ set_permissions() {
 }
 
 #===============================================================================
-# Monitoring Exporters (from monitored.sh)
+# Monitoring Exporters
 #===============================================================================
 
 install_node_exporter() {
-    log_step "Installing Node Exporter..."
+    log_step "Installing Node Exporter ${NODE_EXPORTER_VERSION}..."
 
     local arch
     arch=$(get_architecture)
@@ -813,35 +922,55 @@ install_node_exporter() {
     tar xzf "$tarball"
 
     # Stop service and verify before binary update
-    stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || {
-        log_error "Failed to stop node_exporter safely"
-        return 1
-    }
+    stop_and_verify_service "node_exporter" "/usr/local/bin/node_exporter" || true
 
     cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}/node_exporter" /usr/local/bin/
+    chmod 755 /usr/local/bin/node_exporter
     rm -rf "/tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
-    cat > /etc/systemd/system/node_exporter.service << 'EOF'
+    cat > /etc/systemd/system/node_exporter.service << EOF
 [Unit]
-Description=Node Exporter
+Description=Prometheus Node Exporter
+Documentation=https://github.com/prometheus/node_exporter
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=node_exporter
-ExecStart=/usr/local/bin/node_exporter --collector.systemd --collector.processes
+Group=node_exporter
+ExecStart=/usr/local/bin/node_exporter \\
+    --collector.systemd \\
+    --collector.processes \\
+    --collector.filesystem.mount-points-exclude='^/(sys|proc|dev|host|etc)(\$\$|/)' \\
+    --web.listen-address=':${NODE_EXPORTER_PORT}' \\
+    --web.telemetry-path='/metrics'
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+
+# Resource limits
+MemoryMax=128M
+CPUQuota=25%
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    log_success "Node Exporter installed"
+    log_success "Node Exporter ${NODE_EXPORTER_VERSION} installed (port ${NODE_EXPORTER_PORT})"
 }
 
 install_nginx_exporter() {
-    log_step "Installing Nginx Exporter..."
+    log_step "Installing Nginx Exporter ${NGINX_EXPORTER_VERSION}..."
 
     local arch
     arch=$(get_architecture)
@@ -855,37 +984,59 @@ install_nginx_exporter() {
     tar xzf "$tarball"
 
     # Stop service and verify before binary update
-    stop_and_verify_service "nginx_exporter" "/usr/local/bin/nginx-prometheus-exporter" || {
-        log_error "Failed to stop nginx_exporter safely"
-        return 1
-    }
+    stop_and_verify_service "nginx_exporter" "/usr/local/bin/nginx-prometheus-exporter" || true
 
     cp nginx-prometheus-exporter /usr/local/bin/
+    chmod 755 /usr/local/bin/nginx-prometheus-exporter
     rm -f "/tmp/${tarball}" /tmp/nginx-prometheus-exporter
 
-    cat > /etc/systemd/system/nginx_exporter.service << 'EOF'
+    cat > /etc/systemd/system/nginx_exporter.service << EOF
 [Unit]
-Description=Nginx Exporter
+Description=Prometheus Nginx Exporter
+Documentation=https://github.com/nginxinc/nginx-prometheus-exporter
 After=network-online.target nginx.service
+Wants=network-online.target
+BindsTo=nginx.service
 
 [Service]
 Type=simple
 User=nginx_exporter
-ExecStart=/usr/local/bin/nginx-prometheus-exporter --nginx.scrape-uri=http://127.0.0.1:8080/stub_status
+Group=nginx_exporter
+ExecStart=/usr/local/bin/nginx-prometheus-exporter \\
+    --nginx.scrape-uri='http://127.0.0.1:8080/stub_status' \\
+    --web.listen-address=':${NGINX_EXPORTER_PORT}' \\
+    --web.telemetry-path='/metrics'
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+
+# Resource limits
+MemoryMax=64M
+CPUQuota=10%
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    log_success "Nginx Exporter installed"
+    log_success "Nginx Exporter ${NGINX_EXPORTER_VERSION} installed (port ${NGINX_EXPORTER_PORT})"
 }
 
 install_mysqld_exporter() {
-    log_step "Installing MySQL Exporter..."
+    log_step "Installing MySQL Exporter ${MYSQLD_EXPORTER_VERSION}..."
 
-    source /root/.credentials/mysql
+    # Source credentials if available
+    if [[ -f /root/.credentials/mysql ]]; then
+        source /root/.credentials/mysql
+    fi
 
     local arch
     arch=$(get_architecture)
@@ -899,75 +1050,148 @@ install_mysqld_exporter() {
     tar xzf "$tarball"
 
     # Stop service and verify before binary update
-    stop_and_verify_service "mysqld_exporter" "/usr/local/bin/mysqld_exporter" || {
-        log_error "Failed to stop mysqld_exporter safely"
-        return 1
-    }
+    stop_and_verify_service "mysqld_exporter" "/usr/local/bin/mysqld_exporter" || true
 
     cp "mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-${arch}/mysqld_exporter" /usr/local/bin/
+    chmod 755 /usr/local/bin/mysqld_exporter
     rm -rf "/tmp/mysqld_exporter-${MYSQLD_EXPORTER_VERSION}.linux-${arch}" "/tmp/${tarball}"
 
     mkdir -p /etc/mysqld_exporter
     cat > /etc/mysqld_exporter/.my.cnf << EOF
 [client]
 user=exporter
-password=${MYSQL_EXPORTER_PASS}
+password=${MYSQL_EXPORTER_PASS:-exporter_password}
+host=127.0.0.1
+port=3306
 EOF
     chown -R mysqld_exporter:mysqld_exporter /etc/mysqld_exporter
     chmod 600 /etc/mysqld_exporter/.my.cnf
 
-    cat > /etc/systemd/system/mysqld_exporter.service << 'EOF'
+    cat > /etc/systemd/system/mysqld_exporter.service << EOF
 [Unit]
-Description=MySQL Exporter
-After=network-online.target mariadb.service
+Description=Prometheus MySQL/MariaDB Exporter
+Documentation=https://github.com/prometheus/mysqld_exporter
+After=network-online.target mariadb.service mysql.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=mysqld_exporter
-ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysqld_exporter/.my.cnf
+Group=mysqld_exporter
+ExecStart=/usr/local/bin/mysqld_exporter \\
+    --config.my-cnf=/etc/mysqld_exporter/.my.cnf \\
+    --web.listen-address=':${MYSQLD_EXPORTER_PORT}' \\
+    --web.telemetry-path='/metrics' \\
+    --collect.info_schema.tables \\
+    --collect.info_schema.innodb_metrics \\
+    --collect.global_status \\
+    --collect.global_variables \\
+    --collect.slave_status \\
+    --collect.engine_innodb_status
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+ReadWritePaths=/etc/mysqld_exporter
+
+# Resource limits
+MemoryMax=64M
+CPUQuota=10%
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    log_success "MySQL Exporter installed"
+    log_success "MySQL Exporter ${MYSQLD_EXPORTER_VERSION} installed (port ${MYSQLD_EXPORTER_PORT})"
 }
 
 install_phpfpm_exporter() {
-    log_step "Installing PHP-FPM Exporter..."
+    log_step "Installing PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION}..."
 
     create_system_user phpfpm_exporter phpfpm_exporter
+    # Add to www-data group to access PHP-FPM socket
+    usermod -a -G www-data phpfpm_exporter 2>/dev/null || true
 
     local arch
     arch=$(get_architecture)
     local url="https://github.com/hipages/php-fpm_exporter/releases/download/v${PHPFPM_EXPORTER_VERSION}/php-fpm_exporter_${PHPFPM_EXPORTER_VERSION}_linux_${arch}"
 
-    download_file "$url" /usr/local/bin/phpfpm_exporter
-    chmod +x /usr/local/bin/phpfpm_exporter
+    # Stop service and verify before binary update
+    stop_and_verify_service "phpfpm_exporter" "/usr/local/bin/phpfpm_exporter" || true
 
+    download_file "$url" /usr/local/bin/phpfpm_exporter
+    chmod 755 /usr/local/bin/phpfpm_exporter
+
+    # Find PHP-FPM socket dynamically
+    local fpm_socket
+    fpm_socket=$(find /run/php/ -name "php*-fpm.sock" 2>/dev/null | head -1)
+    if [[ -z "$fpm_socket" ]]; then
+        fpm_socket="/run/php/php${PHP_VERSION}-fpm.sock"
+    fi
+
+    # Verify socket exists and is accessible
+    if [[ ! -S "$fpm_socket" ]]; then
+        log_warn "PHP-FPM socket not found at $fpm_socket"
+        log_info "PHP-FPM exporter will wait for socket to become available"
+    fi
+
+    # Create systemd service - use unix socket format for PHP-FPM status
+    # The hipages exporter uses: unix://<socket_path>;<status_path>
     cat > /etc/systemd/system/phpfpm_exporter.service << EOF
 [Unit]
-Description=PHP-FPM Exporter
-After=network-online.target
+Description=PHP-FPM Exporter for Prometheus
+Documentation=https://github.com/hipages/php-fpm_exporter
+After=network-online.target php${PHP_VERSION}-fpm.service
+Wants=network-online.target
+Requires=php${PHP_VERSION}-fpm.service
 
 [Service]
 Type=simple
 User=phpfpm_exporter
-ExecStart=/usr/local/bin/phpfpm_exporter --phpfpm.scrape-uri="tcp://127.0.0.1:8080/fpm-status"
+Group=phpfpm_exporter
+# Use unix socket format: unix://<socket>;<status_path>
+ExecStart=/usr/local/bin/phpfpm_exporter server \\
+    --phpfpm.scrape-uri="unix://${fpm_socket};/fpm-status" \\
+    --web.listen-address=":${PHPFPM_EXPORTER_PORT}" \\
+    --web.telemetry-path="/metrics"
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+
+# Resource limits
+MemoryMax=64M
+CPUQuota=10%
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    log_success "PHP-FPM Exporter installed"
+    log_success "PHP-FPM Exporter ${PHPFPM_EXPORTER_VERSION} installed (port ${PHPFPM_EXPORTER_PORT}, socket: ${fpm_socket})"
 }
 
+#===============================================================================
+# Telemetry Collectors
+#===============================================================================
+
 install_promtail() {
-    log_step "Installing Promtail..."
+    log_step "Installing Promtail ${PROMTAIL_VERSION}..."
 
     local arch
     arch=$(get_architecture)
@@ -981,93 +1205,447 @@ install_promtail() {
     cd /tmp
     download_file "$url" "promtail.zip"
     unzip -o promtail.zip
-    chmod +x "${binary}"
 
     # Stop service and verify before binary update
-    stop_and_verify_service "promtail" "/usr/local/bin/promtail" || {
-        log_error "Failed to stop promtail safely"
-        return 1
-    }
+    stop_and_verify_service "promtail" "/usr/local/bin/promtail" || true
 
+    chmod +x "${binary}"
     mv "${binary}" /usr/local/bin/promtail
     rm -f /tmp/promtail.zip
 
     mkdir -p /etc/promtail /var/lib/promtail
     chown -R promtail:promtail /var/lib/promtail
 
+    # Determine environment (production vs test)
+    local app_env="${APP_ENV:-production}"
+    if [[ "${HOST_NAME}" == *"_tst"* ]] || [[ "${HOST_NAME}" == *"-tst"* ]]; then
+        app_env="test"
+    fi
+
     cat > /etc/promtail/promtail.yaml << EOF
+# Promtail Configuration for VPSManager/CHOM
+# Host: ${HOST_NAME}
+# Environment: ${app_env}
+# Generated: $(date -Iseconds)
+
 server:
-  http_listen_port: 9080
+  http_listen_port: ${PROMTAIL_PORT}
   grpc_listen_port: 0
+  log_level: info
 
 positions:
   filename: /var/lib/promtail/positions.yaml
 
 clients:
   - url: http://${OBSERVABILITY_IP}:3100/loki/api/v1/push
+    tenant_id: ${HOST_NAME}
+    batchwait: 1s
+    batchsize: 1048576
+    external_labels:
+      host: ${HOST_NAME}
+      env: ${app_env}
+      app: chom
 
 scrape_configs:
-  - job_name: vpsmanager
+  # Laravel Application Logs
+  - job_name: laravel
     static_configs:
       - targets: [localhost]
         labels:
-          job: vpsmanager
+          job: vpsmanager-laravel
+          app: chom
           host: ${HOST_NAME}
+          env: ${app_env}
           __path__: ${VPSMANAGER_PATH}/storage/logs/*.log
+    pipeline_stages:
+      # Parse Laravel log format: [YYYY-MM-DD HH:MM:SS] environment.LEVEL: message
+      - multiline:
+          firstline: '^\[\d{4}-\d{2}-\d{2}'
+          max_wait_time: 3s
+      - regex:
+          expression: '^\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (?P<channel>\w+)\.(?P<level>\w+): (?P<message>.*)'
+      - labels:
+          level:
+          channel:
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02 15:04:05'
 
-  - job_name: nginx
+  # Laravel Worker/Queue Logs
+  - job_name: laravel-worker
     static_configs:
       - targets: [localhost]
         labels:
-          job: nginx
+          job: vpsmanager-worker
+          app: chom
           host: ${HOST_NAME}
-          __path__: /var/log/nginx/*.log
+          env: ${app_env}
+          __path__: ${VPSMANAGER_PATH}/storage/logs/worker*.log
+    pipeline_stages:
+      - multiline:
+          firstline: '^\[\d{4}-\d{2}-\d{2}'
+          max_wait_time: 3s
 
+  # Nginx Access Logs
+  - job_name: nginx-access
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: vpsmanager-nginx
+          log_type: access
+          app: chom
+          host: ${HOST_NAME}
+          env: ${app_env}
+          __path__: /var/log/nginx/access.log
+    pipeline_stages:
+      # Parse combined log format
+      - regex:
+          expression: '^(?P<remote_addr>[\w\.]+) - (?P<remote_user>\S+) \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<request_uri>\S+) (?P<protocol>\S+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+      - labels:
+          method:
+          status:
+
+  # Nginx Error Logs
+  - job_name: nginx-error
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: vpsmanager-nginx
+          log_type: error
+          app: chom
+          host: ${HOST_NAME}
+          env: ${app_env}
+          __path__: /var/log/nginx/error.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<message>.*)'
+      - labels:
+          level:
+
+  # PHP-FPM Logs
   - job_name: php-fpm
     static_configs:
       - targets: [localhost]
         labels:
-          job: php-fpm
+          job: vpsmanager-phpfpm
+          app: chom
           host: ${HOST_NAME}
+          env: ${app_env}
           __path__: /var/log/php${PHP_VERSION}-fpm.log
+    pipeline_stages:
+      - regex:
+          expression: '^\[(?P<timestamp>[^\]]+)\] (?P<level>\w+): (?P<message>.*)'
+      - labels:
+          level:
 
+  # MySQL/MariaDB Logs
+  - job_name: mysql
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: vpsmanager-mysql
+          app: chom
+          host: ${HOST_NAME}
+          env: ${app_env}
+          __path__: /var/log/mysql/*.log
+
+  # MySQL Slow Query Log
+  - job_name: mysql-slow
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: vpsmanager-mysql
+          log_type: slow-query
+          app: chom
+          host: ${HOST_NAME}
+          env: ${app_env}
+          __path__: /var/log/mysql/mysql-slow.log
+    pipeline_stages:
+      - multiline:
+          firstline: '^# Time:'
+          max_wait_time: 3s
+
+  # System Syslog
   - job_name: syslog
     static_configs:
       - targets: [localhost]
         labels:
           job: syslog
           host: ${HOST_NAME}
+          env: ${app_env}
           __path__: /var/log/syslog
 
-  - job_name: mysql
+  # Auth Logs (security monitoring)
+  - job_name: auth
     static_configs:
       - targets: [localhost]
         labels:
-          job: mysql
+          job: auth
           host: ${HOST_NAME}
-          __path__: /var/log/mysql/*.log
+          env: ${app_env}
+          __path__: /var/log/auth.log
+
+  # Supervisor Logs
+  - job_name: supervisor
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: vpsmanager-supervisor
+          app: chom
+          host: ${HOST_NAME}
+          env: ${app_env}
+          __path__: /var/log/supervisor/*.log
+
+  # Redis Logs
+  - job_name: redis
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: vpsmanager-redis
+          app: chom
+          host: ${HOST_NAME}
+          env: ${app_env}
+          __path__: /var/log/redis/*.log
 EOF
 
     chown -R promtail:promtail /etc/promtail
     chmod 600 /etc/promtail/promtail.yaml
 
-    cat > /etc/systemd/system/promtail.service << 'EOF'
+    cat > /etc/systemd/system/promtail.service << EOF
 [Unit]
-Description=Promtail
+Description=Promtail Log Collector
+Documentation=https://grafana.com/docs/loki/latest/clients/promtail/
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=promtail
+Group=promtail
 ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail/promtail.yaml
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/promtail
+ReadOnlyPaths=/etc/promtail /var/log ${VPSMANAGER_PATH}/storage/logs
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Configure log rotation for Promtail positions
+    cat > /etc/logrotate.d/promtail << 'EOF'
+/var/lib/promtail/*.yaml {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0640 promtail promtail
+}
+EOF
+
+    systemctl daemon-reload
+    log_success "Promtail ${PROMTAIL_VERSION} installed (port ${PROMTAIL_PORT})"
+}
+
+install_alloy() {
+    log_step "Installing Grafana Alloy ${ALLOY_VERSION}..."
+
+    local arch
+    arch=$(get_architecture)
+
+    # Map architecture for Alloy download
+    local alloy_arch="$arch"
+    case "$arch" in
+        amd64) alloy_arch="linux-amd64" ;;
+        arm64) alloy_arch="linux-arm64" ;;
+    esac
+
+    local binary="alloy-${alloy_arch}"
+    local url="https://github.com/grafana/alloy/releases/download/v${ALLOY_VERSION}/${binary}.zip"
+
+    create_system_user alloy alloy
+    usermod -a -G adm alloy
+    usermod -a -G www-data alloy
+
+    cd /tmp
+    download_file "$url" "alloy.zip"
+    unzip -o alloy.zip
+
+    # Stop service and verify before binary update
+    stop_and_verify_service "alloy" "/usr/local/bin/alloy" || true
+
+    chmod +x "${binary}"
+    mv "${binary}" /usr/local/bin/alloy
+    rm -f /tmp/alloy.zip
+
+    mkdir -p /etc/alloy /var/lib/alloy
+    chown -R alloy:alloy /var/lib/alloy
+
+    # Determine environment
+    local app_env="${APP_ENV:-production}"
+    if [[ "${HOST_NAME}" == *"_tst"* ]] || [[ "${HOST_NAME}" == *"-tst"* ]]; then
+        app_env="test"
+    fi
+
+    # Create Alloy configuration (River format)
+    cat > /etc/alloy/config.alloy << EOF
+// Grafana Alloy Configuration for VPSManager/CHOM
+// Host: ${HOST_NAME}
+// Environment: ${app_env}
+// Generated: $(date -Iseconds)
+
+// HTTP server configuration
+server {
+    http_listen_addr = "0.0.0.0:${ALLOY_PORT}"
+    log_level        = "info"
+}
+
+// Common labels for all logs
+local.file "hostname" {
+    filename = "/etc/hostname"
+}
+
+// Loki destination
+loki.write "default" {
+    endpoint {
+        url        = "http://${OBSERVABILITY_IP}:3100/loki/api/v1/push"
+        tenant_id  = "${HOST_NAME}"
+    }
+    external_labels = {
+        host = "${HOST_NAME}",
+        env  = "${app_env}",
+        app  = "chom",
+    }
+}
+
+// Laravel Application Logs
+loki.source.file "laravel" {
+    targets = [
+        {__path__ = "${VPSMANAGER_PATH}/storage/logs/*.log", job = "vpsmanager-laravel"},
+    ]
+    forward_to = [loki.process.laravel.receiver]
+}
+
+loki.process "laravel" {
+    stage.multiline {
+        firstline     = "^\\[\\d{4}-\\d{2}-\\d{2}"
+        max_wait_time = "3s"
+    }
+    stage.regex {
+        expression = "^\\[(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\] (?P<channel>\\w+)\\.(?P<level>\\w+): (?P<message>.*)"
+    }
+    stage.labels {
+        values = {
+            level   = "",
+            channel = "",
+        }
+    }
+    forward_to = [loki.write.default.receiver]
+}
+
+// Nginx Logs
+loki.source.file "nginx" {
+    targets = [
+        {__path__ = "/var/log/nginx/access.log", job = "vpsmanager-nginx", log_type = "access"},
+        {__path__ = "/var/log/nginx/error.log", job = "vpsmanager-nginx", log_type = "error"},
+    ]
+    forward_to = [loki.write.default.receiver]
+}
+
+// PHP-FPM Logs
+loki.source.file "phpfpm" {
+    targets = [
+        {__path__ = "/var/log/php${PHP_VERSION}-fpm.log", job = "vpsmanager-phpfpm"},
+    ]
+    forward_to = [loki.write.default.receiver]
+}
+
+// MySQL/MariaDB Logs
+loki.source.file "mysql" {
+    targets = [
+        {__path__ = "/var/log/mysql/*.log", job = "vpsmanager-mysql"},
+    ]
+    forward_to = [loki.write.default.receiver]
+}
+
+// System Logs
+loki.source.file "system" {
+    targets = [
+        {__path__ = "/var/log/syslog", job = "syslog"},
+        {__path__ = "/var/log/auth.log", job = "auth"},
+    ]
+    forward_to = [loki.write.default.receiver]
+}
+
+// Supervisor Logs
+loki.source.file "supervisor" {
+    targets = [
+        {__path__ = "/var/log/supervisor/*.log", job = "vpsmanager-supervisor"},
+    ]
+    forward_to = [loki.write.default.receiver]
+}
+
+// Redis Logs
+loki.source.file "redis" {
+    targets = [
+        {__path__ = "/var/log/redis/*.log", job = "vpsmanager-redis"},
+    ]
+    forward_to = [loki.write.default.receiver]
+}
+EOF
+
+    chown -R alloy:alloy /etc/alloy
+    chmod 600 /etc/alloy/config.alloy
+
+    cat > /etc/systemd/system/alloy.service << EOF
+[Unit]
+Description=Grafana Alloy Telemetry Collector
+Documentation=https://grafana.com/docs/alloy/latest/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alloy
+Group=alloy
+ExecStart=/usr/local/bin/alloy run /etc/alloy/config.alloy --storage.path=/var/lib/alloy
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/alloy
+ReadOnlyPaths=/etc/alloy /var/log ${VPSMANAGER_PATH}/storage/logs
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=50%
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    log_success "Promtail installed"
+    log_success "Grafana Alloy ${ALLOY_VERSION} installed (port ${ALLOY_PORT})"
 }
 
 #===============================================================================
@@ -1089,10 +1667,10 @@ setup_firewall_vpsmanager() {
     ufw allow 443/tcp comment 'HTTPS'
 
     # Metrics (only from observability VPS)
-    ufw allow from "${OBSERVABILITY_IP}" to any port 9100 proto tcp comment 'node_exporter'
-    ufw allow from "${OBSERVABILITY_IP}" to any port 9113 proto tcp comment 'nginx_exporter'
-    ufw allow from "${OBSERVABILITY_IP}" to any port 9104 proto tcp comment 'mysqld_exporter'
-    ufw allow from "${OBSERVABILITY_IP}" to any port 9253 proto tcp comment 'phpfpm_exporter'
+    ufw allow from "${OBSERVABILITY_IP}" to any port ${NODE_EXPORTER_PORT} proto tcp comment 'node_exporter'
+    ufw allow from "${OBSERVABILITY_IP}" to any port ${NGINX_EXPORTER_PORT} proto tcp comment 'nginx_exporter'
+    ufw allow from "${OBSERVABILITY_IP}" to any port ${MYSQLD_EXPORTER_PORT} proto tcp comment 'mysqld_exporter'
+    ufw allow from "${OBSERVABILITY_IP}" to any port ${PHPFPM_EXPORTER_PORT} proto tcp comment 'phpfpm_exporter'
 
     ufw --force enable
     log_success "Firewall configured"
@@ -1105,22 +1683,42 @@ setup_firewall_vpsmanager() {
 start_all_services() {
     log_step "Starting all services..."
 
+    # Core services
     local services=(
         nginx
         "php${PHP_VERSION}-fpm"
         mariadb
         redis-server
         supervisor
+    )
+
+    # Monitoring exporters
+    local exporters=(
         node_exporter
         nginx_exporter
         mysqld_exporter
         phpfpm_exporter
-        promtail
     )
 
+    # Telemetry collector
+    local telemetry_service
+    case "${TELEMETRY_COLLECTOR,,}" in
+        alloy) telemetry_service="alloy" ;;
+        *)     telemetry_service="promtail" ;;
+    esac
+
+    # Start core services first
     for svc in "${services[@]}"; do
         enable_and_start "$svc" || log_warn "Failed to start $svc"
     done
+
+    # Start exporters
+    for svc in "${exporters[@]}"; do
+        enable_and_start "$svc" || log_warn "Failed to start $svc"
+    done
+
+    # Start telemetry collector
+    enable_and_start "$telemetry_service" || log_warn "Failed to start $telemetry_service"
 
     log_success "All services started"
 }
@@ -1137,39 +1735,42 @@ run_health_checks() {
     # Check Nginx
     if systemctl is-active --quiet nginx; then
         if curl -s -o /dev/null -w "%{http_code}" http://localhost | grep -qE "200|301|302"; then
-            log_success "✓ Nginx is responding"
+            log_success "[OK] Nginx is responding"
         else
-            log_error "✗ Nginx not responding to HTTP requests"
+            log_error "[FAIL] Nginx not responding to HTTP requests"
             ((failed_checks++))
         fi
     else
-        log_error "✗ Nginx service not running"
+        log_error "[FAIL] Nginx service not running"
         ((failed_checks++))
     fi
 
     # Check PHP-FPM
     if systemctl is-active --quiet "php${PHP_VERSION}-fpm"; then
-        if php-fpm${PHP_VERSION} -t 2>&1 | grep -q "test is successful"; then
-            log_success "✓ PHP-FPM configuration valid"
+        # Verify FPM socket exists
+        local fpm_socket
+        fpm_socket=$(find /run/php/ -name "php*-fpm.sock" 2>/dev/null | head -1)
+        if [[ -S "${fpm_socket:-}" ]]; then
+            log_success "[OK] PHP-FPM running with socket at $fpm_socket"
         else
-            log_warn "⚠ PHP-FPM configuration may have issues"
+            log_warn "[WARN] PHP-FPM running but socket not found"
         fi
     else
-        log_error "✗ PHP-FPM not running"
+        log_error "[FAIL] PHP-FPM not running"
         ((failed_checks++))
     fi
 
     # Check MariaDB
     if systemctl is-active --quiet mariadb; then
         source /root/.credentials/mysql 2>/dev/null || true
-        if mysql -u root -p"${DB_ROOT_PASS}" -e "SELECT 1" &>/dev/null; then
-            log_success "✓ MariaDB connection OK"
+        if mysql -u root -p"${DB_ROOT_PASS:-}" -e "SELECT 1" &>/dev/null; then
+            log_success "[OK] MariaDB connection OK"
         else
-            log_error "✗ MariaDB connection failed"
+            log_error "[FAIL] MariaDB connection failed"
             ((failed_checks++))
         fi
     else
-        log_error "✗ MariaDB not running"
+        log_error "[FAIL] MariaDB not running"
         ((failed_checks++))
     fi
 
@@ -1179,21 +1780,21 @@ run_health_checks() {
             local redis_pass
             redis_pass=$(grep "REDIS_PASSWORD=" /root/.credentials/redis | cut -d= -f2)
             if redis-cli -a "$redis_pass" ping 2>/dev/null | grep -q PONG; then
-                log_success "✓ Redis responding (authenticated)"
+                log_success "[OK] Redis responding (authenticated)"
             else
-                log_error "✗ Redis authentication failed"
+                log_error "[FAIL] Redis authentication failed"
                 ((failed_checks++))
             fi
         else
             if redis-cli ping 2>/dev/null | grep -q PONG; then
-                log_success "✓ Redis responding"
+                log_success "[OK] Redis responding"
             else
-                log_error "✗ Redis not responding"
+                log_error "[FAIL] Redis not responding"
                 ((failed_checks++))
             fi
         fi
     else
-        log_error "✗ Redis not running"
+        log_error "[FAIL] Redis not running"
         ((failed_checks++))
     fi
 
@@ -1202,51 +1803,72 @@ run_health_checks() {
         local worker_status
         worker_status=$(supervisorctl status 2>/dev/null | grep "vpsmanager-worker" | grep -c "RUNNING" || echo "0")
         if [[ $worker_status -gt 0 ]]; then
-            log_success "✓ Supervisor workers running ($worker_status workers)"
+            log_success "[OK] Supervisor workers running ($worker_status workers)"
         else
-            log_warn "⚠ Supervisor workers not running yet (normal on first install)"
+            log_warn "[WARN] Supervisor workers not running yet (normal on first install)"
         fi
     else
-        log_error "✗ Supervisor not running"
+        log_error "[FAIL] Supervisor not running"
         ((failed_checks++))
     fi
 
-    # Check Exporters (only if OBSERVABILITY_IP is set)
-    if [[ -n "${OBSERVABILITY_IP:-}" ]]; then
-        local exporters=(
-            "9100:Node Exporter"
-            "9113:Nginx Exporter"
-            "9104:MySQL Exporter"
-            "9253:PHP-FPM Exporter"
-        )
+    # Check Exporters
+    local exporter_checks=(
+        "${NODE_EXPORTER_PORT}:node_exporter:Node Exporter"
+        "${NGINX_EXPORTER_PORT}:nginx_exporter:Nginx Exporter"
+        "${MYSQLD_EXPORTER_PORT}:mysqld_exporter:MySQL Exporter"
+        "${PHPFPM_EXPORTER_PORT}:phpfpm_exporter:PHP-FPM Exporter"
+    )
 
-        for exporter in "${exporters[@]}"; do
-            IFS=':' read -r port name <<< "$exporter"
-            if curl -s http://localhost:$port/metrics | grep -q "^# "; then
-                log_success "✓ $name responding (port $port)"
+    for check in "${exporter_checks[@]}"; do
+        IFS=':' read -r port service name <<< "$check"
+        if systemctl is-active --quiet "$service"; then
+            if curl -s --connect-timeout 2 "http://localhost:$port/metrics" 2>/dev/null | grep -q "^# "; then
+                log_success "[OK] $name responding (port $port)"
             else
-                log_warn "⚠ $name not responding on port $port"
+                log_warn "[WARN] $name service running but metrics endpoint not responding on port $port"
             fi
-        done
+        else
+            log_warn "[WARN] $name not running"
+        fi
+    done
+
+    # Check Telemetry Collector
+    local telemetry_service telemetry_port
+    case "${TELEMETRY_COLLECTOR,,}" in
+        alloy)
+            telemetry_service="alloy"
+            telemetry_port="${ALLOY_PORT}"
+            ;;
+        *)
+            telemetry_service="promtail"
+            telemetry_port="${PROMTAIL_PORT}"
+            ;;
+    esac
+
+    if systemctl is-active --quiet "$telemetry_service"; then
+        log_success "[OK] ${telemetry_service^} running (sending logs to ${OBSERVABILITY_IP}:3100)"
+    else
+        log_warn "[WARN] ${telemetry_service^} not running"
     fi
 
     # Check Laravel application
     if [[ -f "${VPSMANAGER_PATH}/artisan" ]]; then
         if php "${VPSMANAGER_PATH}/artisan" --version &>/dev/null; then
-            log_success "✓ Laravel application accessible"
+            log_success "[OK] Laravel application accessible"
 
             # Check if .env is secure
             if [[ -f "${VPSMANAGER_PATH}/.env" ]]; then
                 local env_perms
                 env_perms=$(stat -c "%a" "${VPSMANAGER_PATH}/.env")
                 if [[ "$env_perms" == "600" ]]; then
-                    log_success "✓ .env file properly secured (600)"
+                    log_success "[OK] .env file properly secured (600)"
                 else
-                    log_warn "⚠ .env file permissions: $env_perms (should be 600)"
+                    log_warn "[WARN] .env file permissions: $env_perms (should be 600)"
                 fi
             fi
         else
-            log_error "✗ Laravel application error"
+            log_error "[FAIL] Laravel application error"
             ((failed_checks++))
         fi
     fi
@@ -1255,7 +1877,7 @@ run_health_checks() {
     echo ""
     if [[ $failed_checks -eq 0 ]]; then
         log_success "=========================================="
-        log_success "  All health checks passed! ✓"
+        log_success "  All health checks passed!"
         log_success "=========================================="
     else
         log_warn "=========================================="
@@ -1266,6 +1888,86 @@ run_health_checks() {
     echo ""
 
     return $failed_checks
+}
+
+#===============================================================================
+# Generate Prometheus Targets File
+#===============================================================================
+
+generate_prometheus_targets() {
+    log_step "Generating Prometheus targets file..."
+
+    # Determine environment
+    local app_env="${APP_ENV:-production}"
+    if [[ "${HOST_NAME}" == *"_tst"* ]] || [[ "${HOST_NAME}" == *"-tst"* ]]; then
+        app_env="test"
+    fi
+
+    local targets_file="/tmp/${HOST_NAME}-targets.yaml"
+
+    cat > "$targets_file" << EOF
+# Prometheus Scrape Targets for ${HOST_NAME}
+# Application: CHOM (VPSManager)
+# Environment: ${app_env}
+# Generated: $(date -Iseconds)
+#
+# Instructions:
+# Copy this file to /etc/prometheus/targets/ on the Observability VPS:
+#   scp ${targets_file} root@${OBSERVABILITY_IP}:/etc/prometheus/targets/
+#
+# Prometheus will automatically discover these targets via file_sd_configs
+# Job naming convention: vpsmanager-{exporter_type}
+
+# Node Exporter - System metrics (CPU, memory, disk, network)
+- targets:
+    - '${HOST_IP}:${NODE_EXPORTER_PORT}'
+  labels:
+    instance: '${HOST_NAME}'
+    job: 'vpsmanager-node'
+    app: 'chom'
+    env: '${app_env}'
+    role: 'vpsmanager'
+
+# Nginx Exporter - Web server metrics (connections, requests)
+- targets:
+    - '${HOST_IP}:${NGINX_EXPORTER_PORT}'
+  labels:
+    instance: '${HOST_NAME}'
+    job: 'vpsmanager-nginx'
+    app: 'chom'
+    env: '${app_env}'
+    role: 'vpsmanager'
+
+# MySQL Exporter - Database metrics (queries, connections, InnoDB)
+- targets:
+    - '${HOST_IP}:${MYSQLD_EXPORTER_PORT}'
+  labels:
+    instance: '${HOST_NAME}'
+    job: 'vpsmanager-mysql'
+    app: 'chom'
+    env: '${app_env}'
+    role: 'vpsmanager'
+
+# PHP-FPM Exporter - Application runtime metrics (processes, requests)
+- targets:
+    - '${HOST_IP}:${PHPFPM_EXPORTER_PORT}'
+  labels:
+    instance: '${HOST_NAME}'
+    job: 'vpsmanager-phpfpm'
+    app: 'chom'
+    env: '${app_env}'
+    role: 'vpsmanager'
+EOF
+
+    # Save locally for reference
+    mkdir -p /etc/prometheus-client
+    cp "$targets_file" /etc/prometheus-client/
+    chmod 644 /etc/prometheus-client/*.yaml
+
+    log_info "Prometheus targets file created: $targets_file"
+    log_info "Copy to Observability VPS: scp $targets_file root@${OBSERVABILITY_IP}:/etc/prometheus/targets/"
+
+    log_success "Prometheus targets generated with vpsmanager-* job naming"
 }
 
 #===============================================================================
@@ -1296,6 +1998,12 @@ save_installation_info() {
 
     mkdir -p "$STACK_DIR"
 
+    # Determine environment
+    local app_env="${APP_ENV:-production}"
+    if [[ "${HOST_NAME}" == *"_tst"* ]] || [[ "${HOST_NAME}" == *"-tst"* ]]; then
+        app_env="test"
+    fi
+
     cat > "$STACK_DIR/.installation" << EOF
 # VPSManager Installation
 # Generated: $(date -Iseconds)
@@ -1304,49 +2012,28 @@ ROLE=vpsmanager
 HOST_NAME=${HOST_NAME}
 HOST_IP=${HOST_IP}
 OBSERVABILITY_IP=${OBSERVABILITY_IP}
+APP_ENV=${app_env}
 
 VPSMANAGER_DOMAIN=${VPSMANAGER_DOMAIN}
 VPSMANAGER_REPO=${VPSMANAGER_REPO}
 VPSMANAGER_PATH=${VPSMANAGER_PATH}
 
 PHP_VERSION=${PHP_VERSION}
+TELEMETRY_COLLECTOR=${TELEMETRY_COLLECTOR}
 
 # Services installed
 SERVICES=(nginx php-fpm mariadb redis supervisor)
-EXPORTERS=(node_exporter nginx_exporter mysqld_exporter phpfpm_exporter promtail)
+EXPORTERS=(node_exporter nginx_exporter mysqld_exporter phpfpm_exporter)
+
+# Exporter ports (standard)
+NODE_EXPORTER_PORT=${NODE_EXPORTER_PORT}
+NGINX_EXPORTER_PORT=${NGINX_EXPORTER_PORT}
+MYSQLD_EXPORTER_PORT=${MYSQLD_EXPORTER_PORT}
+PHPFPM_EXPORTER_PORT=${PHPFPM_EXPORTER_PORT}
+PROMTAIL_PORT=${PROMTAIL_PORT}
+ALLOY_PORT=${ALLOY_PORT}
 EOF
 
     chmod 600 "$STACK_DIR/.installation"
-
-    # Generate Prometheus target file
-    cat > "/tmp/${HOST_NAME}-targets.yaml" << EOF
-# Prometheus targets for ${HOST_NAME} (VPSManager)
-# Copy to /etc/prometheus/targets/ on Observability VPS
-
-- targets: ['${HOST_IP}:9100']
-  labels:
-    instance: ${HOST_NAME}
-    job: node
-    app: vpsmanager
-
-- targets: ['${HOST_IP}:9113']
-  labels:
-    instance: ${HOST_NAME}
-    job: nginx
-    app: vpsmanager
-
-- targets: ['${HOST_IP}:9104']
-  labels:
-    instance: ${HOST_NAME}
-    job: mysql
-    app: vpsmanager
-
-- targets: ['${HOST_IP}:9253']
-  labels:
-    instance: ${HOST_NAME}
-    job: phpfpm
-    app: vpsmanager
-EOF
-
-    log_success "Installation info saved"
+    log_success "Installation info saved to $STACK_DIR/.installation"
 }

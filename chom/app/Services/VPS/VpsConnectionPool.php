@@ -40,13 +40,11 @@ class VpsConnectionPool
      * Get an SSH connection for a VPS server.
      * Returns existing connection from pool or creates new one.
      *
-     * @param VpsServer $vps
-     * @return SSH2
      * @throws \Exception
      */
     public function getConnection(VpsServer $vps): SSH2
     {
-        $vpsId = $vps->id;
+        $vpsId = (int) $vps->id;
 
         // Clean up expired connections
         $this->cleanupExpiredConnections();
@@ -59,6 +57,7 @@ class VpsConnectionPool
             if ($this->isConnectionHealthy($connection)) {
                 $this->connections[$vpsId]['last_used'] = time();
                 Log::debug("Reusing SSH connection for VPS {$vps->hostname}");
+
                 return $connection;
             } else {
                 // Connection is dead, remove it
@@ -74,8 +73,6 @@ class VpsConnectionPool
     /**
      * Create a new SSH connection and add to pool.
      *
-     * @param VpsServer $vps
-     * @return SSH2
      * @throws \Exception
      */
     private function createConnection(VpsServer $vps): SSH2
@@ -87,7 +84,7 @@ class VpsConnectionPool
             $ssh->setTimeout(30);
 
             // Authenticate using stored credentials
-            if (!empty($vps->ssh_private_key)) {
+            if (! empty($vps->ssh_private_key)) {
                 // Use key-based authentication
                 $key = \phpseclib3\Crypt\PublicKeyLoader::load($vps->ssh_private_key);
                 $authenticated = $ssh->login($vps->ssh_user ?? 'root', $key);
@@ -96,12 +93,12 @@ class VpsConnectionPool
                 $authenticated = $ssh->login($vps->ssh_user ?? 'root', $vps->ssh_password ?? '');
             }
 
-            if (!$authenticated) {
+            if (! $authenticated) {
                 throw new \Exception("SSH authentication failed for VPS {$vps->hostname}");
             }
 
             // Add to pool
-            $this->addConnection($vps->id, $ssh);
+            $this->addConnection((int) $vps->id, $ssh);
 
             Log::info("SSH connection established to {$vps->hostname}");
 
@@ -116,15 +113,13 @@ class VpsConnectionPool
 
     /**
      * Check if a connection is healthy.
-     *
-     * @param SSH2 $connection
-     * @return bool
      */
     private function isConnectionHealthy(SSH2 $connection): bool
     {
         try {
             // Try to execute a simple command
             $result = $connection->exec('echo "ping"');
+
             return $result !== false && trim($result) === 'ping';
         } catch (\Exception $e) {
             return false;
@@ -133,9 +128,6 @@ class VpsConnectionPool
 
     /**
      * Check if we have an active connection for a VPS.
-     *
-     * @param int $vpsId
-     * @return bool
      */
     private function hasActiveConnection(int $vpsId): bool
     {
@@ -144,9 +136,6 @@ class VpsConnectionPool
 
     /**
      * Add connection to pool.
-     *
-     * @param int $vpsId
-     * @param SSH2 $connection
      */
     private function addConnection(int $vpsId, SSH2 $connection): void
     {
@@ -163,8 +152,6 @@ class VpsConnectionPool
 
     /**
      * Remove connection from pool.
-     *
-     * @param int $vpsId
      */
     private function removeConnection(int $vpsId): void
     {
@@ -225,12 +212,10 @@ class VpsConnectionPool
 
     /**
      * Close a specific connection.
-     *
-     * @param VpsServer $vps
      */
     public function closeConnection(VpsServer $vps): void
     {
-        $this->removeConnection($vps->id);
+        $this->removeConnection((int) $vps->id);
     }
 
     /**
@@ -245,8 +230,6 @@ class VpsConnectionPool
 
     /**
      * Get pool statistics for monitoring.
-     *
-     * @return array
      */
     public function getPoolStats(): array
     {

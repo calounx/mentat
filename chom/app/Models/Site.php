@@ -98,9 +98,10 @@ class Site extends Model
      */
     public function isSslExpiringSoon(): bool
     {
-        if (!$this->ssl_enabled || !$this->ssl_expires_at) {
+        if (! $this->ssl_enabled || ! $this->ssl_expires_at) {
             return false;
         }
+
         return $this->ssl_expires_at->diffInDays(now()) <= 14;
     }
 
@@ -109,9 +110,10 @@ class Site extends Model
      */
     public function isSslExpired(): bool
     {
-        if (!$this->ssl_enabled || !$this->ssl_expires_at) {
+        if (! $this->ssl_enabled || ! $this->ssl_expires_at) {
             return false;
         }
+
         return $this->ssl_expires_at->isPast();
     }
 
@@ -121,6 +123,7 @@ class Site extends Model
     public function getUrl(): string
     {
         $protocol = $this->ssl_enabled ? 'https' : 'http';
+
         return "{$protocol}://{$this->domain}";
     }
 

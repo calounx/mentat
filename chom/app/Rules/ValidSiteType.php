@@ -14,6 +14,7 @@ use Illuminate\Contracts\Validation\Rule;
 class ValidSiteType implements Rule
 {
     private string $message = 'The :attribute must be a valid site type.';
+
     private array $supportedTypes = [];
 
     public function __construct(
@@ -25,20 +26,21 @@ class ValidSiteType implements Rule
     /**
      * Determine if the validation rule passes.
      *
-     * @param string $attribute
-     * @param mixed $value
-     * @return bool
+     * @param  string  $attribute
+     * @param  mixed  $value
      */
     public function passes($attribute, $value): bool
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             $this->message = 'The :attribute must be a string.';
+
             return false;
         }
 
-        if (!$this->provisionerFactory->supports($value)) {
-            $this->message = "The :attribute must be one of: " .
-                implode(', ', $this->supportedTypes) . '.';
+        if (! $this->provisionerFactory->supports($value)) {
+            $this->message = 'The :attribute must be one of: '.
+                implode(', ', $this->supportedTypes).'.';
+
             return false;
         }
 
@@ -47,8 +49,6 @@ class ValidSiteType implements Rule
 
     /**
      * Get the validation error message.
-     *
-     * @return string
      */
     public function message(): string
     {
@@ -57,8 +57,6 @@ class ValidSiteType implements Rule
 
     /**
      * Get supported site types.
-     *
-     * @return array
      */
     public function getSupportedTypes(): array
     {

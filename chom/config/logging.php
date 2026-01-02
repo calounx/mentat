@@ -191,6 +191,69 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | Production Observability Channels
+        |--------------------------------------------------------------------------
+        |
+        | These channels are optimized for integration with the observability stack.
+        | Use 'production' channel in production for Promtail/Loki integration.
+        |
+        */
+
+        // Production channel: JSON logs to stdout for container/Promtail collection
+        'production' => [
+            'driver' => 'monolog',
+            'handler' => StreamHandler::class,
+            'formatter' => \Monolog\Formatter\JsonFormatter::class,
+            'formatter_with' => [
+                'batchMode' => \Monolog\Formatter\JsonFormatter::BATCH_MODE_NEWLINES,
+                'appendNewline' => true,
+            ],
+            'handler_with' => [
+                'stream' => 'php://stdout',
+            ],
+            'level' => env('LOG_LEVEL', 'info'),
+            'processors' => [
+                PsrLogMessageProcessor::class,
+            ],
+        ],
+
+        // JSON file logging for Promtail file scraping
+        'json_file' => [
+            'driver' => 'monolog',
+            'handler' => StreamHandler::class,
+            'formatter' => \Monolog\Formatter\JsonFormatter::class,
+            'formatter_with' => [
+                'batchMode' => \Monolog\Formatter\JsonFormatter::BATCH_MODE_NEWLINES,
+                'appendNewline' => true,
+            ],
+            'handler_with' => [
+                'stream' => storage_path('logs/app.json'),
+            ],
+            'level' => env('LOG_LEVEL', 'info'),
+            'processors' => [
+                PsrLogMessageProcessor::class,
+            ],
+        ],
+
+        // Observability stack: combines stdout JSON with file backup
+        'observability' => [
+            'driver' => 'stack',
+            'channels' => explode(',', env('LOG_OBSERVABILITY_CHANNELS', 'json_file')),
+            'ignore_exceptions' => false,
+        ],
+
+        // Alerts channel for critical notifications
+        'alerts' => [
+            'driver' => 'stack',
+            'channels' => array_filter([
+                'daily',
+                env('LOG_SLACK_WEBHOOK_URL') ? 'slack' : null,
+            ]),
+            'ignore_exceptions' => false,
+        ],
+
     ],
 
 ];

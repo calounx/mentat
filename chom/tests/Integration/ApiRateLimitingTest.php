@@ -11,8 +11,6 @@ use Tests\TestCase;
 
 /**
  * Integration test for API rate limiting across subscription tiers
- *
- * @package Tests\Integration
  */
 class ApiRateLimitingTest extends TestCase
 {
@@ -21,24 +19,20 @@ class ApiRateLimitingTest extends TestCase
 
     /**
      * Test basic tier rate limiting
-     *
-     * @return void
      */
     public function test_basic_tier_rate_limit_enforced(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'basic']);
+        $user = User::factory()->create();
 
         $this->assertRateLimiting('/api/v1/sites', 60, $user);
     }
 
     /**
      * Test professional tier has higher limits
-     *
-     * @return void
      */
     public function test_professional_tier_has_higher_rate_limit(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'professional']);
+        $user = User::factory()->create();
 
         // Professional tier should allow more requests
         for ($i = 0; $i < 100; $i++) {
@@ -49,8 +43,6 @@ class ApiRateLimitingTest extends TestCase
 
     /**
      * Test rate limit headers are present
-     *
-     * @return void
      */
     public function test_rate_limit_headers_present(): void
     {
@@ -64,12 +56,10 @@ class ApiRateLimitingTest extends TestCase
 
     /**
      * Test rate limit bypass attempts fail
-     *
-     * @return void
      */
     public function test_rate_limit_cannot_be_bypassed(): void
     {
-        $user = User::factory()->create(['subscription_tier' => 'basic']);
+        $user = User::factory()->create();
 
         // Exceed rate limit
         for ($i = 0; $i < 61; $i++) {

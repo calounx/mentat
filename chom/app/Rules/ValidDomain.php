@@ -19,19 +19,19 @@ class ValidDomain implements Rule
     /**
      * Determine if the validation rule passes.
      *
-     * @param string $attribute
-     * @param mixed $value
-     * @return bool
+     * @param  string  $attribute
+     * @param  mixed  $value
      */
     public function passes($attribute, $value): bool
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             $this->message = 'The :attribute must be a string.';
+
             return false;
         }
 
         // Use the Domain value object for validation
-        if (!Domain::isValid($value)) {
+        if (! Domain::isValid($value)) {
             // Try to get more specific error message
             try {
                 Domain::fromString($value);
@@ -58,8 +58,6 @@ class ValidDomain implements Rule
 
     /**
      * Get the validation error message.
-     *
-     * @return string
      */
     public function message(): string
     {

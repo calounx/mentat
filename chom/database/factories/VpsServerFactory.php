@@ -12,21 +12,20 @@ class VpsServerFactory extends Factory
     public function definition(): array
     {
         return [
-            'hostname' => 'vps-' . $this->faker->unique()->numberBetween(1, 9999),
+            'hostname' => 'vps-'.$this->faker->unique()->numberBetween(1, 9999),
             'ip_address' => $this->faker->unique()->ipv4(),
             'provider' => $this->faker->randomElement(['hetzner', 'digitalocean', 'vultr', 'linode']),
-            'location' => $this->faker->randomElement(['us-east', 'us-west', 'eu-central', 'asia-pacific']),
+            'region' => $this->faker->randomElement(['us-east', 'us-west', 'eu-central', 'asia-pacific']),
+            'spec_cpu' => $this->faker->randomElement([2, 4, 8, 16]),
+            'spec_memory_mb' => $this->faker->randomElement([2048, 4096, 8192, 16384]),
+            'spec_disk_gb' => $this->faker->randomElement([50, 100, 200, 500]),
             'status' => 'active',
-            'allocation_mode' => $this->faker->randomElement(['shared', 'dedicated']),
-            'max_sites' => $this->faker->numberBetween(10, 100),
-            'total_memory_mb' => $this->faker->randomElement([2048, 4096, 8192, 16384]),
-            'total_storage_gb' => $this->faker->randomElement([50, 100, 200, 500]),
-            'total_bandwidth_gb' => $this->faker->randomElement([1000, 2000, 5000]),
-            'cpu_cores' => $this->faker->randomElement([2, 4, 8, 16]),
-            'ssh_port' => 22,
-            'ssh_user' => 'root',
-            'notes' => null,
-            'last_health_check' => now(),
+            'allocation_type' => $this->faker->randomElement(['shared', 'dedicated']),
+            'vpsmanager_version' => null,
+            'observability_configured' => false,
+            'ssh_key_id' => null,
+            'last_health_check_at' => now(),
+            'health_status' => 'healthy',
         ];
     }
 
@@ -46,7 +45,7 @@ class VpsServerFactory extends Factory
     public function shared(): static
     {
         return $this->state(fn (array $attributes) => [
-            'allocation_mode' => 'shared',
+            'allocation_type' => 'shared',
         ]);
     }
 
@@ -56,7 +55,7 @@ class VpsServerFactory extends Factory
     public function dedicated(): static
     {
         return $this->state(fn (array $attributes) => [
-            'allocation_mode' => 'dedicated',
+            'allocation_type' => 'dedicated',
         ]);
     }
 
@@ -67,7 +66,8 @@ class VpsServerFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'active',
-            'last_health_check' => now(),
+            'health_status' => 'healthy',
+            'last_health_check_at' => now(),
         ]);
     }
 }

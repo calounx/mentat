@@ -33,7 +33,7 @@ class ErrorHandlingTest extends TestCase
      */
     public function test_update_tenant_metrics_has_retry_config(): void
     {
-        $listener = new UpdateTenantMetrics();
+        $listener = new UpdateTenantMetrics;
 
         $this->assertEquals('default', $listener->queue);
         $this->assertEquals(3, $listener->tries);
@@ -45,7 +45,7 @@ class ErrorHandlingTest extends TestCase
      */
     public function test_record_audit_log_has_retry_config(): void
     {
-        $listener = new RecordAuditLog();
+        $listener = new RecordAuditLog;
 
         $this->assertEquals('default', $listener->queue);
         $this->assertEquals(3, $listener->tries);
@@ -57,7 +57,7 @@ class ErrorHandlingTest extends TestCase
      */
     public function test_send_notification_has_retry_config(): void
     {
-        $listener = new SendNotification();
+        $listener = new SendNotification;
 
         $this->assertEquals('notifications', $listener->queue);
         $this->assertEquals(3, $listener->tries);
@@ -86,7 +86,7 @@ class ErrorHandlingTest extends TestCase
     public function test_update_tenant_metrics_handles_missing_tenant(): void
     {
         $user = User::factory()->create();
-        $tenant = Tenant::factory()->create(['owner_id' => $user->id]);
+        $tenant = Tenant::factory()->create(['organization_id' => $user->organization_id]);
         $site = Site::factory()->create(['tenant_id' => $tenant->id]);
 
         $event = new SiteCreated($site, $tenant);
@@ -94,14 +94,14 @@ class ErrorHandlingTest extends TestCase
         // Delete tenant before listener executes
         $tenant->delete();
 
-        $listener = new UpdateTenantMetrics();
+        $listener = new UpdateTenantMetrics;
 
         // Should not throw exception when tenant is missing
         try {
             $listener->handleSiteCreated($event);
             $this->assertTrue(true, 'Listener should handle missing tenant gracefully');
         } catch (\Exception $e) {
-            $this->fail('Listener should not throw exception for missing tenant: ' . $e->getMessage());
+            $this->fail('Listener should not throw exception for missing tenant: '.$e->getMessage());
         }
     }
 
@@ -116,14 +116,14 @@ class ErrorHandlingTest extends TestCase
         // Create event with null actor (no user)
         $event = new SiteCreated($site, $tenant, null);
 
-        $listener = new RecordAuditLog();
+        $listener = new RecordAuditLog;
 
         // Should not throw exception when user is missing
         try {
             $listener->handle($event);
             $this->assertTrue(true, 'Listener should handle missing user gracefully');
         } catch (\Exception $e) {
-            $this->fail('Listener should not throw exception for missing user: ' . $e->getMessage());
+            $this->fail('Listener should not throw exception for missing user: '.$e->getMessage());
         }
 
         // Verify audit log was still created
@@ -139,7 +139,7 @@ class ErrorHandlingTest extends TestCase
     public function test_listener_backoff_strategy(): void
     {
         // UpdateTenantMetrics has backoff of 30 seconds
-        $listener = new UpdateTenantMetrics();
+        $listener = new UpdateTenantMetrics;
 
         // Laravel's backoff property can be int or array
         $backoff = $listener->backoff;
@@ -182,9 +182,9 @@ class ErrorHandlingTest extends TestCase
      */
     public function test_listeners_have_reasonable_timeout(): void
     {
-        $updateTenantMetrics = new UpdateTenantMetrics();
-        $recordAuditLog = new RecordAuditLog();
-        $sendNotification = new SendNotification();
+        $updateTenantMetrics = new UpdateTenantMetrics;
+        $recordAuditLog = new RecordAuditLog;
+        $sendNotification = new SendNotification;
 
         // Check if listeners have timeout property
         // Default Laravel job timeout is 60 seconds
@@ -216,7 +216,7 @@ class ErrorHandlingTest extends TestCase
         $site = Site::factory()->create(['tenant_id' => $tenant->id]);
 
         $event = new SiteCreated($site, $tenant);
-        $listener = new UpdateTenantMetrics();
+        $listener = new UpdateTenantMetrics;
 
         // Execute listener multiple times
         $listener->handleSiteCreated($event);
@@ -315,7 +315,7 @@ class ErrorHandlingTest extends TestCase
         $site = Site::factory()->create(['tenant_id' => $tenantId]);
         $event = new SiteCreated($site, Tenant::withTrashed()->find($tenantId));
 
-        $listener = new UpdateTenantMetrics();
+        $listener = new UpdateTenantMetrics;
         $listener->handleSiteCreated($event);
 
         // Should log a debug message about missing tenant

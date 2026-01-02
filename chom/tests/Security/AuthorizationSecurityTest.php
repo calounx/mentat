@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Security;
 
-use App\Models\Backup;
 use App\Models\Site;
+use App\Models\SiteBackup;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\WithSecurityTesting;
@@ -16,8 +16,6 @@ use Tests\TestCase;
  *
  * Tests policy bypass attempts, privilege escalation, and authorization
  * enforcement across all protected resources.
- *
- * @package Tests\Security
  */
 class AuthorizationSecurityTest extends TestCase
 {
@@ -25,26 +23,26 @@ class AuthorizationSecurityTest extends TestCase
     use WithSecurityTesting;
 
     protected User $user;
+
     protected User $admin;
+
     protected User $otherUser;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->user = User::factory()->create(['role' => 'user']);
+        $this->user = User::factory()->create(['role' => 'member']);
         $this->admin = User::factory()->create(['role' => 'admin']);
-        $this->otherUser = User::factory()->create(['role' => 'user']);
+        $this->otherUser = User::factory()->create(['role' => 'member']);
     }
 
     /**
      * Test users cannot access other users' sites
-     *
-     * @return void
      */
     public function test_users_cannot_access_other_users_sites(): void
     {
-        $otherSite = Site::factory()->create(['user_id' => $this->otherUser->id]);
+        $otherSite = Site::factory()->create(['tenant_id' => $this->otherUser->currentTenant()->id]);
 
         $endpoints = [
             ['GET', "/api/v1/sites/{$otherSite->id}"],
@@ -52,7 +50,8 @@ class AuthorizationSecurityTest extends TestCase
             ['DELETE', "/api/v1/sites/{$otherSite->id}"],
         ];
 
-        foreach ($endpoints as [$method, $uri, $data = []]) {
+        foreach ($endpoints as $endpoint) {
+            [$method, $uri, $data] = array_pad($endpoint, 3, []);
             $response = $this->actingAs($this->user)->call($method, $uri, $data);
 
             $this->assertEquals(403, $response->status(), "Failed authorization check for {$method} {$uri}");
@@ -61,8 +60,6 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test privilege escalation attempts
-     *
-     * @return void
      */
     public function test_cannot_escalate_privileges_via_mass_assignment(): void
     {
@@ -75,19 +72,17 @@ class AuthorizationSecurityTest extends TestCase
 
         // Role should not change
         $this->user->refresh();
-        $this->assertEquals('user', $this->user->role);
+        $this->assertEquals('member', $this->user->role);
         $this->assertFalse($this->user->is_super_admin ?? false);
     }
 
     /**
      * Test IDOR (Insecure Direct Object Reference) protection
-     *
-     * @return void
      */
     public function test_idor_protection_on_all_resources(): void
     {
-        $otherSite = Site::factory()->create(['user_id' => $this->otherUser->id]);
-        $otherBackup = Backup::factory()->create(['site_id' => $otherSite->id]);
+        $otherSite = Site::factory()->create(['tenant_id' => $this->otherUser->currentTenant()->id]);
+        $otherBackup = SiteBackup::factory()->create(['site_id' => $otherSite->id]);
 
         $this->assertIDORProtection($this->user, $otherSite->id, "/api/v1/sites/{$otherSite->id}");
         $this->assertIDORProtection($this->user, $otherBackup->id, "/api/v1/backups/{$otherBackup->id}");
@@ -95,12 +90,10 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test parameter tampering protection
-     *
-     * @return void
      */
     public function test_parameter_tampering_protection(): void
     {
-        $site = Site::factory()->create(['user_id' => $this->user->id]);
+        $site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         // Attempt to change ownership via parameter tampering
         $response = $this->actingAs($this->user)
@@ -116,13 +109,11 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test horizontal privilege escalation prevention
-     *
-     * @return void
      */
     public function test_horizontal_privilege_escalation_prevention(): void
     {
-        $user1Site = Site::factory()->create(['user_id' => $this->user->id]);
-        $user2Site = Site::factory()->create(['user_id' => $this->otherUser->id]);
+        $user1Site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
+        $user2Site = Site::factory()->create(['tenant_id' => $this->otherUser->currentTenant()->id]);
 
         // User 1 tries to modify User 2's site
         $response = $this->actingAs($this->user)
@@ -139,8 +130,6 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test vertical privilege escalation prevention
-     *
-     * @return void
      */
     public function test_vertical_privilege_escalation_prevention(): void
     {
@@ -160,12 +149,10 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test admin can access authorized resources
-     *
-     * @return void
      */
     public function test_admin_has_appropriate_access(): void
     {
-        $anySite = Site::factory()->create(['user_id' => $this->user->id]);
+        $anySite = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         $response = $this->actingAs($this->admin)
             ->get("/api/v1/admin/sites/{$anySite->id}");
@@ -175,12 +162,10 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test authorization checks cannot be bypassed via headers
-     *
-     * @return void
      */
     public function test_authorization_not_bypassable_via_headers(): void
     {
-        $otherSite = Site::factory()->create(['user_id' => $this->otherUser->id]);
+        $otherSite = Site::factory()->create(['tenant_id' => $this->otherUser->currentTenant()->id]);
 
         $headers = [
             ['X-User-ID', $this->otherUser->id],
@@ -200,13 +185,11 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test forced browsing protection
-     *
-     * @return void
      */
     public function test_forced_browsing_protection(): void
     {
         // Test sequential ID guessing
-        $site1 = Site::factory()->create(['user_id' => $this->otherUser->id]);
+        $site1 = Site::factory()->create(['tenant_id' => $this->otherUser->currentTenant()->id]);
 
         for ($id = $site1->id - 5; $id <= $site1->id + 5; $id++) {
             $response = $this->actingAs($this->user)
@@ -224,12 +207,10 @@ class AuthorizationSecurityTest extends TestCase
 
     /**
      * Test missing function level access control
-     *
-     * @return void
      */
     public function test_function_level_access_control(): void
     {
-        $site = Site::factory()->create(['user_id' => $this->user->id]);
+        $site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         // These operations should require specific permissions
         $sensitiveOperations = [

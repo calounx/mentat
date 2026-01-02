@@ -29,8 +29,9 @@ class PerformanceTestSeeder extends Seeder
         $this->command->warn('   - 2000+ backups');
         $this->command->newLine();
 
-        if (!$this->command->confirm('Do you want to continue?', false)) {
+        if (! $this->command->confirm('Do you want to continue?', false)) {
             $this->command->info('Cancelled.');
+
             return;
         }
 
@@ -51,7 +52,7 @@ class PerformanceTestSeeder extends Seeder
                 $this->command->line("  Progress: {$i}/50");
             }
         }
-        $this->command->info("✓ Created 50 organizations");
+        $this->command->info('✓ Created 50 organizations');
         $this->command->newLine();
 
         // Create tenants
@@ -73,7 +74,7 @@ class PerformanceTestSeeder extends Seeder
                 $this->command->line("  Progress: {$i}/100");
             }
         }
-        $this->command->info("✓ Created 100 tenants");
+        $this->command->info('✓ Created 100 tenants');
         $this->command->newLine();
 
         // Create users
@@ -94,7 +95,7 @@ class PerformanceTestSeeder extends Seeder
                 $this->command->line("  Progress: {$i}/200");
             }
         }
-        $this->command->info("✓ Created 200 users");
+        $this->command->info('✓ Created 200 users');
         $this->command->newLine();
 
         // Create VPS servers
@@ -110,7 +111,7 @@ class PerformanceTestSeeder extends Seeder
                 'tenant_id' => $tenant->id,
                 'name' => "VPS-{$i}",
                 'hostname' => "vps-{$i}.example.com",
-                'ip_address' => "192.0.2." . ($i % 255),
+                'ip_address' => '192.0.2.'.($i % 255),
                 'provider' => $providers[array_rand($providers)],
                 'region' => $regions[array_rand($regions)],
                 'vcpus' => [2, 4, 8][array_rand([2, 4, 8])],
@@ -129,7 +130,7 @@ class PerformanceTestSeeder extends Seeder
                 $this->command->line("  Progress: {$i}/50");
             }
         }
-        $this->command->info("✓ Created 50 VPS servers");
+        $this->command->info('✓ Created 50 VPS servers');
         $this->command->newLine();
 
         // Create sites
@@ -137,7 +138,7 @@ class PerformanceTestSeeder extends Seeder
         $sites = [];
         $types = ['wordpress', 'woocommerce', 'laravel', 'html', 'static'];
         $phpVersions = ['7.4', '8.0', '8.1', '8.2'];
-        $activeVpsServers = array_filter($vpsServers, fn($vps) => $vps->status === 'active');
+        $activeVpsServers = array_filter($vpsServers, fn ($vps) => $vps->status === 'active');
 
         for ($i = 1; $i <= 500; $i++) {
             $tenant = $tenants[array_rand($tenants)];
@@ -164,7 +165,7 @@ class PerformanceTestSeeder extends Seeder
                 $this->command->line("  Progress: {$i}/500");
             }
         }
-        $this->command->info("✓ Created 500 sites");
+        $this->command->info('✓ Created 500 sites');
         $this->command->newLine();
 
         // Create backups
@@ -187,7 +188,7 @@ class PerformanceTestSeeder extends Seeder
                     'type' => $backupTypes[array_rand($backupTypes)],
                     'status' => $status,
                     'size_mb' => rand(50, 2000),
-                    'storage_path' => "backups/{$site->domain}/" . $createdAt->format('Y-m-d') . ".tar.gz",
+                    'storage_path' => "backups/{$site->domain}/".$createdAt->format('Y-m-d').'.tar.gz',
                     'created_at' => $createdAt,
                     'completed_at' => $status === 'completed' ? $createdAt->addMinutes(rand(5, 60)) : null,
                 ]);
@@ -195,7 +196,7 @@ class PerformanceTestSeeder extends Seeder
             }
 
             if (($i + 1) % 100 === 0) {
-                $this->command->line("  Progress: " . ($i + 1) . "/500 sites");
+                $this->command->line('  Progress: '.($i + 1).'/500 sites');
             }
         }
         $this->command->info("✓ Created {$backupCount} backups");
@@ -205,11 +206,11 @@ class PerformanceTestSeeder extends Seeder
         $this->command->info('========================================');
         $this->command->info('Performance Test Data Summary:');
         $this->command->info('========================================');
-        $this->command->info("Organizations: 50");
-        $this->command->info("Tenants:       100");
-        $this->command->info("Users:         200");
-        $this->command->info("VPS Servers:   50");
-        $this->command->info("Sites:         500");
+        $this->command->info('Organizations: 50');
+        $this->command->info('Tenants:       100');
+        $this->command->info('Users:         200');
+        $this->command->info('VPS Servers:   50');
+        $this->command->info('Sites:         500');
         $this->command->info("Backups:       {$backupCount}");
         $this->command->info('========================================');
         $this->command->newLine();

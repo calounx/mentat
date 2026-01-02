@@ -17,14 +17,12 @@ use Tests\TestCase;
  *
  * Tests SQL injection, PromQL injection, LogQL injection, and command injection
  * protection across all application entry points.
- *
- * @package Tests\Security
  */
 class InjectionAttackTest extends TestCase
 {
     use RefreshDatabase;
-    use WithSecurityTesting;
     use WithMockObservability;
+    use WithSecurityTesting;
 
     protected User $user;
 
@@ -38,23 +36,19 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test SQL injection protection in site search
-     *
-     * @return void
      */
     public function test_sql_injection_protection_in_site_search(): void
     {
-        Site::factory()->create(['user_id' => $this->user->id, 'domain' => 'test.com']);
+        Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id, 'domain' => 'test.com']);
 
         $this->assertSqlInjectionProtection(function ($payload) {
             return $this->actingAs($this->user)
-                ->get('/api/v1/sites?search=' . urlencode($payload));
+                ->get('/api/v1/sites?search='.urlencode($payload));
         });
     }
 
     /**
      * Test SQL injection protection in site creation
-     *
-     * @return void
      */
     public function test_sql_injection_protection_in_site_creation(): void
     {
@@ -69,12 +63,10 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test PromQL injection protection
-     *
-     * @return void
      */
     public function test_promql_injection_protection(): void
     {
-        $site = Site::factory()->create(['user_id' => $this->user->id]);
+        $site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         $maliciousQueries = [
             'up{job="test"} or vector(1)',
@@ -97,12 +89,10 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test LogQL injection protection
-     *
-     * @return void
      */
     public function test_logql_injection_protection(): void
     {
-        $site = Site::factory()->create(['user_id' => $this->user->id]);
+        $site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         $this->assertLogQLInjectionProtection(function ($payload) use ($site) {
             $this->mockLogQLInjectionPrevention($payload, '{job="safe"}');
@@ -117,12 +107,10 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test command injection protection in site operations
-     *
-     * @return void
      */
     public function test_command_injection_protection(): void
     {
-        $site = Site::factory()->create(['user_id' => $this->user->id]);
+        $site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         $commandInjectionPayloads = [
             'domain.com; rm -rf /',
@@ -148,8 +136,6 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test LDAP injection protection (if LDAP is used)
-     *
-     * @return void
      */
     public function test_ldap_injection_protection(): void
     {
@@ -173,8 +159,6 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test NoSQL injection protection (if MongoDB/similar used)
-     *
-     * @return void
      */
     public function test_nosql_injection_protection(): void
     {
@@ -186,7 +170,7 @@ class InjectionAttackTest extends TestCase
 
         foreach ($nosqlPayloads as $payload) {
             $response = $this->actingAs($this->user)
-                ->get('/api/v1/sites?filter=' . json_encode($payload));
+                ->get('/api/v1/sites?filter='.json_encode($payload));
 
             // Should sanitize or reject
             $this->assertTrue(
@@ -198,8 +182,6 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test Server-Side Template Injection (SSTI) protection
-     *
-     * @return void
      */
     public function test_template_injection_protection(): void
     {
@@ -210,7 +192,7 @@ class InjectionAttackTest extends TestCase
             '#{7*7}',
         ];
 
-        $site = Site::factory()->create(['user_id' => $this->user->id]);
+        $site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         foreach ($sstiPayloads as $payload) {
             $response = $this->actingAs($this->user)
@@ -228,8 +210,6 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test XML injection/XXE protection
-     *
-     * @return void
      */
     public function test_xml_injection_protection(): void
     {
@@ -250,8 +230,6 @@ class InjectionAttackTest extends TestCase
 
     /**
      * Test protection against second-order SQL injection
-     *
-     * @return void
      */
     public function test_second_order_sql_injection_protection(): void
     {

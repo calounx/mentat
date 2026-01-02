@@ -18,15 +18,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('vps_servers', function (Blueprint $table) {
-            // Current SSH credentials
-            $table->timestamp('key_rotated_at')->nullable()->after('ssh_public_key');
-
             // Previous SSH credentials (for 24h overlap period)
+            // Note: key_rotated_at is already added by encrypt_ssh_keys migration
             $table->text('previous_ssh_private_key')->nullable()->after('key_rotated_at');
             $table->text('previous_ssh_public_key')->nullable()->after('previous_ssh_private_key');
-
-            // Add index for finding servers needing rotation
-            $table->index('key_rotated_at');
         });
     }
 
@@ -36,10 +31,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('vps_servers', function (Blueprint $table) {
-            $table->dropIndex(['key_rotated_at']);
-
             $table->dropColumn([
-                'key_rotated_at',
                 'previous_ssh_private_key',
                 'previous_ssh_public_key',
             ]);

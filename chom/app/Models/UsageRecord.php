@@ -79,6 +79,7 @@ class UsageRecord extends Model
     public function scopeCurrentMonth($query)
     {
         $now = now();
+
         return $query->whereMonth('period_start', $now->month)
             ->whereYear('period_start', $now->year);
     }
@@ -100,7 +101,7 @@ class UsageRecord extends Model
      */
     public function getFormattedTotalCost(): string
     {
-        return '$' . number_format($this->getTotalCost(), 2);
+        return '$'.number_format($this->getTotalCost(), 2);
     }
 
     /**
@@ -109,6 +110,7 @@ class UsageRecord extends Model
     public function isCurrentPeriod(): bool
     {
         $now = now()->toDateString();
+
         return $this->period_start <= $now && $this->period_end >= $now;
     }
 }

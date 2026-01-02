@@ -7,8 +7,8 @@ namespace Tests\Integration;
 use App\Models\Backup;
 use App\Models\Site;
 use App\Models\User;
-use App\Services\Backup\BackupService;
 use App\Services\Backup\BackupRestoreService;
+use App\Services\Backup\BackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\WithMockVpsManager;
@@ -20,8 +20,6 @@ use Tests\TestCase;
  *
  * Tests complete backup creation, storage, and restoration flows including
  * automated backups, manual backups, point-in-time recovery, and validation.
- *
- * @package Tests\Integration
  */
 class BackupRestoreFlowTest extends TestCase
 {
@@ -30,8 +28,11 @@ class BackupRestoreFlowTest extends TestCase
     use WithPerformanceTesting;
 
     protected User $user;
+
     protected Site $site;
+
     protected BackupService $backupService;
+
     protected BackupRestoreService $restoreService;
 
     protected function setUp(): void
@@ -39,7 +40,7 @@ class BackupRestoreFlowTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create();
-        $this->site = Site::factory()->create(['user_id' => $this->user->id]);
+        $this->site = Site::factory()->create(['tenant_id' => $this->user->currentTenant()->id]);
 
         $this->setUpVpsMocks();
 
@@ -51,8 +52,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test complete backup creation flow
-     *
-     * @return void
      */
     public function test_complete_backup_creation_flow(): void
     {
@@ -63,7 +62,7 @@ class BackupRestoreFlowTest extends TestCase
 
         // Act
         $backup = $this->assertBenchmark(
-            fn() => $this->actingAs($this->user)
+            fn () => $this->actingAs($this->user)
                 ->post("/api/v1/sites/{$this->site->id}/backups", [
                     'type' => 'full',
                     'description' => 'Manual backup before update',
@@ -88,8 +87,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test incremental backup
-     *
-     * @return void
      */
     public function test_incremental_backup_only_backs_up_changes(): void
     {
@@ -125,8 +122,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test backup restoration flow
-     *
-     * @return void
      */
     public function test_complete_backup_restoration_flow(): void
     {
@@ -144,7 +139,7 @@ class BackupRestoreFlowTest extends TestCase
 
         // Act
         $restore = $this->assertBenchmark(
-            fn() => $this->actingAs($this->user)
+            fn () => $this->actingAs($this->user)
                 ->post("/api/v1/backups/{$backup->id}/restore")
                 ->json('data'),
             'restore_operation'
@@ -158,8 +153,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test automated backup scheduling
-     *
-     * @return void
      */
     public function test_automated_backup_runs_on_schedule(): void
     {
@@ -185,8 +178,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test backup with encryption
-     *
-     * @return void
      */
     public function test_backup_with_encryption(): void
     {
@@ -211,8 +202,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test backup retention policy enforcement
-     *
-     * @return void
      */
     public function test_backup_retention_policy_deletes_old_backups(): void
     {
@@ -242,8 +231,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test point-in-time recovery
-     *
-     * @return void
      */
     public function test_point_in_time_recovery(): void
     {
@@ -278,8 +265,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test backup verification
-     *
-     * @return void
      */
     public function test_backup_verification_ensures_integrity(): void
     {
@@ -306,14 +291,12 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test backup quota enforcement
-     *
-     * @return void
      */
     public function test_backup_quota_prevents_excessive_backups(): void
     {
         // Arrange
-        $basicUser = User::factory()->create(['subscription_tier' => 'basic']);
-        $site = Site::factory()->create(['user_id' => $basicUser->id]);
+        $basicUser = User::factory()->create();
+        $site = Site::factory()->create(['tenant_id' => $basicUser->currentTenant()->id]);
 
         // Create backups up to quota (assume basic allows 5 backups)
         Backup::factory()->count(5)->create(['site_id' => $site->id]);
@@ -333,8 +316,6 @@ class BackupRestoreFlowTest extends TestCase
 
     /**
      * Test rollback after failed restore
-     *
-     * @return void
      */
     public function test_rollback_after_failed_restore(): void
     {

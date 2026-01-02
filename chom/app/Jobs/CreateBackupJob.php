@@ -43,11 +43,12 @@ class CreateBackupJob implements ShouldQueue
         $site = $this->site;
         $vps = $site->vpsServer;
 
-        if (!$vps) {
+        if (! $vps) {
             Log::error('CreateBackupJob: No VPS server associated with site', [
                 'site_id' => $site->id,
                 'domain' => $site->domain,
             ]);
+
             return;
         }
 
@@ -64,7 +65,7 @@ class CreateBackupJob implements ShouldQueue
         $backup = SiteBackup::create([
             'site_id' => $site->id,
             'backup_type' => $this->backupType,
-            'storage_path' => '/var/backups/' . $site->domain . '/' . now()->format('Y-m-d-His'),
+            'storage_path' => '/var/backups/'.$site->domain.'/'.now()->format('Y-m-d-His'),
             'size_bytes' => 0,
             'checksum' => null,
             'retention_days' => $this->retentionDays ?? $site->tenant?->tierLimits?->backup_retention_days ?? 7,

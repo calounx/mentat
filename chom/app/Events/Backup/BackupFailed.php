@@ -15,18 +15,16 @@ use App\Events\AbstractDomainEvent;
  *
  * NOTE: We don't pass the SiteBackup model because it will be deleted
  * after this event is fired. We pass primitive data instead.
- *
- * @package App\Events\Backup
  */
 class BackupFailed extends AbstractDomainEvent
 {
     /**
      * Create a new BackupFailed event instance.
      *
-     * @param string $siteId The UUID of the site
-     * @param string $backupType The type of backup that failed ('full', 'database', 'files')
-     * @param string $errorMessage The error message describing what went wrong
-     * @param string|null $actorId The ID of the actor (defaults to 'system')
+     * @param  string  $siteId  The UUID of the site
+     * @param  string  $backupType  The type of backup that failed ('full', 'database', 'files')
+     * @param  string  $errorMessage  The error message describing what went wrong
+     * @param  string|null  $actorId  The ID of the actor (defaults to 'system')
      */
     public function __construct(
         public readonly string $siteId,

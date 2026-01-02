@@ -18,7 +18,7 @@ class ObservabilityAdapterTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->adapter = new ObservabilityAdapter();
+        $this->adapter = new ObservabilityAdapter;
     }
 
     /**
@@ -38,9 +38,14 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryMetrics($tenant, 'up');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
+
             // Verify that the tenant_id is injected and properly escaped
             $this->assertStringContainsString('tenant_id="test-tenant-123"', $query);
+
             return true;
         });
     }
@@ -62,11 +67,16 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryMetrics($tenant, 'up');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
+
             // The quotes should be escaped
             $this->assertStringContainsString('\\"', $query);
             // Should not contain unescaped quotes that could break out
             $this->assertStringNotContainsString('",other_label="', $query);
+
             return true;
         });
     }
@@ -88,12 +98,17 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryMetrics($tenant, 'up');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
+
             // All regex special characters should be escaped
             $this->assertStringContainsString('\\*', $query);
             $this->assertStringContainsString('\\|', $query);
             $this->assertStringContainsString('\\^', $query);
             $this->assertStringContainsString('\\$', $query);
+
             return true;
         });
     }
@@ -115,9 +130,13 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryMetrics($tenant, 'up');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Backslashes should be escaped
             $this->assertStringContainsString('\\\\', $query);
+
             return true;
         });
     }
@@ -139,9 +158,13 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryMetrics($tenant, 'up');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Newlines should be escaped
             $this->assertStringContainsString('\\n', $query);
+
             return true;
         });
     }
@@ -163,9 +186,13 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->getVpsSummary($vps);
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Dots in IP should be escaped for regex safety
             $this->assertStringContainsString('192\\.168\\.1\\.1', $query);
+
             return true;
         });
     }
@@ -187,12 +214,16 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->getVpsSummary($vps);
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // All special characters should be escaped
             $this->assertStringContainsString('\\*', $query);
             $this->assertStringContainsString('\\|', $query);
             $this->assertStringContainsString('\\{', $query);
             $this->assertStringContainsString('\\}', $query);
+
             return true;
         });
     }
@@ -214,9 +245,13 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryBandwidth($tenant);
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Quotes should be escaped
             $this->assertStringContainsString('\\"', $query);
+
             return true;
         });
     }
@@ -238,9 +273,13 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryDiskUsage($tenant);
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Asterisk should be escaped
             $this->assertStringContainsString('\\*', $query);
+
             return true;
         });
     }
@@ -251,6 +290,10 @@ class ObservabilityAdapterTest extends TestCase
     public function test_logql_string_escaping_in_site_logs(): void
     {
         $tenant = Tenant::factory()->create();
+        $site = \App\Models\Site::factory()->create([
+            'tenant_id' => $tenant->id,
+            'domain' => 'example.com"}{evil="yes"}',
+        ]);
 
         Http::fake([
             '*/loki/api/v1/query_range' => Http::response([
@@ -259,12 +302,16 @@ class ObservabilityAdapterTest extends TestCase
             ], 200),
         ]);
 
-        $this->adapter->getSiteLogs($tenant, 'example.com"}{evil="yes"}');
+        $this->adapter->getSiteLogs($site);
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Quotes and braces should be escaped
             $this->assertStringContainsString('\\"', $query);
+
             return true;
         });
     }
@@ -286,10 +333,14 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->searchLogs($tenant, 'search"\nterm');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // Quotes and newlines should be escaped
             $this->assertStringContainsString('\\"', $query);
             $this->assertStringContainsString('\\n', $query);
+
             return true;
         });
     }
@@ -313,6 +364,7 @@ class ObservabilityAdapterTest extends TestCase
         Http::assertSent(function ($request) use ($tenant) {
             // Verify the tenant isolation header is set
             $this->assertEquals((string) $tenant->id, $request->header('X-Loki-Org-Id')[0] ?? null);
+
             return true;
         });
     }
@@ -364,13 +416,17 @@ class ObservabilityAdapterTest extends TestCase
         $this->adapter->queryMetrics($tenant, 'up');
 
         Http::assertSent(function ($request) {
-            $query = $request['query'];
+            // Parse query parameter from URL
+            $url = parse_url($request->url());
+            parse_str($url['query'] ?? '', $params);
+            $query = $params['query'] ?? '';
             // The injection should be escaped and not create valid PromQL
             $this->assertStringContainsString('\\"', $query);
             $this->assertStringContainsString('\\{', $query);
             $this->assertStringContainsString('\\}', $query);
             // Should not contain literal unescaped or {
             $this->assertStringNotContainsString('} or {', $query);
+
             return true;
         });
     }
@@ -396,7 +452,7 @@ class ObservabilityAdapterTest extends TestCase
      */
     public function test_scrape_config_generation_includes_tenant_labels(): void
     {
-        $tenant = Tenant::factory()->create(['id' => 'tenant-123', 'tier' => 'premium']);
+        $tenant = Tenant::factory()->create(['tier' => 'premium']);
         $vps = VpsServer::factory()->create([
             'hostname' => 'vps-1',
             'ip_address' => '192.168.1.1',
@@ -406,7 +462,7 @@ class ObservabilityAdapterTest extends TestCase
         $config = $this->adapter->generateScrapeConfig($vps, $tenant);
 
         $this->assertArrayHasKey('labels', $config);
-        $this->assertEquals('tenant-123', $config['labels']['tenant_id']);
+        $this->assertEquals((string) $tenant->id, $config['labels']['tenant_id']);
         $this->assertEquals('premium', $config['labels']['tier']);
         $this->assertEquals('vps-1', $config['labels']['hostname']);
         $this->assertEquals('hetzner', $config['labels']['provider']);

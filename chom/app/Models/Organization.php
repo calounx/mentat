@@ -5,19 +5,21 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Cashier\Billable;
 
 class Organization extends Model
 {
-    use HasFactory, HasUuids, Billable;
+    use Billable, HasFactory, HasUuids;
 
     protected $fillable = [
         'name',
         'slug',
         'billing_email',
         'stripe_customer_id',
+        'default_tenant_id',
     ];
 
     protected $hidden = [
@@ -43,9 +45,9 @@ class Organization extends Model
     /**
      * Get the default/primary tenant.
      */
-    public function defaultTenant(): HasOne
+    public function defaultTenant(): BelongsTo
     {
-        return $this->hasOne(Tenant::class)->oldestOfMany();
+        return $this->belongsTo(Tenant::class, 'default_tenant_id');
     }
 
     /**

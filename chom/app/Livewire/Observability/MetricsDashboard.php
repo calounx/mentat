@@ -5,22 +5,29 @@ namespace App\Livewire\Observability;
 use App\Models\Site;
 use App\Models\Tenant;
 use App\Services\Integration\ObservabilityAdapter;
-use Livewire\Component;
 use Illuminate\Support\Facades\Log;
+use Livewire\Component;
 
 class MetricsDashboard extends Component
 {
     public ?string $siteFilter = '';
+
     public string $timeRange = '1h';
+
     public string $refreshInterval = '30';
 
     public array $cpuData = [];
+
     public array $memoryData = [];
+
     public array $diskData = [];
+
     public array $networkData = [];
+
     public array $httpData = [];
 
     public bool $loading = true;
+
     public ?string $error = null;
 
     protected $queryString = [
@@ -140,7 +147,7 @@ class MetricsDashboard extends Component
         }
 
         $result = $data['data']['result'][0] ?? null;
-        if (!$result || empty($result['value'])) {
+        if (! $result || empty($result['value'])) {
             return $default;
         }
 
@@ -149,7 +156,7 @@ class MetricsDashboard extends Component
             return $default;
         }
 
-        return number_format((float) $value, 1) . '%';
+        return number_format((float) $value, 1).'%';
     }
 
     public function render()
