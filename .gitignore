@@ -127,3 +127,26 @@ composer.phar
 coverage/
 .coverage
 htmlcov/
+
+# ------------------------------------------------------------------------------
+# Disaster Recovery and Backup (scripts/disaster-recovery/)
+# ------------------------------------------------------------------------------
+# Backup configuration (contains credentials)
+scripts/disaster-recovery/backup-config.env
+
+# GPG passphrase files
+scripts/disaster-recovery/.gpg-passphrase
+scripts/disaster-recovery/*.asc.private
+
+# Backup files
+backups/
+*.backup
+*.sql.gpg
+*.tar.gz.gpg
+
+# Test reports
+reports/backup-verification/
+reports/dr-tests/
+
+# Backup logs
+/var/log/backups/

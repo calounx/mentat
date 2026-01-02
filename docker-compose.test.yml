@@ -1,0 +1,114 @@
+version: '3.8'
+
+# CHOM API Test Environment
+#
+# This Docker Compose file sets up an isolated test environment for API testing.
+#
+# Usage:
+#   docker-compose -f docker-compose.test.yml up -d
+#   docker-compose -f docker-compose.test.yml exec test-runner /bin/bash
+#   docker-compose -f docker-compose.test.yml down
+
+services:
+  # Test Database
+  test-db:
+    image: mysql:8.0
+    container_name: chom_test_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_test
+      MYSQL_DATABASE: chom_test
+      MYSQL_USER: chom_test
+      MYSQL_PASSWORD: chom_test_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - test-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+
+  # Test Redis
+  test-redis:
+    image: redis:7-alpine
+    container_name: chom_test_redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 5
+
+  # CHOM API Test Instance
+  test-api:
+    build:
+      context: ./chom
+      dockerfile: Dockerfile
+    container_name: chom_test_api
+    depends_on:
+      test-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8001
+      DB_CONNECTION: mysql
+      DB_HOST: test-db
+      DB_PORT: 3306
+      DB_DATABASE: chom_test
+      DB_USERNAME: chom_test
+      DB_PASSWORD: chom_test_password
+      REDIS_HOST: test-redis
+      REDIS_PORT: 6379
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+    ports:
+      - "8001:80"
+    volumes:
+      - ./chom:/var/www/html
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      bash -c "
+        php artisan migrate --force &&
+        php artisan db:seed --force &&
+        php-fpm
+      "
+
+  # Test Runner Container
+  test-runner:
+    image: python:3.11-slim
+    container_name: chom_test_runner
+    depends_on:
+      test-api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://test-api:80/api/v1
+      API_TIMEOUT: 30
+      TEST_USER_EMAIL: test@chom.local
+      TEST_USER_PASSWORD: Test123!@#Password
+      CLEANUP_AFTER_TESTS: "true"
+    volumes:
+      - ./:/app
+      - ./reports:/app/reports
+      - ./htmlcov:/app/htmlcov
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r requirements-test.txt &&
+        tail -f /dev/null
+      "
+
+volumes:
+  test-db-data:
+    driver: local
+
+networks:
+  default:
+    name: chom_test_network

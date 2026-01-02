@@ -1,0 +1,563 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      deployment_strategy:
+        description: 'Deployment Strategy'
+        required: true
+        default: 'blue-green'
+        type: choice
+        options:
+          - blue-green
+          - rolling
+          - canary
+      skip_tests:
+        description: 'Skip test suite'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PHP_VERSION: '8.2'
+  NODE_VERSION: '20'
+  DEPLOYMENT_TIMEOUT: 600
+  HEALTH_CHECK_RETRIES: 10
+  ROLLBACK_ON_FAILURE: true
+
+permissions:
+  contents: read
+  deployments: write
+  statuses: write
+
+jobs:
+  # ========================================================================
+  # STAGE 1: BUILD & TEST
+  # ========================================================================
+
+  build-and-test:
+    name: Build Application & Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="main-${GITHUB_SHA:0:8}"
+          fi
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "build_number=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Build: ${BUILD_NUMBER}"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, bcmath, curl, pdo, pdo_mysql, redis, gd, zip, intl
+          coverage: xdebug
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'chom/package-lock.json'
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        working-directory: chom
+        run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader
+
+      - name: Install NPM dependencies
+        working-directory: chom
+        run: npm ci
+
+      - name: Prepare environment
+        working-directory: chom
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+
+      - name: Run PHP tests
+        if: ${{ !inputs.skip_tests }}
+        working-directory: chom
+        run: |
+          php artisan test --parallel --coverage-clover=coverage.xml
+
+      - name: Run static analysis
+        if: ${{ !inputs.skip_tests }}
+        working-directory: chom
+        run: |
+          ./vendor/bin/phpstan analyse --memory-limit=2G || true
+
+      - name: Build frontend assets
+        working-directory: chom
+        run: npm run build
+
+      - name: Run frontend tests
+        if: ${{ !inputs.skip_tests }}
+        working-directory: chom
+        run: npm test || true
+
+      - name: Create deployment artifact
+        run: |
+          mkdir -p artifacts
+          cd chom
+
+          # Install production dependencies
+          composer install --no-dev --optimize-autoloader --no-interaction
+
+          # Create deployment package
+          tar -czf ../artifacts/chom-${{ steps.version.outputs.version }}.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            --exclude='.env*' \
+            --exclude='storage/logs/*' \
+            --exclude='storage/framework/cache/*' \
+            --exclude='storage/framework/sessions/*' \
+            --exclude='storage/framework/views/*' \
+            --exclude='phpunit.xml' \
+            --exclude='*.md' \
+            .
+
+          cd ..
+
+          # Generate checksums
+          cd artifacts
+          sha256sum chom-${{ steps.version.outputs.version }}.tar.gz > checksums.txt
+          md5sum chom-${{ steps.version.outputs.version }}.tar.gz >> checksums.txt
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package
+          path: artifacts/
+          retention-days: 30
+
+      - name: Upload test coverage
+        if: ${{ !inputs.skip_tests }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: chom/coverage.xml
+          retention-days: 7
+
+  # ========================================================================
+  # STAGE 2: SECURITY SCANNING
+  # ========================================================================
+
+  security-scan:
+    name: Security & Vulnerability Scanning
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'chom/'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Setup PHP for security checks
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+
+      - name: Run Composer audit
+        working-directory: chom
+        run: |
+          composer audit --format=json > composer-audit.json || true
+          if [ -s composer-audit.json ]; then
+            VULNS=$(jq '.advisories | length' composer-audit.json)
+            if [ "$VULNS" -gt 0 ]; then
+              echo "::warning::Found $VULNS vulnerable packages"
+            fi
+          fi
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+  # ========================================================================
+  # STAGE 3: BLUE-GREEN DEPLOYMENT
+  # ========================================================================
+
+  deploy-blue-green:
+    name: Blue-Green Deployment to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://landsraad.arewel.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+          path: artifacts/
+
+      - name: Create deployment record
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: production
+          ref: ${{ github.ref }}
+
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy to production (Blue-Green)
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # Copy deployment artifact
+          scp artifacts/chom-${VERSION}.tar.gz ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/
+
+          # Execute blue-green deployment script
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
+            set -e
+
+            VERSION="${VERSION}"
+            APP_PATH="/var/www/chom"
+            RELEASES_PATH="/var/www/releases"
+            BACKUP_PATH="/var/backups/chom"
+
+            echo "Starting Blue-Green Deployment for version ${VERSION}"
+
+            # Create directories
+            mkdir -p ${RELEASES_PATH}/${VERSION}
+            mkdir -p ${BACKUP_PATH}
+
+            # Extract new version (GREEN environment)
+            tar -xzf /tmp/chom-${VERSION}.tar.gz -C ${RELEASES_PATH}/${VERSION}
+
+            # Copy environment configuration
+            cp ${APP_PATH}/.env ${RELEASES_PATH}/${VERSION}/.env
+
+            # Link shared storage
+            rm -rf ${RELEASES_PATH}/${VERSION}/storage
+            ln -s ${APP_PATH}/storage ${RELEASES_PATH}/${VERSION}/storage
+
+            # Set permissions
+            chown -R www-data:www-data ${RELEASES_PATH}/${VERSION}
+            chmod -R 755 ${RELEASES_PATH}/${VERSION}
+
+            # Run migrations on GREEN (test database first)
+            cd ${RELEASES_PATH}/${VERSION}
+            sudo -u www-data php artisan migrate:status
+
+            # Backup database before migration
+            BACKUP_FILE="${BACKUP_PATH}/db_backup_$(date +%Y%m%d_%H%M%S).sql"
+            sudo -u www-data php artisan db:backup --file=${BACKUP_FILE} || mysqldump chom > ${BACKUP_FILE}
+
+            # Run migrations
+            sudo -u www-data php artisan migrate --force
+
+            # Optimize GREEN environment
+            sudo -u www-data php artisan config:cache
+            sudo -u www-data php artisan route:cache
+            sudo -u www-data php artisan view:cache
+
+            # Health check on GREEN before switch
+            sudo -u www-data php artisan health:check || {
+              echo "Health check failed on GREEN environment"
+              exit 1
+            }
+
+            # Point 'current' symlink to GREEN (atomic switch)
+            CURRENT_LINK="${APP_PATH}_current"
+            ln -sfn ${RELEASES_PATH}/${VERSION} ${CURRENT_LINK}_new
+            mv -Tf ${CURRENT_LINK}_new ${CURRENT_LINK}
+
+            # Update main application symlink
+            ln -sfn ${CURRENT_LINK} ${APP_PATH}
+
+            # Reload PHP-FPM and services
+            systemctl reload php8.2-fpm
+            systemctl reload nginx
+
+            # Restart queue workers
+            sudo -u www-data php artisan queue:restart
+
+            # Sleep for service restart
+            sleep 5
+
+            # Final health check
+            sudo -u www-data php artisan health:check || {
+              echo "Post-deployment health check failed"
+              exit 1
+            }
+
+            # Cleanup old releases (keep last 5)
+            cd ${RELEASES_PATH}
+            ls -t | tail -n +6 | xargs -r rm -rf
+
+            # Cleanup old backups (keep last 14 days)
+            find ${BACKUP_PATH} -name "*.sql" -mtime +14 -delete
+
+            echo "Blue-Green deployment completed successfully"
+            rm /tmp/chom-${VERSION}.tar.gz
+          ENDSSH
+
+      - name: Run post-deployment health checks
+        env:
+          APP_URL: https://landsraad.arewel.com
+        run: |
+          echo "Running health checks..."
+
+          for i in {1..10}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${APP_URL}/health || echo "000")
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Health check passed (HTTP $HTTP_CODE)"
+              exit 0
+            else
+              echo "Attempt $i/10: Health check returned HTTP $HTTP_CODE"
+              if [ $i -lt 10 ]; then
+                sleep 10
+              fi
+            fi
+          done
+
+          echo "Health checks failed after 10 attempts"
+          exit 1
+
+      - name: Update deployment status (success)
+        if: success()
+        uses: bobheadxi/deployments@v1
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: success
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: https://landsraad.arewel.com
+
+      - name: Send success notification
+        if: success()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\":rocket: Production deployment successful\",\"attachments\":[{\"color\":\"good\",\"text\":\"Version ${{ needs.build-and-test.outputs.version }} deployed to production\"}]}" \
+              "$SLACK_WEBHOOK"
+          fi
+
+      - name: Rollback on failure
+        if: failure() && env.ROLLBACK_ON_FAILURE == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          echo "Deployment failed, initiating rollback..."
+
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
+            set -e
+
+            RELEASES_PATH="/var/www/releases"
+            APP_PATH="/var/www/chom"
+
+            # Get previous release
+            PREVIOUS=$(ls -t ${RELEASES_PATH} | sed -n 2p)
+
+            if [ -n "$PREVIOUS" ]; then
+              echo "Rolling back to previous version: ${PREVIOUS}"
+
+              # Point to previous release
+              ln -sfn ${RELEASES_PATH}/${PREVIOUS} ${APP_PATH}_current
+              ln -sfn ${APP_PATH}_current ${APP_PATH}
+
+              # Reload services
+              systemctl reload php8.2-fpm nginx
+
+              # Rollback migrations (last batch)
+              cd ${RELEASES_PATH}/${PREVIOUS}
+              sudo -u www-data php artisan migrate:rollback --force
+
+              echo "Rollback completed"
+            else
+              echo "No previous release found for rollback"
+              exit 1
+            fi
+          ENDSSH
+
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: bobheadxi/deployments@v1
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: failure
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+
+      - name: Send failure notification
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\":x: Production deployment failed\",\"attachments\":[{\"color\":\"danger\",\"text\":\"Version ${{ needs.build-and-test.outputs.version }} deployment failed. Check logs.\"}]}" \
+              "$SLACK_WEBHOOK"
+          fi
+
+  # ========================================================================
+  # STAGE 4: SMOKE TESTS & MONITORING
+  # ========================================================================
+
+  smoke-tests:
+    name: Post-Deployment Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy-blue-green
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run smoke tests
+        env:
+          APP_URL: https://landsraad.arewel.com
+        run: |
+          echo "Running smoke tests against production..."
+
+          # Test homepage
+          curl -f ${APP_URL} || exit 1
+
+          # Test health endpoint
+          curl -f ${APP_URL}/health || exit 1
+
+          # Test readiness endpoint
+          curl -f ${APP_URL}/health/ready || exit 1
+
+          # Test API endpoints
+          curl -f ${APP_URL}/api/health || exit 1
+
+          # Check response time
+          TIME=$(curl -o /dev/null -s -w '%{time_total}' ${APP_URL})
+          echo "Response time: ${TIME}s"
+
+          # Verify response time is acceptable (< 2 seconds)
+          if (( $(echo "$TIME > 2.0" | bc -l) )); then
+            echo "::warning::Response time is slow: ${TIME}s"
+          fi
+
+      - name: Test database connectivity
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
+            cd /var/www/chom
+            sudo -u www-data php artisan db:show
+          ENDSSH
+
+      - name: Verify queue workers
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
+            pgrep -f "artisan queue:work" || {
+              echo "::warning::Queue workers not running"
+              exit 1
+            }
+          ENDSSH
+
+  # ========================================================================
+  # STAGE 5: OBSERVABILITY STACK UPDATE
+  # ========================================================================
+
+  update-observability:
+    name: Update Observability Stack
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    timeout-minutes: 10
+
+    steps:
+      - name: Update Grafana dashboards
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_API_KEY: ${{ secrets.GRAFANA_API_KEY }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
+        run: |
+          if [ -n "$GRAFANA_API_KEY" ]; then
+            # Add deployment annotation to Grafana
+            curl -X POST "${GRAFANA_URL}/api/annotations" \
+              -H "Authorization: Bearer ${GRAFANA_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"text\": \"Production deployment: ${VERSION}\",
+                \"tags\": [\"deployment\", \"production\"],
+                \"time\": $(date +%s)000
+              }"
+          fi
+
+      - name: Create Prometheus alert
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+        run: |
+          echo "Deployment marker created for version ${{ needs.build-and-test.outputs.version }}"

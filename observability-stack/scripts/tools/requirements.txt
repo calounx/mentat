@@ -6,3 +6,6 @@ PyYAML>=6.0
 
 # Schema validation (required for validate_schema.py)
 jsonschema>=4.0.0
+
+# HTTP requests (required for validate-exporters.py)
+requests>=2.31.0

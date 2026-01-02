@@ -1,0 +1,32 @@
+[Unit]
+Description=Prometheus Redis Exporter
+Documentation=https://github.com/oliver006/redis_exporter
+After=network-online.target redis.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/redis_exporter \
+    --web.listen-address=0.0.0.0:9121 \
+    --redis.addr=redis://localhost:6379
+
+SyslogIdentifier=redis_exporter
+Restart=always
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+
+# Resource limits
+LimitNOFILE=8192
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target

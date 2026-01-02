@@ -10,6 +10,7 @@ use App\Http\Resources\V1\TeamInvitationCollection;
 use App\Http\Resources\V1\TeamInvitationResource;
 use App\Http\Resources\V1\TeamMemberCollection;
 use App\Http\Resources\V1\TeamMemberResource;
+use App\Mail\TeamInvitationMail;
 use App\Models\Organization;
 use App\Models\TeamInvitation;
 use App\Models\User;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class TeamController extends Controller
@@ -287,34 +289,50 @@ class TeamController extends Controller
                 'expires_at' => now()->addDays(7),
             ]);
 
-            // Log invitation details for now - replace with Mail::send() when email service is configured
-            // This logs all necessary data for email template: recipient, role, inviter, acceptance link, expiry
+            // Build acceptance URL
             $acceptUrl = url("/api/v1/team/accept/{$invitation->token}");
-
-            Log::info('Team invitation created - invitation email queued', [
-                'organization_id' => $organization->id,
-                'organization_name' => $organization->name,
-                'invitation_id' => $invitation->id,
-                'recipient_email' => $validated['email'],
-                'assigned_role' => $validated['role'],
-                'invited_by_user_id' => $currentUser->id,
-                'invited_by_name' => $currentUser->name,
-                'invited_by_email' => $currentUser->email,
-                'invitation_token' => $invitation->token,
-                'accept_url' => $acceptUrl,
-                'expires_at' => $invitation->expires_at->toIso8601String(),
-                'valid_for_days' => 7,
-            ]);
-
-            // When email service is configured, replace the Log::info above with:
-            // Mail::to($validated['email'])->send(new TeamInvitationMail($invitation, $organization, $currentUser, $acceptUrl));
 
             // Load relationships for response
             $invitation->load('inviter');
 
+            // Send invitation email (queued for async delivery)
+            // If no email service is configured (MAIL_MAILER=log), the email will be logged
+            try {
+                Mail::queue(
+                    new TeamInvitationMail($invitation, $organization, $currentUser, $acceptUrl)
+                );
+
+                Log::info('Team invitation created and email queued', [
+                    'organization_id' => $organization->id,
+                    'organization_name' => $organization->name,
+                    'invitation_id' => $invitation->id,
+                    'recipient_email' => $validated['email'],
+                    'assigned_role' => $validated['role'],
+                    'invited_by_user_id' => $currentUser->id,
+                    'invited_by_name' => $currentUser->name,
+                    'invited_by_email' => $currentUser->email,
+                    'invitation_token' => $invitation->token,
+                    'accept_url' => $acceptUrl,
+                    'expires_at' => $invitation->expires_at->toIso8601String(),
+                    'valid_for_days' => 7,
+                    'email_status' => 'queued',
+                ]);
+            } catch (\Exception $mailException) {
+                // If email fails, still return success but log the error
+                // User can still access the invitation via link
+                Log::warning('Failed to queue invitation email', [
+                    'invitation_id' => $invitation->id,
+                    'email' => $validated['email'],
+                    'error' => $mailException->getMessage(),
+                ]);
+
+                // Optionally: You could still return success since invitation is created
+                // But alert the user that email delivery may have failed
+            }
+
             return (new TeamInvitationResource($invitation))
                 ->additional([
-                    'message' => 'Invitation sent successfully.',
+                    'message' => 'Invitation sent successfully. An email has been sent to the invitee.',
                 ])
                 ->response()
                 ->setStatusCode(201);

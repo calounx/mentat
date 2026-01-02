@@ -1,0 +1,159 @@
+Docker Environment Regression Test - 2026-01-02T10:27:13+00:00
+========================================================================
+[2026-01-02 10:27:13] [SUCCESS] Environment setup complete
+[2026-01-02 10:27:13] [INFO] 
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] Docker Environment Regression Test Suite
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] Timestamp: 2026-01-02T10:27:13+00:00
+[2026-01-02 10:27:13] [INFO] Main Environment: true
+[2026-01-02 10:27:13] [INFO] VPS Simulation: false
+[2026-01-02 10:27:13] [INFO] Dev Environment: false
+[2026-01-02 10:27:13] [INFO] Skip Persistence: true
+[2026-01-02 10:27:13] [INFO] Cleanup: true
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] Testing Main Test Environment
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] Starting Phase: Phase 1: Environment Setup Tests
+[2026-01-02 10:27:13] [INFO] ========================================================================
+[2026-01-02 10:27:13] [INFO] Test 1: Docker Compose Syntax: docker-compose.yml
+[2026-01-02 10:27:14] [SUCCESS] ✓ Docker Compose Syntax: docker-compose.yml (1s)
+[2026-01-02 10:27:14] [INFO] Test 2: Port Conflict Check: docker-compose.yml
+[2026-01-02 10:27:14] [SUCCESS] ✓ Port Conflict Check: docker-compose.yml (0s)
+[2026-01-02 10:27:14] [INFO] Test 3: Volume Mount Validation: docker-compose.yml
+[2026-01-02 10:27:14] [SUCCESS] ✓ Volume Mount Validation: docker-compose.yml (0s)
+[2026-01-02 10:27:14] [INFO] Test 4: Network Configuration: docker-compose.yml
+[2026-01-02 10:27:14] [SUCCESS] ✓ Network Configuration: docker-compose.yml (0s)
+[2026-01-02 10:27:14] [INFO] Test 5: Environment Variable Check: docker-compose.yml
+[2026-01-02 10:27:14] [SUCCESS] ✓ Environment Variable Check: docker-compose.yml (0s)
+[2026-01-02 10:27:14] [INFO] Test 6: Resource Limit Validation: docker-compose.yml
+[2026-01-02 10:27:14] [INFO] Resource limits are defined
+[2026-01-02 10:27:14] [SUCCESS] ✓ Resource Limit Validation: docker-compose.yml (0s)
+[2026-01-02 10:27:14] [INFO] Test 7: Container Startup: docker-compose.yml
+[2026-01-02 10:27:14] [INFO] Starting containers from /home/calounx/repositories/mentat/docker/docker-compose.yml
+[2026-01-02 10:32:22] [ERROR] Timeout waiting for containers to start
+[2026-01-02 10:32:22] [ERROR] Failed to start containers
+[2026-01-02 10:32:22] [INFO] Container status:
+[2026-01-02 10:32:22] [ERROR] ✗ Container Startup: docker-compose.yml (308s)
+[2026-01-02 10:32:22] [INFO] ========================================================================
+[2026-01-02 10:32:22] [INFO] Starting Phase: Phase 2: Service-Level Tests - Main Test Environment
+[2026-01-02 10:32:22] [INFO] ========================================================================
+[2026-01-02 10:32:22] [INFO] Test 8: Prometheus Service
+[2026-01-02 10:32:22] [INFO] Waiting for http://localhost:9090/-/healthy to respond with 200...
+[2026-01-02 10:32:22] [SUCCESS] http://localhost:9090/-/healthy is responding
+[2026-01-02 10:32:22] [SUCCESS] Prometheus is collecting metrics
+[2026-01-02 10:32:22] [SUCCESS] ✓ Prometheus Service (0s)
+[2026-01-02 10:32:22] [INFO] Test 9: Loki Service
+[2026-01-02 10:32:22] [INFO] Waiting for http://localhost:3100/ready to respond with 200...
+[2026-01-02 10:32:53] [ERROR] Timeout waiting for http://localhost:3100/ready
+[2026-01-02 10:32:53] [ERROR] ✗ Loki Service (31s)
+[2026-01-02 10:32:53] [INFO] Test 10: Grafana Service
+[2026-01-02 10:32:53] [INFO] Waiting for http://localhost:3000/api/health to respond with 200...
+[2026-01-02 10:32:53] [SUCCESS] http://localhost:3000/api/health is responding
+[2026-01-02 10:32:53] [WARN] Grafana login may have different response format
+[2026-01-02 10:32:53] [WARN] ⚠ Grafana Service (0s)
+[2026-01-02 10:32:53] [INFO] Test 11: Tempo Service
+[2026-01-02 10:32:53] [INFO] Waiting for localhost:3200 to be available...
+[2026-01-02 10:32:53] [SUCCESS] localhost:3200 is available
+[2026-01-02 10:32:53] [SUCCESS] Tempo HTTP endpoint is available
+[2026-01-02 10:32:53] [INFO] Waiting for localhost:4317 to be available...
+[2026-01-02 10:32:53] [SUCCESS] localhost:4317 is available
+[2026-01-02 10:32:53] [SUCCESS] Tempo OTLP gRPC endpoint is available
+[2026-01-02 10:32:53] [INFO] Waiting for localhost:4318 to be available...
+[2026-01-02 10:32:53] [SUCCESS] localhost:4318 is available
+[2026-01-02 10:32:53] [SUCCESS] Tempo OTLP HTTP endpoint is available
+[2026-01-02 10:32:53] [SUCCESS] ✓ Tempo Service (0s)
+[2026-01-02 10:32:53] [INFO] Test 12: Alertmanager Service
+[2026-01-02 10:32:53] [INFO] Waiting for http://localhost:9093/-/healthy to respond with 200...
+[2026-01-02 10:32:53] [SUCCESS] http://localhost:9093/-/healthy is responding
+[2026-01-02 10:32:53] [SUCCESS] Alertmanager is responding
+[2026-01-02 10:32:53] [SUCCESS] ✓ Alertmanager Service (0s)
+[2026-01-02 10:32:53] [INFO] Test 13: Node Exporter (Observability)
+[2026-01-02 10:32:53] [INFO] Waiting for http://localhost:9199/metrics to respond with 200...
+[2026-01-02 10:33:23] [ERROR] Timeout waiting for http://localhost:9199/metrics
+[2026-01-02 10:33:23] [ERROR] ✗ Node Exporter (Observability) (30s)
+[2026-01-02 10:33:23] [INFO] Test 14: Nginx Service
+[2026-01-02 10:33:23] [INFO] Waiting for http://localhost:8000 to respond with 200...
+[2026-01-02 10:34:24] [ERROR] Timeout waiting for http://localhost:8000
+[2026-01-02 10:34:24] [SUCCESS] Nginx HTTP is listening
+[2026-01-02 10:34:24] [SUCCESS] Nginx HTTPS is listening
+[2026-01-02 10:34:24] [SUCCESS] ✓ Nginx Service (61s)
+[2026-01-02 10:34:24] [INFO] Test 15: MySQL Service
+[2026-01-02 10:34:24] [INFO] Waiting for localhost:3316 to be available...
+[2026-01-02 10:34:24] [SUCCESS] localhost:3316 is available
+[2026-01-02 10:34:24] [WARN] MySQL connection failed (may need initialization)
+[2026-01-02 10:34:24] [SUCCESS] ✓ MySQL Service (0s)
+[2026-01-02 10:34:24] [INFO] Test 16: Redis Service
+[2026-01-02 10:34:24] [INFO] Waiting for localhost:6389 to be available...
+[2026-01-02 10:34:24] [SUCCESS] localhost:6389 is available
+[2026-01-02 10:34:24] [INFO] redis-cli not available, skipping operation test
+[2026-01-02 10:34:24] [SUCCESS] ✓ Redis Service (0s)
+[2026-01-02 10:34:24] [INFO] Test 17: Web Stack Exporters
+[2026-01-02 10:34:24] [INFO] Waiting for http://localhost:9101/metrics to respond with 200...
+[2026-01-02 10:34:54] [ERROR] Timeout waiting for http://localhost:9101/metrics
+[2026-01-02 10:34:54] [ERROR] Node Exporter (Web) failed
+[2026-01-02 10:34:54] [INFO] Waiting for http://localhost:9114/metrics to respond with 200...
+[2026-01-02 10:35:24] [ERROR] Timeout waiting for http://localhost:9114/metrics
+[2026-01-02 10:35:24] [WARN] Nginx Exporter not available
+[2026-01-02 10:35:24] [INFO] Waiting for http://localhost:9105/metrics to respond with 200...
+[2026-01-02 10:35:55] [ERROR] Timeout waiting for http://localhost:9105/metrics
+[2026-01-02 10:35:55] [WARN] MySQL Exporter not available
+[2026-01-02 10:35:55] [INFO] Waiting for http://localhost:9254/metrics to respond with 200...
+[2026-01-02 10:35:55] [SUCCESS] http://localhost:9254/metrics is responding
+[2026-01-02 10:35:55] [SUCCESS] PHP-FPM Exporter is available
+[2026-01-02 10:35:55] [ERROR] ✗ Web Stack Exporters (91s)
+[2026-01-02 10:35:55] [INFO] ========================================================================
+[2026-01-02 10:35:55] [INFO] Completed Phase: Phase 2: Service-Level Tests - Main Test Environment
+[2026-01-02 10:35:55] [INFO] ========================================================================
+[2026-01-02 10:35:55] [INFO] ========================================================================
+[2026-01-02 10:35:55] [INFO] Starting Phase: Phase 3: Integration Tests - Main Test Environment
+[2026-01-02 10:35:55] [INFO] ========================================================================
+[2026-01-02 10:35:55] [INFO] Test 18: Prometheus Target Scraping
+[2026-01-02 10:35:55] [SUCCESS] Prometheus has 11 active targets
+[2026-01-02 10:35:55] [WARN] Some Prometheus targets are down:
+[2026-01-02 10:35:55] [WARN] http://10.10.100.20:9104/metrics
+http://10.10.100.20:9113/metrics
+http://10.10.100.20:9100/metrics
+[2026-01-02 10:35:55] [WARN] ⚠ Prometheus Target Scraping (0s)
+[2026-01-02 10:35:55] [INFO] Test 19: Prometheus Metrics Collection
+[2026-01-02 10:35:55] [SUCCESS] Metric up is being collected (12 series)
+[2026-01-02 10:35:55] [SUCCESS] Metric node_cpu_seconds_total is being collected (32 series)
+[2026-01-02 10:35:55] [SUCCESS] Metric node_memory_MemAvailable_bytes is being collected (1 series)
+[2026-01-02 10:35:55] [SUCCESS] Metric process_cpu_seconds_total is being collected (9 series)
+[2026-01-02 10:35:55] [SUCCESS] ✓ Prometheus Metrics Collection (0s)
+[2026-01-02 10:35:55] [INFO] Test 20: Grafana Prometheus Data Source
+[2026-01-02 10:35:55] [SUCCESS] Grafana has Prometheus datasource configured: Prometheus
+[2026-01-02 10:35:56] [SUCCESS] Grafana can query Prometheus datasource
+[2026-01-02 10:35:56] [SUCCESS] ✓ Grafana Prometheus Data Source (1s)
+[2026-01-02 10:35:56] [INFO] Test 21: Loki Log Ingestion
+[2026-01-02 10:35:58] [WARN] Could not verify Loki log ingestion
+[2026-01-02 10:35:58] [WARN] ⚠ Loki Log Ingestion (2s)
+[2026-01-02 10:35:58] [INFO] Test 22: Grafana Loki Data Source
+[2026-01-02 10:35:58] [SUCCESS] Grafana has Loki datasource configured: Loki
+[2026-01-02 10:35:58] [SUCCESS] ✓ Grafana Loki Data Source (0s)
+[2026-01-02 10:35:58] [INFO] Test 23: MySQL Database Creation
+[2026-01-02 10:35:58] [WARN] MySQL database operations may not be working
+[2026-01-02 10:35:58] [WARN] ⚠ MySQL Database Creation (0s)
+[2026-01-02 10:35:58] [INFO] Test 24: Redis Operations
+[2026-01-02 10:35:58] [INFO] redis-cli not available, skipping test
+[2026-01-02 10:35:58] [SUCCESS] ✓ Redis Operations (0s)
+[2026-01-02 10:35:58] [INFO] Test 25: CHOM App MySQL Connection
+[2026-01-02 10:35:58] [INFO] CHOM web container not running, skipping test
+[2026-01-02 10:35:58] [SUCCESS] ✓ CHOM App MySQL Connection (0s)
+[2026-01-02 10:35:58] [INFO] Test 26: CHOM App Redis Connection
+[2026-01-02 10:35:58] [INFO] CHOM web container not running, skipping test
+[2026-01-02 10:35:58] [SUCCESS] ✓ CHOM App Redis Connection (0s)
+[2026-01-02 10:35:58] [INFO] Test 27: Metrics Exporters Integration
+[2026-01-02 10:35:58] [WARN] Exporter http://localhost:9199/metrics may not be returning valid metrics
+[2026-01-02 10:35:58] [WARN] Exporter http://localhost:9101/metrics may not be returning valid metrics
+[2026-01-02 10:35:58] [WARN] ⚠ Metrics Exporters Integration (0s)
+[2026-01-02 10:35:58] [INFO] ========================================================================
+[2026-01-02 10:35:58] [INFO] Completed Phase: Phase 3: Integration Tests - Main Test Environment
+[2026-01-02 10:35:58] [INFO] ========================================================================
+[2026-01-02 10:35:58] [INFO] Skipping persistence tests
+[2026-01-02 10:35:58] [INFO] Cleaning up test environments...
+[2026-01-02 10:35:58] [INFO] Cleaning up containers, networks, and volumes from /home/calounx/repositories/mentat/docker/docker-compose.yml
+[2026-01-02 10:36:10] [INFO] Cleaning up containers, networks, and volumes from /home/calounx/repositories/mentat/docker/docker-compose.vps.yml
+[2026-01-02 10:36:10] [INFO] Cleaning up test environments...

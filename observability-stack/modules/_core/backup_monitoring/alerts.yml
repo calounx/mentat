@@ -1,0 +1,407 @@
+# ============================================================================
+# Backup and Disaster Recovery Monitoring Alerts
+# ============================================================================
+# These alerts monitor backup health, offsite uploads, and DR readiness
+# ============================================================================
+
+groups:
+  - name: backup_alerts
+    interval: 5m
+    rules:
+      # ========================================================================
+      # Backup Execution Alerts
+      # ========================================================================
+
+      - alert: BackupJobFailed
+        expr: backup_offsite_last_run_status == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+          category: availability
+        annotations:
+          summary: "Offsite backup job failed"
+          description: "The last offsite backup job failed on {{ $labels.instance }}. No backups are being uploaded to S3."
+          impact: "Disaster recovery capability degraded. RPO increasing."
+          action: |
+            1. Check backup logs: tail -f /var/log/backup-offsite.log
+            2. Verify S3 connectivity: aws s3 ls s3://your-bucket/
+            3. Check disk space: df -h
+            4. Verify GPG encryption setup
+            5. Review backup script errors
+          runbook: "https://github.com/yourorg/mentat/blob/main/DISASTER_RECOVERY.md#backup-failures"
+
+      - alert: BackupJobNotRun
+        expr: time() - backup_offsite_last_run_timestamp > 86400
+        for: 10m
+        labels:
+          severity: critical
+          component: backup
+          category: availability
+        annotations:
+          summary: "Offsite backup job has not run in 24 hours"
+          description: "No offsite backup has been executed in the last 24 hours on {{ $labels.instance }}."
+          impact: "RPO exceeds acceptable threshold. Data loss risk increasing."
+          action: |
+            1. Check if backup cron job is running: systemctl status cron
+            2. Verify crontab entry: crontab -l | grep backup
+            3. Check system logs: journalctl -u cron
+            4. Run backup manually: /path/to/backup-offsite.sh
+            5. Verify no resource constraints (CPU, memory, disk)
+
+      - alert: BackupDurationTooLong
+        expr: backup_offsite_last_run_duration_seconds > 3600
+        for: 5m
+        labels:
+          severity: warning
+          component: backup
+          category: performance
+        annotations:
+          summary: "Backup taking longer than expected"
+          description: "Last backup took {{ $value | humanizeDuration }} to complete on {{ $labels.instance }}."
+          impact: "Backup window may overlap with production traffic. Performance degradation possible."
+          action: |
+            1. Check database size growth: docker exec mysql du -sh /var/lib/mysql
+            2. Review network bandwidth to S3
+            3. Consider incremental backups
+            4. Check for table locks during backup
+            5. Optimize backup parallelization
+
+      # ========================================================================
+      # Backup Verification Alerts
+      # ========================================================================
+
+      - alert: BackupVerificationFailed
+        expr: backup_verification_failed > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+          category: integrity
+        annotations:
+          summary: "Backup verification tests failed"
+          description: "{{ $value }} backup verification test(s) failed on {{ $labels.instance }}."
+          impact: "Backups may be corrupted or incomplete. DR capability uncertain."
+          action: |
+            1. Review verification report: cat /path/to/reports/verification_latest.txt
+            2. Check backup file integrity
+            3. Attempt manual restore test
+            4. Verify encryption keys are accessible
+            5. Check storage corruption
+
+      - alert: BackupVerificationWarnings
+        expr: backup_verification_warnings > 3
+        for: 15m
+        labels:
+          severity: warning
+          component: backup
+          category: integrity
+        annotations:
+          summary: "Multiple backup verification warnings"
+          description: "{{ $value }} backup verification warnings on {{ $labels.instance }}."
+          impact: "Potential backup quality issues. Investigation recommended."
+          action: |
+            1. Review verification warnings
+            2. Check backup file sizes
+            3. Verify backup completeness
+            4. Test restoration procedure
+
+      - alert: BackupVerificationNotRun
+        expr: time() - backup_verification_last_run > 172800
+        for: 30m
+        labels:
+          severity: warning
+          component: backup
+          category: compliance
+        annotations:
+          summary: "Backup verification has not run in 48 hours"
+          description: "Backup verification tests have not been executed in 48+ hours on {{ $labels.instance }}."
+          impact: "Unknown backup integrity status. Compliance risk."
+          action: |
+            1. Check verification cron job
+            2. Run verification manually: /path/to/verify-backups.sh
+            3. Review system logs for failures
+
+      # ========================================================================
+      # Backup Storage Alerts
+      # ========================================================================
+
+      - alert: BackupStorageFull
+        expr: node_filesystem_avail_bytes{mountpoint=~"/var/lib/.*|/opt/.*"} / node_filesystem_size_bytes < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+          category: capacity
+        annotations:
+          summary: "Backup storage nearly full"
+          description: "Backup storage on {{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full on {{ $labels.instance }}."
+          impact: "Backups will fail when storage fills. Data loss risk imminent."
+          action: |
+            1. Clean old backups: find /path/to/backups -mtime +7 -delete
+            2. Check retention policy enforcement
+            3. Increase storage capacity
+            4. Move backups to offsite storage
+            5. Compress existing backups
+
+      - alert: BackupSizeAbnormal
+        expr: |
+          (
+            backup_offsite_last_run_bytes
+            / avg_over_time(backup_offsite_last_run_bytes[7d])
+          ) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: backup
+          category: integrity
+        annotations:
+          summary: "Backup size significantly smaller than average"
+          description: "Latest backup is {{ $value | humanizePercentage }} of average size on {{ $labels.instance }}."
+          impact: "Backup may be incomplete. Data loss risk."
+          action: |
+            1. Compare backup file sizes: ls -lh /path/to/backups
+            2. Check database size: docker exec mysql du -sh /var/lib/mysql
+            3. Verify backup script completed successfully
+            4. Check for partial backup uploads
+            5. Review application data volume
+
+      # ========================================================================
+      # Offsite Backup Alerts
+      # ========================================================================
+
+      - alert: OffsiteBackupMissing
+        expr: backup_offsite_upload_success{type="mysql"} == 0
+        for: 30m
+        labels:
+          severity: critical
+          component: backup
+          category: availability
+        annotations:
+          summary: "Offsite MySQL backup upload failed"
+          description: "MySQL backups are not being uploaded to S3 on {{ $labels.instance }}."
+          impact: "No offsite disaster recovery capability. Single point of failure."
+          action: |
+            1. Check S3 connectivity: aws s3 ls
+            2. Verify S3 credentials
+            3. Check network connectivity
+            4. Review backup-offsite.sh logs
+            5. Test manual upload: aws s3 cp test.txt s3://bucket/
+
+      - alert: S3UploadSlowdown
+        expr: rate(backup_offsite_last_run_bytes[5m]) < 1000000
+        for: 15m
+        labels:
+          severity: warning
+          component: backup
+          category: performance
+        annotations:
+          summary: "S3 upload speed degraded"
+          description: "Upload speed to S3 is {{ $value | humanize }}B/s on {{ $labels.instance }}."
+          impact: "Backups taking longer. May miss backup window."
+          action: |
+            1. Check network bandwidth
+            2. Verify S3 endpoint performance
+            3. Consider compression improvements
+            4. Check for network saturation
+            5. Review S3 transfer acceleration
+
+      - alert: BackupEncryptionFailure
+        expr: backup_encryption_failed > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+          category: security
+        annotations:
+          summary: "Backup encryption failures detected"
+          description: "{{ $value }} backup(s) failed to encrypt on {{ $labels.instance }}."
+          impact: "Unencrypted backups uploaded to S3. Security breach risk."
+          action: |
+            1. Verify GPG keys present and valid
+            2. Check GPG agent status
+            3. Verify encryption configuration
+            4. Review backup-offsite.sh logs
+            5. URGENT: Delete unencrypted backups from S3
+
+      # ========================================================================
+      # Database Backup Specific Alerts
+      # ========================================================================
+
+      - alert: DatabaseBackupMissing
+        expr: |
+          time() - mysql_backup_last_timestamp > 86400
+        for: 30m
+        labels:
+          severity: critical
+          component: database
+          category: backup
+        annotations:
+          summary: "MySQL backup missing for 24+ hours"
+          description: "No MySQL backup created in last 24 hours on {{ $labels.instance }}."
+          impact: "RPO exceeds 24 hours. Significant data loss risk."
+          action: |
+            1. Check mysqldump cron job
+            2. Verify database accessibility
+            3. Check disk space
+            4. Run manual backup
+            5. Review database logs for issues
+
+      - alert: DatabaseBackupConsistencyIssue
+        expr: mysql_backup_consistency_check_failed > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          category: integrity
+        annotations:
+          summary: "MySQL backup consistency check failed"
+          description: "Database backup failed consistency check on {{ $labels.instance }}."
+          impact: "Backup may not be restorable. DR capability uncertain."
+          action: |
+            1. Run mysqlcheck: mysqlcheck --all-databases
+            2. Verify no table corruption
+            3. Check for replication lag (if applicable)
+            4. Retry backup with --single-transaction
+            5. Test restore to verify integrity
+
+      # ========================================================================
+      # Retention Policy Alerts
+      # ========================================================================
+
+      - alert: BackupRetentionViolation
+        expr: backup_retention_oldest_backup_age_days > 35
+        for: 1h
+        labels:
+          severity: warning
+          component: backup
+          category: compliance
+        annotations:
+          summary: "Backups older than retention policy"
+          description: "Oldest backup is {{ $value }} days old on {{ $labels.instance }}. Retention policy is 30 days."
+          impact: "Excessive storage usage. Compliance violation possible."
+          action: |
+            1. Check retention cleanup script
+            2. Manually clean old backups
+            3. Verify cron job for cleanup
+            4. Review S3 lifecycle policies
+            5. Update retention configuration
+
+      - alert: InsufficientBackupCoverage
+        expr: backup_retention_coverage_days < 7
+        for: 2h
+        labels:
+          severity: warning
+          component: backup
+          category: compliance
+        annotations:
+          summary: "Insufficient backup history"
+          description: "Only {{ $value }} days of backup history available on {{ $labels.instance }}."
+          impact: "Cannot recover to earlier points in time. Compliance risk."
+          action: |
+            1. Identify missing backup dates
+            2. Check for backup job failures
+            3. Verify backup retention settings
+            4. Review historical backup logs
+            5. Implement gap-filling backups
+
+      # ========================================================================
+      # Disaster Recovery Readiness Alerts
+      # ========================================================================
+
+      - alert: DisasterRecoveryTestOverdue
+        expr: time() - dr_last_test_timestamp > 7776000
+        for: 1h
+        labels:
+          severity: warning
+          component: disaster_recovery
+          category: compliance
+        annotations:
+          summary: "DR test not performed in 90 days"
+          description: "Last disaster recovery test was {{ $value | humanizeDuration }} ago."
+          impact: "DR procedures may be outdated. Recovery capability unverified."
+          action: |
+            1. Schedule DR drill
+            2. Review DR runbook for updates
+            3. Test full recovery procedure
+            4. Document test results
+            5. Update RTO/RPO measurements
+
+      - alert: RecoveryTimeObjectiveExceeded
+        expr: backup_last_restore_test_duration_seconds > 7200
+        for: 5m
+        labels:
+          severity: warning
+          component: disaster_recovery
+          category: compliance
+        annotations:
+          summary: "Last recovery test exceeded RTO"
+          description: "Recovery took {{ $value | humanizeDuration }}, exceeding 2-hour RTO."
+          impact: "May not meet RTO commitments during actual disaster."
+          action: |
+            1. Optimize restore procedures
+            2. Review bottlenecks in recovery
+            3. Consider parallel restoration
+            4. Improve automation
+            5. Update RTO targets if needed
+
+      - alert: BackupDocumentationOutdated
+        expr: time() - backup_runbook_last_update > 7776000
+        for: 1d
+        labels:
+          severity: info
+          component: disaster_recovery
+          category: compliance
+        annotations:
+          summary: "DR documentation not updated in 90 days"
+          description: "Disaster recovery runbook last updated {{ $value | humanizeDuration }} ago."
+          impact: "Procedures may be inaccurate during actual incident."
+          action: |
+            1. Review DISASTER_RECOVERY.md
+            2. Update contact information
+            3. Verify recovery procedures
+            4. Test documented steps
+            5. Update version and date
+
+  # ==========================================================================
+  # Backup File-Level Monitoring
+  # ==========================================================================
+
+  - name: backup_file_alerts
+    interval: 15m
+    rules:
+      - alert: CriticalFileNotBackedUp
+        expr: |
+          backup_file_age_seconds{file=~".*\.env|.*secrets.*|.*\.key"} > 86400
+        for: 1h
+        labels:
+          severity: warning
+          component: backup
+          category: security
+        annotations:
+          summary: "Critical configuration file not backed up recently"
+          description: "Critical file {{ $labels.file }} not backed up in 24+ hours."
+          impact: "Configuration recovery capability degraded."
+          action: |
+            1. Run configuration backup manually
+            2. Check backup script coverage
+            3. Add file to backup manifest
+            4. Verify encryption of sensitive files
+
+      - alert: BackupChecksumMismatch
+        expr: backup_checksum_verification_failed > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+          category: integrity
+        annotations:
+          summary: "Backup checksum verification failed"
+          description: "{{ $value }} backup file(s) failed checksum verification on {{ $labels.instance }}."
+          impact: "Backup corruption detected. Cannot trust backup integrity."
+          action: |
+            1. Identify corrupted backup files
+            2. Re-run backup for affected data
+            3. Check storage media health
+            4. Verify no tampering occurred
+            5. Test restoration from earlier backup

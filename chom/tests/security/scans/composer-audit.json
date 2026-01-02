@@ -1,0 +1,4 @@
+{
+    "status": "no_composer_binary",
+    "message": "Composer not in PATH, using docker container"
+}

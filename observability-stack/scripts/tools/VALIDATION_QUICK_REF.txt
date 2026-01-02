@@ -1,0 +1,95 @@
+================================================================================
+PROMETHEUS EXPORTER VALIDATOR - QUICK REFERENCE CARD
+================================================================================
+
+LOCATION
+--------
+/home/calounx/repositories/mentat/observability-stack/scripts/tools/
+
+INSTALLATION
+------------
+pip install -r requirements.txt
+
+BASIC USAGE
+-----------
+./validate-exporters.py --endpoint http://localhost:9100/metrics
+./validate-exporters.py --scan-host localhost
+./validate-exporters.py --endpoints-file endpoints.txt
+
+WITH PROMETHEUS
+---------------
+./validate-exporters.py \
+  --endpoint http://localhost:9100/metrics \
+  --prometheus http://prometheus:9090 \
+  --job node_exporter
+
+CI/CD MODE
+----------
+./validate-exporters.py \
+  --endpoint http://localhost:9100/metrics \
+  --exit-on-warning \
+  --json > validation.json
+
+EXIT CODES
+----------
+0 = All checks passed (healthy)
+1 = Warnings detected (non-critical)
+2 = Critical errors (failures)
+
+EXAMPLE SCRIPTS
+---------------
+./examples/validate-all-exporters.sh    # Comprehensive validation
+./examples/ci-cd-validation.sh          # CI/CD integration
+python3 examples/test-validator.py      # Run tests
+
+DOCUMENTATION
+-------------
+EXPORTER_VALIDATION.md           # Full documentation
+QUICK_START_VALIDATION.md        # 5-minute guide
+EXPORTER_VALIDATOR_README.md     # User-friendly overview
+VALIDATOR_SUMMARY.md             # Implementation details
+examples/README.md               # Integration examples
+
+COMMON OPTIONS
+--------------
+--max-cardinality N              # Max label cardinality (default: 1000)
+--staleness-threshold N          # Max metric age in seconds (default: 300)
+--timeout N                      # HTTP timeout (default: 10)
+--json                           # JSON output
+--verbose, -v                    # Debug mode
+--quiet, -q                      # Suppress output
+--summary-only                   # Brief summary
+--exit-on-warning                # Strict mode for CI/CD
+
+VALIDATION CHECKS
+-----------------
+✓ HTTP health (200 OK, response time)
+✓ Metrics format (Prometheus text format)
+✓ Naming conventions (metric/label names)
+✓ Cardinality (detect performance issues)
+✓ Staleness (detect stuck exporters)
+✓ Type consistency (counter, gauge, histogram, summary)
+✓ Prometheus targets (optional)
+
+TROUBLESHOOTING
+---------------
+Connection refused:
+  - Check exporter: systemctl status node_exporter
+  - Check port: ss -tlnp | grep 9100
+  - Test: curl http://localhost:9100/metrics
+
+High cardinality:
+  - Review labels, remove unbounded values
+  - Use aggregation/recording rules
+  - Adjust threshold: --max-cardinality 2000
+
+Dependencies:
+  - Python 3.8+: python3 --version
+  - Requests: pip install requests
+
+HELP
+----
+./validate-exporters.py --help
+cat QUICK_START_VALIDATION.md
+
+================================================================================

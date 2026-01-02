@@ -49,8 +49,20 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
+        'sendgrid' => [
+            'transport' => 'sendgrid',
+        ],
+
+        'mailgun' => [
+            'transport' => 'mailgun',
+            'domain' => env('MAILGUN_DOMAIN'),
+            'secret' => env('MAILGUN_SECRET'),
+            'endpoint' => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
+        ],
+
         'ses' => [
             'transport' => 'ses',
+            'region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION', 'us-east-1')),
         ],
 
         'postmark' => [
@@ -82,7 +94,8 @@ return [
         'failover' => [
             'transport' => 'failover',
             'mailers' => [
-                'smtp',
+                'sendgrid',
+                'mailgun',
                 'log',
             ],
             'retry_after' => 60,
@@ -91,8 +104,8 @@ return [
         'roundrobin' => [
             'transport' => 'roundrobin',
             'mailers' => [
-                'ses',
-                'postmark',
+                'sendgrid',
+                'mailgun',
             ],
             'retry_after' => 60,
         ],

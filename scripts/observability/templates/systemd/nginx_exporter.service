@@ -1,0 +1,32 @@
+[Unit]
+Description=Prometheus Nginx Exporter
+Documentation=https://github.com/nginxinc/nginx-prometheus-exporter
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/nginx_exporter \
+    --web.listen-address=0.0.0.0:9113 \
+    --nginx.scrape-uri=http://localhost/nginx_status
+
+SyslogIdentifier=nginx_exporter
+Restart=always
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+
+# Resource limits
+LimitNOFILE=8192
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target

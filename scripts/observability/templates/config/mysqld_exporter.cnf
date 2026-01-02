@@ -1,0 +1,15 @@
+# MySQL Exporter Configuration
+# Place this file at: /etc/.mysqld_exporter.cnf
+# Set ownership: chown prometheus:prometheus /etc/.mysqld_exporter.cnf
+# Set permissions: chmod 600 /etc/.mysqld_exporter.cnf
+
+[client]
+user=exporter
+password=YOUR_PASSWORD_HERE
+host=localhost
+port=3306
+
+# Example MySQL user creation:
+# CREATE USER 'exporter'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD_HERE' WITH MAX_USER_CONNECTIONS 3;
+# GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';
+# FLUSH PRIVILEGES;

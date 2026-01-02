@@ -1,0 +1,33 @@
+# OVH API Credentials
+# Get these from: https://api.ovh.com/createToken/
+ovh_application_key    = "your_application_key_here"
+ovh_application_secret = "your_application_secret_here"
+ovh_consumer_key       = "your_consumer_key_here"
+ovh_cloud_project_id   = "your_cloud_project_id_here"
+
+# Environment Configuration
+environment = "production"
+ovh_endpoint = "ovh-eu"
+
+# DNS Configuration
+domain_zone = "arewel.com"
+manage_dns  = true
+
+# VPS Configuration
+create_vps = false  # Set to true only for initial provisioning
+
+# Backup Configuration
+create_backup_storage  = true
+backup_region         = "GRA"
+backup_retention_days = 90
+
+# Monitoring
+create_monitoring_db = false
+
+# High Availability
+enable_ha           = false
+enable_auto_scaling = false
+
+# Notifications
+notification_email = "ops@arewel.com"
+slack_webhook_url  = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"

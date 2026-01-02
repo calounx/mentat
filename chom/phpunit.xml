@@ -48,6 +48,12 @@
         <testsuite name="DeploymentChaos">
             <directory>tests/Deployment/Chaos</directory>
         </testsuite>
+        <testsuite name="Browser">
+            <directory>tests/Browser</directory>
+            <exclude>tests/Browser/console</exclude>
+            <exclude>tests/Browser/screenshots</exclude>
+            <exclude>tests/Browser/source</exclude>
+        </testsuite>
     </testsuites>
     <source>
         <include>

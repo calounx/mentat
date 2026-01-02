@@ -1,0 +1,12 @@
+# Example endpoints file for validate-exporters.py
+# One endpoint per line, comments (starting with #) are ignored
+
+# Local exporters
+http://localhost:9100/metrics
+http://localhost:9090/metrics
+http://localhost:9093/metrics
+
+# Remote exporters (example - adjust to your environment)
+# http://host1.example.com:9100/metrics
+# http://host2.example.com:9100/metrics
+# http://db-server.example.com:9104/metrics

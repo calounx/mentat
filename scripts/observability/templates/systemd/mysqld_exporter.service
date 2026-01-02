@@ -1,0 +1,38 @@
+[Unit]
+Description=Prometheus MySQL Exporter
+Documentation=https://github.com/prometheus/mysqld_exporter
+After=network-online.target mysql.service mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/mysqld_exporter \
+    --web.listen-address=0.0.0.0:9104 \
+    --config.my-cnf=/etc/.mysqld_exporter.cnf \
+    --collect.info_schema.processlist \
+    --collect.info_schema.innodb_metrics \
+    --collect.info_schema.tablestats \
+    --collect.info_schema.tables \
+    --collect.info_schema.userstats \
+    --collect.engine_innodb_status
+
+SyslogIdentifier=mysqld_exporter
+Restart=always
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+
+# Resource limits
+LimitNOFILE=8192
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target

@@ -7,10 +7,11 @@ Production-quality Python tools for YAML validation and management in the observ
 - Python 3.8+
 - PyYAML: `pip install PyYAML`
 - jsonschema: `pip install jsonschema` (for validate_schema.py)
+- requests: `pip install requests` (for validate-exporters.py)
 
 Install all dependencies:
 ```bash
-pip install PyYAML jsonschema
+pip install -r requirements.txt
 ```
 
 ## Tools Overview
@@ -285,6 +286,64 @@ Validates module.yaml files for completeness and correctness.
 - 1: Issues found
 - 2: Execution error
 
+### 9. validate-exporters.py - Exporter Metrics Validator
+
+Validates Prometheus exporter metrics format, health, and integration with Prometheus.
+
+**Features:**
+- Prometheus text format parsing and validation
+- Metric naming convention enforcement
+- High cardinality detection (performance issues)
+- Metric staleness detection
+- Prometheus scraping verification
+- JSON output for automation
+- CI/CD integration support
+
+**Usage:**
+```bash
+# Validate single exporter
+./validate-exporters.py --endpoint http://localhost:9100/metrics
+
+# Scan host for exporters
+./validate-exporters.py --scan-host localhost
+
+# Validate with Prometheus integration
+./validate-exporters.py --endpoint http://localhost:9100/metrics \
+                        --prometheus http://prometheus:9090 \
+                        --job node_exporter
+
+# CI/CD integration with JSON output
+./validate-exporters.py --endpoint http://localhost:9100/metrics \
+                        --json --exit-on-warning
+
+# Validate from endpoints file
+./validate-exporters.py --endpoints-file endpoints.txt
+
+# Custom thresholds
+./validate-exporters.py --endpoint http://localhost:9100/metrics \
+                        --max-cardinality 500 \
+                        --staleness-threshold 60
+```
+
+**Validation Checks:**
+1. HTTP endpoint health (200 OK, response time)
+2. Metrics format compliance (Prometheus text format)
+3. Naming conventions (metric/label names)
+4. Label cardinality (detect performance issues)
+5. Metric staleness (detect stuck exporters)
+6. Type consistency (counter, gauge, histogram, summary)
+7. Prometheus target status (optional)
+
+**Exit Codes:**
+- 0: All checks passed
+- 1: Warnings detected
+- 2: Critical errors detected
+
+**Documentation:**
+- Quick Start: [QUICK_START_VALIDATION.md](QUICK_START_VALIDATION.md)
+- Full Documentation: [EXPORTER_VALIDATION.md](EXPORTER_VALIDATION.md)
+- Examples: [examples/](examples/)
+
 ## Common Workflows
 
 ### Pre-commit Validation
@@ -300,6 +359,9 @@ Validates module.yaml files for completeness and correctness.
 
 # Lint all modules
 ./lint_module.py modules/ --recursive
+
+# Validate exporters
+./validate-exporters.py --scan-host localhost
 ```
 
 ### CI/CD Integration
@@ -313,6 +375,11 @@ set -e
 ./scripts/tools/check_ports.py --modules modules/ --global config/global.yaml
 ./scripts/tools/scan_secrets.py config/ --recursive --strict
 ./scripts/tools/resolve_deps.py modules/ --check-cycles
+
+# Validate exporter metrics
+./scripts/tools/validate-exporters.py --scan-host localhost \
+    --prometheus http://localhost:9090 \
+    --exit-on-warning
 
 echo "All validations passed!"
 ```
