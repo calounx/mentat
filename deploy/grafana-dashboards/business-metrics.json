@@ -1,0 +1,236 @@
+{
+  "dashboard": {
+    "title": "Business Metrics",
+    "tags": ["business", "kpi", "growth"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "5m",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "type": "stat",
+        "title": "Total Sites Managed",
+        "targets": [
+          {
+            "expr": "chom_total_sites",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "blue"},
+                {"value": 100, "color": "green"},
+                {"value": 1000, "color": "yellow"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+        "type": "stat",
+        "title": "Active Organizations",
+        "targets": [
+          {
+            "expr": "chom_active_organizations",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "blue"},
+                {"value": 50, "color": "green"},
+                {"value": 500, "color": "yellow"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "type": "stat",
+        "title": "Backups Created Today",
+        "targets": [
+          {
+            "expr": "increase(chom_backups_created_total[24h])",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "blue"},
+                {"value": 10, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "type": "stat",
+        "title": "Total Storage Used",
+        "targets": [
+          {
+            "expr": "sum(chom_storage_used_bytes)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 107374182400, "color": "yellow"},
+                {"value": 214748364800, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Sites Created Over Time",
+        "targets": [
+          {
+            "expr": "increase(chom_sites_created_total[1d])",
+            "legendFormat": "Daily New Sites",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Sites"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "graph",
+        "title": "Backup Operations",
+        "targets": [
+          {
+            "expr": "increase(chom_backups_created_total[1h])",
+            "legendFormat": "Created",
+            "refId": "A"
+          },
+          {
+            "expr": "increase(chom_backups_restored_total[1h])",
+            "legendFormat": "Restored",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Operations"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "type": "piechart",
+        "title": "Storage Usage by Tenant",
+        "targets": [
+          {
+            "expr": "topk(10, sum(chom_storage_used_bytes) by (tenant_id))",
+            "legendFormat": "{{tenant_id}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "displayLabels": ["name", "percent"],
+          "pieType": "donut"
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "type": "graph",
+        "title": "API Usage by Tier",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (tier)",
+            "legendFormat": "{{tier}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "type": "table",
+        "title": "Top 10 Organizations by Activity",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(chom_organization_activity_total[24h])) by (organization_id, organization_name))",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "organization_name": "Organization",
+                "Value": "Activity Score"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-7d",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5m", "15m", "30m", "1h", "6h", "12h", "24h"]
+    }
+  }
+}

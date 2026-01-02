@@ -3,7 +3,6 @@
 namespace Tests\Unit\Jobs;
 
 use App\Jobs\RotateVpsCredentialsJob;
-use App\Models\Tenant;
 use App\Models\VpsServer;
 use App\Services\Secrets\SecretsRotationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,10 +20,10 @@ class RotateVpsCredentialsJobTest extends TestCase
     {
         parent::setUp();
 
-        $tenant = Tenant::factory()->create();
+        // VPS servers are infrastructure resources without direct tenant relationship
+        // Tenants access VPS through VpsAllocation
         $this->vps = VpsServer::factory()->create([
-            'tenant_id' => $tenant->id,
-            'name' => 'production-server',
+            'hostname' => 'production-server',
         ]);
     }
 

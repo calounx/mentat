@@ -1,0 +1,614 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use App\Models\Team;
+use App\Models\Site;
+use App\Models\Vps;
+
+/**
+ * Prometheus Metrics Exporter for CHOM Cost & Capacity Monitoring
+ *
+ * This service exports metrics in Prometheus format for Grafana dashboards.
+ * Place this file in: app/Services/MetricsExporter.php
+ *
+ * Usage:
+ * Route::get('/metrics', function() {
+ *     return response(app(MetricsExporter::class)->export())
+ *         ->header('Content-Type', 'text/plain; version=0.0.4');
+ * });
+ */
+class MetricsExporter
+{
+    private array $config;
+    private string $service;
+    private array $metrics = [];
+
+    public function __construct()
+    {
+        $this->config = config('metrics-config');
+        $this->service = $this->config['metrics']['labels']['service'] ?? 'chom';
+    }
+
+    /**
+     * Export all metrics in Prometheus format
+     */
+    public function export(): string
+    {
+        // Use caching to reduce database load
+        $cacheTtl = $this->config['metrics']['cache_ttl'] ?? 60;
+
+        return Cache::remember('prometheus_metrics', $cacheTtl, function () {
+            $this->metrics = [];
+
+            if ($this->config['metrics']['export']['cost']) {
+                $this->exportCostMetrics();
+            }
+
+            if ($this->config['metrics']['export']['capacity']) {
+                $this->exportCapacityMetrics();
+            }
+
+            if ($this->config['metrics']['export']['tenant']) {
+                $this->exportTenantMetrics();
+            }
+
+            if ($this->config['metrics']['export']['optimization']) {
+                $this->exportOptimizationMetrics();
+            }
+
+            return implode("\n", $this->metrics) . "\n";
+        });
+    }
+
+    /**
+     * Export cost-related metrics
+     */
+    private function exportCostMetrics(): void
+    {
+        // Infrastructure cost by category
+        $this->addHelp('chom_infrastructure_cost_monthly', 'Monthly infrastructure cost in USD');
+        $this->addType('chom_infrastructure_cost_monthly', 'gauge');
+
+        // Compute costs
+        $computeCost = $this->calculateComputeCost();
+        $this->addMetric('chom_infrastructure_cost_monthly', $computeCost, [
+            'category' => 'compute',
+            'resource_type' => 'vps',
+        ]);
+
+        // Storage costs
+        $storageCost = $this->calculateStorageCost();
+        $this->addMetric('chom_infrastructure_cost_monthly', $storageCost, [
+            'category' => 'storage',
+            'resource_type' => 'disk',
+        ]);
+
+        // Network costs
+        $networkCost = $this->calculateNetworkCost();
+        $this->addMetric('chom_infrastructure_cost_monthly', $networkCost, [
+            'category' => 'network',
+            'resource_type' => 'bandwidth',
+        ]);
+
+        // Email costs
+        $emailCost = $this->calculateEmailCost();
+        $this->addMetric('chom_infrastructure_cost_monthly', $emailCost, [
+            'category' => 'email',
+            'resource_type' => 'ses',
+        ]);
+
+        // Database costs
+        $databaseCost = $this->calculateDatabaseCost();
+        $this->addMetric('chom_infrastructure_cost_monthly', $databaseCost, [
+            'category' => 'database',
+            'resource_type' => 'mysql',
+        ]);
+
+        // Budget metrics
+        $this->addHelp('chom_cost_budget_monthly', 'Monthly budget allocation in USD');
+        $this->addType('chom_cost_budget_monthly', 'gauge');
+        $this->addMetric('chom_cost_budget_monthly', $this->config['budgets']['monthly']['total']);
+
+        // Storage metrics
+        $totalStorage = $this->getTotalStorageBytes();
+        $this->addHelp('chom_storage_bytes_total', 'Total storage used in bytes');
+        $this->addType('chom_storage_bytes_total', 'gauge');
+        $this->addMetric('chom_storage_bytes_total', $totalStorage);
+
+        // Storage cost
+        $this->addHelp('chom_storage_cost_total', 'Total storage cost');
+        $this->addType('chom_storage_cost_total', 'counter');
+        $this->addMetric('chom_storage_cost_total', $storageCost);
+
+        // Email metrics
+        $this->addHelp('chom_email_sent_total', 'Total emails sent');
+        $this->addType('chom_email_sent_total', 'counter');
+
+        $emailCounts = $this->getEmailCounts();
+        foreach ($emailCounts as $type => $count) {
+            $this->addMetric('chom_email_sent_total', $count, ['type' => $type]);
+        }
+
+        $this->addHelp('chom_email_service_cost_monthly', 'Monthly email service cost in USD');
+        $this->addType('chom_email_service_cost_monthly', 'gauge');
+        $this->addMetric('chom_email_service_cost_monthly', $emailCost);
+
+        // Cost anomaly detection
+        $this->addHelp('chom_cost_anomaly_detected', 'Cost anomaly detected (1 = yes, 0 = no)');
+        $this->addType('chom_cost_anomaly_detected', 'gauge');
+        $anomaly = $this->detectCostAnomaly() ? 1 : 0;
+        $this->addMetric('chom_cost_anomaly_detected', $anomaly);
+
+        // Revenue (if tracked)
+        if (method_exists($this, 'getMonthlyRevenue')) {
+            $this->addHelp('chom_revenue_monthly', 'Monthly revenue in USD');
+            $this->addType('chom_revenue_monthly', 'gauge');
+            $this->addMetric('chom_revenue_monthly', $this->getMonthlyRevenue());
+        }
+    }
+
+    /**
+     * Export capacity-related metrics
+     */
+    private function exportCapacityMetrics(): void
+    {
+        // Tenant count
+        $this->addHelp('chom_tenant_id', 'Active tenants');
+        $this->addType('chom_tenant_id', 'gauge');
+        $tenantCount = Team::count();
+        $this->addMetric('chom_tenant_id', $tenantCount);
+
+        // HTTP requests (if tracked)
+        if (method_exists($this, 'getHttpRequestCount')) {
+            $this->addHelp('chom_http_requests_total', 'Total HTTP requests');
+            $this->addType('chom_http_requests_total', 'counter');
+            $this->addMetric('chom_http_requests_total', $this->getHttpRequestCount());
+        }
+
+        // Capacity thresholds
+        $this->addHelp('chom_capacity_threshold_exceeded', 'Capacity threshold exceeded (1 = yes, 0 = no)');
+        $this->addType('chom_capacity_threshold_exceeded', 'gauge');
+
+        $thresholds = $this->checkCapacityThresholds();
+        foreach ($thresholds as $resource => $exceeded) {
+            $this->addMetric('chom_capacity_threshold_exceeded', $exceeded ? 1 : 0, [
+                'resource' => $resource,
+            ]);
+        }
+
+        // Capacity headroom
+        $this->addHelp('chom_capacity_headroom', 'Capacity headroom percentage');
+        $this->addType('chom_capacity_headroom', 'gauge');
+
+        $headroom = $this->calculateCapacityHeadroom();
+        foreach ($headroom as $resource => $data) {
+            $this->addMetric('chom_capacity_headroom', $data['headroom'], [
+                'resource' => $resource,
+                'current_utilization' => (string)$data['utilization'],
+                'unit' => $data['unit'],
+            ]);
+        }
+    }
+
+    /**
+     * Export tenant-specific metrics
+     */
+    private function exportTenantMetrics(): void
+    {
+        $this->addHelp('chom_tenant_cost_monthly', 'Monthly cost per tenant in USD');
+        $this->addType('chom_tenant_cost_monthly', 'gauge');
+
+        $this->addHelp('chom_tenant_storage_bytes', 'Storage used by tenant in bytes');
+        $this->addType('chom_tenant_storage_bytes', 'gauge');
+
+        $this->addHelp('chom_site_count', 'Number of sites per tenant');
+        $this->addType('chom_site_count', 'gauge');
+
+        $this->addHelp('chom_vps_count', 'Number of VPS instances per tenant');
+        $this->addType('chom_vps_count', 'gauge');
+
+        foreach (Team::all() as $tenant) {
+            $tenantId = $tenant->id;
+
+            // Tenant cost
+            $cost = $this->calculateTenantCost($tenant);
+            $this->addMetric('chom_tenant_cost_monthly', $cost, ['tenant_id' => (string)$tenantId]);
+
+            // Tenant storage
+            $storage = $this->getTenantStorageBytes($tenant);
+            $this->addMetric('chom_tenant_storage_bytes', $storage, ['tenant_id' => (string)$tenantId]);
+
+            // Tenant sites
+            $siteCount = Site::where('team_id', $tenantId)->count();
+            $this->addMetric('chom_site_count', $siteCount, ['tenant_id' => (string)$tenantId]);
+
+            // Tenant VPS
+            $vpsCount = Vps::where('team_id', $tenantId)->count();
+            $this->addMetric('chom_vps_count', $vpsCount, ['tenant_id' => (string)$tenantId]);
+        }
+    }
+
+    /**
+     * Export optimization opportunity metrics
+     */
+    private function exportOptimizationMetrics(): void
+    {
+        $this->addHelp('chom_cost_optimization_opportunity', 'Cost optimization opportunity in USD');
+        $this->addType('chom_cost_optimization_opportunity', 'gauge');
+
+        $opportunities = $this->identifyOptimizationOpportunities();
+
+        foreach ($opportunities as $opportunity) {
+            $this->addMetric('chom_cost_optimization_opportunity', $opportunity['savings'], [
+                'category' => $opportunity['category'],
+                'priority' => $opportunity['priority'],
+                'description' => $opportunity['description'],
+            ]);
+        }
+
+        // Capacity recommendations
+        $this->addHelp('chom_capacity_recommendation', 'Capacity scaling recommendation');
+        $this->addType('chom_capacity_recommendation', 'gauge');
+
+        $recommendations = $this->generateCapacityRecommendations();
+
+        foreach ($recommendations as $recommendation) {
+            $this->addMetric('chom_capacity_recommendation', 1, [
+                'resource' => $recommendation['resource'],
+                'action' => $recommendation['action'],
+                'priority' => $recommendation['priority'],
+                'eta_days' => (string)$recommendation['eta_days'],
+                'threshold' => (string)$recommendation['threshold'],
+                'description' => $recommendation['description'],
+            ]);
+        }
+    }
+
+    /**
+     * Calculate compute costs
+     */
+    private function calculateComputeCost(): float
+    {
+        $vpsCount = Vps::count();
+        $baseCost = $this->config['pricing']['vps']['base_cost'] ?? 10.00;
+
+        return $vpsCount * $baseCost;
+    }
+
+    /**
+     * Calculate storage costs
+     */
+    private function calculateStorageCost(): float
+    {
+        $totalStorageGB = $this->getTotalStorageBytes() / (1024 ** 3);
+        $pricePerGB = $this->config['pricing']['storage']['ssd_per_gb'] ?? 0.15;
+
+        return $totalStorageGB * $pricePerGB;
+    }
+
+    /**
+     * Calculate network costs
+     */
+    private function calculateNetworkCost(): float
+    {
+        // This would need to be tracked via actual bandwidth monitoring
+        // For now, return estimated cost based on typical usage
+        $estimatedBandwidthGB = 500; // TODO: Track actual bandwidth
+        $freeTier = $this->config['pricing']['network']['bandwidth_free_tier'] ?? 100;
+        $pricePerGB = $this->config['pricing']['network']['bandwidth_per_gb'] ?? 0.08;
+
+        $chargeableBandwidth = max(0, $estimatedBandwidthGB - $freeTier);
+
+        return $chargeableBandwidth * $pricePerGB;
+    }
+
+    /**
+     * Calculate email costs
+     */
+    private function calculateEmailCost(): float
+    {
+        $emailCount = $this->getMonthlyEmailCount();
+
+        // Using Brevo pricing as example
+        if ($emailCount <= 9000) {
+            return 0; // Free tier (300/day * 30 days)
+        } elseif ($emailCount <= 10000) {
+            return 25;
+        } elseif ($emailCount <= 100000) {
+            return 65;
+        } else {
+            return 65 + (($emailCount - 100000) / 1000) * 0.50;
+        }
+    }
+
+    /**
+     * Calculate database costs
+     */
+    private function calculateDatabaseCost(): float
+    {
+        // This would need to query actual database size
+        $databaseSizeGB = 10; // TODO: Get actual DB size
+        $pricePerGB = $this->config['pricing']['database']['per_gb_month'] ?? 0.20;
+
+        return $databaseSizeGB * $pricePerGB;
+    }
+
+    /**
+     * Get total storage in bytes
+     */
+    private function getTotalStorageBytes(): int
+    {
+        return (int)DB::table('sites')->sum('storage_used_bytes') ?: 0;
+    }
+
+    /**
+     * Get tenant storage in bytes
+     */
+    private function getTenantStorageBytes(Team $tenant): int
+    {
+        return (int)DB::table('sites')
+            ->where('team_id', $tenant->id)
+            ->sum('storage_used_bytes') ?: 0;
+    }
+
+    /**
+     * Calculate tenant cost
+     */
+    private function calculateTenantCost(Team $tenant): float
+    {
+        $storageGB = $this->getTenantStorageBytes($tenant) / (1024 ** 3);
+        $storageCost = $storageGB * ($this->config['pricing']['storage']['ssd_per_gb'] ?? 0.15);
+
+        $vpsCount = Vps::where('team_id', $tenant->id)->count();
+        $vpsCost = $vpsCount * ($this->config['pricing']['vps']['base_cost'] ?? 10.00);
+
+        return $storageCost + $vpsCost;
+    }
+
+    /**
+     * Get email counts by type
+     */
+    private function getEmailCounts(): array
+    {
+        // This would need actual email tracking
+        // For now, return example data
+        return [
+            'transactional' => 5000,
+            'marketing' => 2000,
+        ];
+    }
+
+    /**
+     * Get monthly email count
+     */
+    private function getMonthlyEmailCount(): int
+    {
+        $counts = $this->getEmailCounts();
+        return array_sum($counts);
+    }
+
+    /**
+     * Detect cost anomalies
+     */
+    private function detectCostAnomaly(): bool
+    {
+        // Compare current cost to 7-day average
+        // This would need historical cost tracking
+        // For now, return false
+        return false;
+    }
+
+    /**
+     * Check capacity thresholds
+     */
+    private function checkCapacityThresholds(): array
+    {
+        $thresholds = $this->config['capacity']['thresholds'];
+
+        return [
+            'cpu' => $this->getCpuUtilization() > $thresholds['cpu']['critical'],
+            'memory' => $this->getMemoryUtilization() > $thresholds['memory']['critical'],
+            'disk' => $this->getDiskUtilization() > $thresholds['disk']['critical'],
+        ];
+    }
+
+    /**
+     * Calculate capacity headroom
+     */
+    private function calculateCapacityHeadroom(): array
+    {
+        return [
+            'cpu' => [
+                'utilization' => $this->getCpuUtilization(),
+                'headroom' => 100 - $this->getCpuUtilization(),
+                'unit' => 'percent',
+            ],
+            'memory' => [
+                'utilization' => $this->getMemoryUtilization(),
+                'headroom' => 100 - $this->getMemoryUtilization(),
+                'unit' => 'percent',
+            ],
+            'disk' => [
+                'utilization' => $this->getDiskUtilization(),
+                'headroom' => 100 - $this->getDiskUtilization(),
+                'unit' => 'percent',
+            ],
+        ];
+    }
+
+    /**
+     * Get CPU utilization
+     */
+    private function getCpuUtilization(): float
+    {
+        // This would read from system metrics
+        // For now, return example value
+        $load = sys_getloadavg()[0] ?? 0;
+        $cores = 4; // TODO: Get actual core count
+        return min(100, ($load / $cores) * 100);
+    }
+
+    /**
+     * Get memory utilization
+     */
+    private function getMemoryUtilization(): float
+    {
+        // This would read from system metrics
+        if (function_exists('sys_getloadavg')) {
+            $meminfo = file_get_contents('/proc/meminfo');
+            preg_match('/MemTotal:\s+(\d+)/', $meminfo, $total);
+            preg_match('/MemAvailable:\s+(\d+)/', $meminfo, $available);
+
+            if (isset($total[1]) && isset($available[1])) {
+                return ((1 - ($available[1] / $total[1])) * 100);
+            }
+        }
+
+        return 50.0; // Default value
+    }
+
+    /**
+     * Get disk utilization
+     */
+    private function getDiskUtilization(): float
+    {
+        $total = disk_total_space('/');
+        $free = disk_free_space('/');
+
+        if ($total > 0) {
+            return ((1 - ($free / $total)) * 100);
+        }
+
+        return 50.0; // Default value
+    }
+
+    /**
+     * Identify cost optimization opportunities
+     */
+    private function identifyOptimizationOpportunities(): array
+    {
+        $opportunities = [];
+
+        // Check for underutilized resources
+        if ($this->getCpuUtilization() < $this->config['optimization']['underutilized_threshold']) {
+            $opportunities[] = [
+                'category' => 'compute',
+                'priority' => 'Medium',
+                'description' => 'Underutilized CPU - consider downsizing',
+                'savings' => 100.00,
+            ];
+        }
+
+        // Check for old backups
+        $opportunities[] = [
+            'category' => 'storage',
+            'priority' => 'High',
+            'description' => 'Implement backup lifecycle policy',
+            'savings' => 250.00,
+        ];
+
+        // Check for bandwidth optimization
+        $opportunities[] = [
+            'category' => 'network',
+            'priority' => 'Medium',
+            'description' => 'Enable CDN for static assets',
+            'savings' => 150.00,
+        ];
+
+        return $opportunities;
+    }
+
+    /**
+     * Generate capacity recommendations
+     */
+    private function generateCapacityRecommendations(): array
+    {
+        $recommendations = [];
+        $thresholds = $this->config['capacity']['thresholds'];
+
+        // CPU recommendation
+        $cpuUtil = $this->getCpuUtilization();
+        if ($cpuUtil > $thresholds['cpu']['critical']) {
+            $recommendations[] = [
+                'resource' => 'cpu',
+                'action' => 'scale_up',
+                'priority' => 'Critical',
+                'eta_days' => 7,
+                'threshold' => $thresholds['cpu']['critical'],
+                'description' => 'CPU utilization critical - scale up immediately',
+            ];
+        }
+
+        // Disk recommendation
+        $diskUtil = $this->getDiskUtilization();
+        if ($diskUtil > $thresholds['disk']['warning']) {
+            $daysToFull = $this->estimateDaysToFullDisk();
+            $priority = $daysToFull < 30 ? 'High' : 'Medium';
+
+            $recommendations[] = [
+                'resource' => 'disk',
+                'action' => 'expand_storage',
+                'priority' => $priority,
+                'eta_days' => $daysToFull,
+                'threshold' => $thresholds['disk']['warning'],
+                'description' => "Disk capacity will be full in {$daysToFull} days",
+            ];
+        }
+
+        return $recommendations;
+    }
+
+    /**
+     * Estimate days until disk is full
+     */
+    private function estimateDaysToFullDisk(): int
+    {
+        // This would need historical growth data
+        // For now, return estimated value based on utilization
+        $util = $this->getDiskUtilization();
+
+        if ($util > 85) {
+            return 15;
+        } elseif ($util > 75) {
+            return 45;
+        } else {
+            return 90;
+        }
+    }
+
+    /**
+     * Helper: Add metric help text
+     */
+    private function addHelp(string $name, string $help): void
+    {
+        $this->metrics[] = "# HELP {$name} {$help}";
+    }
+
+    /**
+     * Helper: Add metric type
+     */
+    private function addType(string $name, string $type): void
+    {
+        $this->metrics[] = "# TYPE {$name} {$type}";
+    }
+
+    /**
+     * Helper: Add metric with labels
+     */
+    private function addMetric(string $name, $value, array $labels = []): void
+    {
+        $labels['service'] = $this->service;
+
+        $labelPairs = [];
+        foreach ($labels as $key => $val) {
+            $escapedValue = str_replace(['\\', '"', "\n"], ['\\\\', '\\"', '\\n'], $val);
+            $labelPairs[] = "{$key}=\"{$escapedValue}\"";
+        }
+
+        $labelString = empty($labelPairs) ? '' : '{' . implode(',', $labelPairs) . '}';
+        $this->metrics[] = "{$name}{$labelString} {$value}";
+    }
+}

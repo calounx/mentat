@@ -1,0 +1,43 @@
+# k6 Load Testing - Ignore Patterns
+
+# Test results
+results/*.json
+results/*.csv
+results/*.txt
+results/*.html
+
+# k6 cloud results
+k6-cloud-results/
+
+# Test data
+data/*.json
+data/*.csv
+
+# Logs
+*.log
+
+# Environment files
+.env.local
+.env.test
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if using npm for utilities)
+node_modules/
+
+# Keep results directory structure
+!results/.gitkeep
+!data/.gitkeep
