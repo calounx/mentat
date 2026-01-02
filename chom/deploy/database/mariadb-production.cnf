@@ -1,0 +1,247 @@
+# ============================================================================
+# MariaDB Production Configuration - CHOM Platform
+# ============================================================================
+# Optimized for production workload with security hardening
+# Target: 4GB RAM server with moderate to high transaction volume
+# ============================================================================
+
+[client]
+port                        = 3306
+socket                      = /var/run/mysqld/mysqld.sock
+default-character-set       = utf8mb4
+
+[mysqld_safe]
+socket                      = /var/run/mysqld/mysqld.sock
+nice                        = 0
+skip_syslog
+syslog
+
+[mysqld]
+# ----------------------------------------------------------------------------
+# BASIC SETTINGS
+# ----------------------------------------------------------------------------
+user                        = mysql
+pid-file                    = /var/run/mysqld/mysqld.pid
+socket                      = /var/run/mysqld/mysqld.sock
+port                        = 3306
+basedir                     = /usr
+datadir                     = /var/lib/mysql
+tmpdir                      = /tmp
+lc-messages-dir             = /usr/share/mysql
+bind-address                = 0.0.0.0
+skip-external-locking
+
+# ----------------------------------------------------------------------------
+# CHARACTER SET & COLLATION
+# ----------------------------------------------------------------------------
+character-set-server        = utf8mb4
+collation-server            = utf8mb4_unicode_ci
+init-connect                = 'SET NAMES utf8mb4'
+
+# ----------------------------------------------------------------------------
+# NETWORK & CONNECTION SETTINGS
+# ----------------------------------------------------------------------------
+max_connections             = 200
+max_connect_errors          = 100000
+max_allowed_packet          = 64M
+connect_timeout             = 10
+wait_timeout                = 600
+interactive_timeout         = 600
+
+# Thread pool for better concurrency
+thread_handling             = pool-of-threads
+thread_pool_size            = 4
+thread_pool_max_threads     = 500
+thread_pool_idle_timeout    = 60
+
+# ----------------------------------------------------------------------------
+# SECURITY HARDENING
+# ----------------------------------------------------------------------------
+# Disable unsafe features
+local-infile                = 0
+symbolic-links              = 0
+skip-name-resolve           = 1
+secure_file_priv            = /var/lib/mysql-files
+
+# Require secure connections (TLS/SSL)
+require_secure_transport    = ON
+
+# SSL/TLS Configuration
+ssl-ca                      = /etc/mysql/ssl/ca-cert.pem
+ssl-cert                    = /etc/mysql/ssl/server-cert.pem
+ssl-key                     = /etc/mysql/ssl/server-key.pem
+ssl-cipher                  = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384'
+tls-version                 = 'TLSv1.2,TLSv1.3'
+
+# ----------------------------------------------------------------------------
+# PERFORMANCE TUNING - InnoDB
+# ----------------------------------------------------------------------------
+# InnoDB is the default storage engine
+default-storage-engine      = InnoDB
+
+# Buffer pool settings (50-70% of available RAM for dedicated DB server)
+# For 4GB RAM: 2-3GB, For 8GB RAM: 4-6GB
+innodb_buffer_pool_size     = 2G
+innodb_buffer_pool_instances = 4
+innodb_buffer_pool_chunk_size = 128M
+
+# Log settings for performance and durability
+innodb_log_file_size        = 512M
+innodb_log_buffer_size      = 16M
+innodb_log_files_in_group   = 2
+innodb_flush_log_at_trx_commit = 2  # 1 for max durability, 2 for better performance
+innodb_flush_method         = O_DIRECT
+
+# I/O settings
+innodb_io_capacity          = 2000
+innodb_io_capacity_max      = 4000
+innodb_read_io_threads      = 4
+innodb_write_io_threads     = 4
+
+# Transaction settings
+innodb_lock_wait_timeout    = 50
+innodb_rollback_on_timeout  = 1
+innodb_deadlock_detect      = ON
+
+# File per table (better for space management)
+innodb_file_per_table       = 1
+
+# Additional InnoDB optimizations
+innodb_stats_on_metadata    = OFF
+innodb_checksum_algorithm   = crc32
+innodb_adaptive_hash_index  = ON
+innodb_change_buffering     = all
+
+# ----------------------------------------------------------------------------
+# QUERY CACHE (Disabled in MariaDB 10.5+)
+# ----------------------------------------------------------------------------
+# query_cache_type          = 0
+# query_cache_size          = 0
+
+# ----------------------------------------------------------------------------
+# TEMPORARY TABLES & MEMORY
+# ----------------------------------------------------------------------------
+tmp_table_size              = 64M
+max_heap_table_size         = 64M
+table_open_cache            = 4000
+table_definition_cache      = 2000
+open_files_limit            = 65535
+
+# ----------------------------------------------------------------------------
+# SORT & JOIN BUFFERS
+# ----------------------------------------------------------------------------
+sort_buffer_size            = 2M
+read_buffer_size            = 2M
+read_rnd_buffer_size        = 4M
+join_buffer_size            = 2M
+
+# ----------------------------------------------------------------------------
+# BINARY LOGGING (Required for Replication & PITR)
+# ----------------------------------------------------------------------------
+log_bin                     = /var/log/mysql/mysql-bin.log
+log_bin_index               = /var/log/mysql/mysql-bin.index
+binlog_format               = ROW
+binlog_expire_logs_seconds  = 604800  # 7 days
+max_binlog_size             = 100M
+sync_binlog                 = 1  # 1 for durability, 0 for performance
+
+# Binary log compression (MariaDB 10.2+)
+binlog_row_image            = MINIMAL
+binlog_annotate_row_events  = ON
+
+# ----------------------------------------------------------------------------
+# REPLICATION SETTINGS
+# ----------------------------------------------------------------------------
+server-id                   = 1  # Unique for each server in replication
+relay_log                   = /var/log/mysql/relay-bin
+relay_log_index             = /var/log/mysql/relay-bin.index
+relay_log_recovery          = ON
+slave_net_timeout           = 60
+slave_parallel_threads      = 4
+slave_parallel_mode         = conservative
+
+# GTID-based replication (recommended)
+gtid_strict_mode            = ON
+
+# ----------------------------------------------------------------------------
+# LOGGING
+# ----------------------------------------------------------------------------
+# General query log (disable in production for performance)
+general_log                 = 0
+general_log_file            = /var/log/mysql/query.log
+
+# Error log
+log_error                   = /var/log/mysql/error.log
+log_warnings                = 2
+
+# Slow query log
+slow_query_log              = 1
+slow_query_log_file         = /var/log/mysql/slow-query.log
+long_query_time             = 1.0
+log_slow_verbosity          = query_plan,explain
+log_queries_not_using_indexes = 0
+min_examined_row_limit      = 1000
+
+# ----------------------------------------------------------------------------
+# MONITORING & STATISTICS
+# ----------------------------------------------------------------------------
+performance_schema          = ON
+performance_schema_max_table_instances = 512
+performance_schema_max_table_handles = 4000
+
+# User statistics
+userstat                    = ON
+
+# ----------------------------------------------------------------------------
+# SAFETY & RECOVERY
+# ----------------------------------------------------------------------------
+# Automatic crash recovery
+innodb_fast_shutdown        = 1
+innodb_force_recovery       = 0
+
+# Double write buffer (durability vs performance)
+innodb_doublewrite          = ON
+
+# Automatic server restart after crash
+# Set in systemd service file instead
+
+[mysqldump]
+quick
+quote-names
+max_allowed_packet          = 64M
+
+[mysql]
+default-character-set       = utf8mb4
+no-auto-rehash
+show-warnings
+
+[isamchk]
+key_buffer_size             = 16M
+sort_buffer_size            = 16M
+read_buffer                 = 8M
+write_buffer                = 8M
+
+# ============================================================================
+# PRODUCTION DEPLOYMENT NOTES
+# ============================================================================
+# 1. After deploying this config:
+#    - Restart MariaDB: systemctl restart mariadb
+#    - Verify settings: mysql -e "SHOW VARIABLES;"
+#
+# 2. SSL/TLS certificates must be generated and placed in /etc/mysql/ssl/
+#    Run: ./deploy/database/setup-mariadb-ssl.sh
+#
+# 3. Monitor performance with:
+#    - ./deploy/database/mariadb-health-check.sh
+#    - Grafana dashboards
+#
+# 4. Tune buffer pool size based on actual server RAM:
+#    - 4GB RAM: innodb_buffer_pool_size = 2G
+#    - 8GB RAM: innodb_buffer_pool_size = 5G
+#    - 16GB RAM: innodb_buffer_pool_size = 10G
+#
+# 5. For replication, ensure unique server-id on each node
+#
+# 6. Binary logs required for point-in-time recovery
+#    Retention: 7 days (604800 seconds)
+# ============================================================================
