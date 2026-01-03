@@ -1,0 +1,137 @@
+# Prometheus configuration for CHOM monitoring
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'chom-production'
+    environment: 'production'
+
+# AlertManager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load rules
+rule_files:
+  - '/etc/prometheus/alerts/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: 'prometheus'
+
+  # Node Exporter on mentat (observability server)
+  - job_name: 'node-exporter-mentat'
+    static_configs:
+      - targets:
+          - localhost:9100
+        labels:
+          instance: 'mentat.arewel.com'
+          service: 'node-exporter'
+          role: 'observability'
+
+  # Node Exporter on landsraad (application server)
+  - job_name: 'node-exporter-landsraad'
+    static_configs:
+      - targets:
+          - landsraad.arewel.com:9100
+        labels:
+          instance: 'landsraad.arewel.com'
+          service: 'node-exporter'
+          role: 'application'
+
+  # CHOM Laravel application metrics
+  - job_name: 'chom-application'
+    static_configs:
+      - targets:
+          - landsraad.arewel.com:9200
+        labels:
+          instance: 'landsraad.arewel.com'
+          service: 'chom'
+          role: 'application'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # PostgreSQL Exporter (if installed)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets:
+          - landsraad.arewel.com:9187
+        labels:
+          instance: 'landsraad.arewel.com'
+          service: 'postgresql'
+          role: 'database'
+
+  # Redis Exporter (if installed)
+  - job_name: 'redis'
+    static_configs:
+      - targets:
+          - landsraad.arewel.com:9121
+        labels:
+          instance: 'landsraad.arewel.com'
+          service: 'redis'
+          role: 'cache'
+
+  # Nginx Exporter (if installed)
+  - job_name: 'nginx'
+    static_configs:
+      - targets:
+          - landsraad.arewel.com:9113
+        labels:
+          instance: 'landsraad.arewel.com'
+          service: 'nginx'
+          role: 'web-server'
+
+  # PHP-FPM Exporter (if installed)
+  - job_name: 'php-fpm'
+    static_configs:
+      - targets:
+          - landsraad.arewel.com:9253
+        labels:
+          instance: 'landsraad.arewel.com'
+          service: 'php-fpm'
+          role: 'application-runtime'
+
+  # Blackbox Exporter for endpoint monitoring
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://chom.arewel.com
+        - https://chom.arewel.com/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Docker metrics from mentat
+  - job_name: 'docker'
+    static_configs:
+      - targets:
+          - localhost:9323
+        labels:
+          instance: 'mentat.arewel.com'
+          service: 'docker'
+          role: 'container-runtime'
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets:
+          - cadvisor:8080
+        labels:
+          instance: 'mentat.arewel.com'
+          service: 'cadvisor'

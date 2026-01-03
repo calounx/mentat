@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+# Deploy CHOM Laravel application to landsraad.arewel.com
+# Zero-downtime deployment using blue-green strategy
+# Usage: ./deploy-application.sh --branch main [--skip-backup] [--skip-migrations]
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../utils/logging.sh"
+source "${SCRIPT_DIR}/../utils/notifications.sh"
+
+# Configuration
+APP_DIR="${APP_DIR:-/var/www/chom}"
+RELEASES_DIR="${APP_DIR}/releases"
+SHARED_DIR="${APP_DIR}/shared"
+CURRENT_LINK="${APP_DIR}/current"
+REPO_URL="${REPO_URL:-}"
+BRANCH="${BRANCH:-main}"
+PHP_VERSION="${PHP_VERSION:-8.2}"
+KEEP_RELEASES="${KEEP_RELEASES:-5}"
+
+# Deployment flags
+SKIP_BACKUP=false
+SKIP_MIGRATIONS=false
+SKIP_HEALTH_CHECK=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --branch)
+            BRANCH="$2"
+            shift 2
+            ;;
+        --repo-url)
+            REPO_URL="$2"
+            shift 2
+            ;;
+        --skip-backup)
+            SKIP_BACKUP=true
+            shift
+            ;;
+        --skip-migrations)
+            SKIP_MIGRATIONS=true
+            shift
+            ;;
+        --skip-health-check)
+            SKIP_HEALTH_CHECK=true
+            shift
+            ;;
+        *)
+            log_error "Unknown argument: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate repository URL
+if [[ -z "$REPO_URL" ]]; then
+    log_fatal "Repository URL is required. Set REPO_URL environment variable or use --repo-url"
+fi
+
+init_deployment_log "deploy-app-$(date +%Y%m%d_%H%M%S)"
+log_section "Application Deployment"
+
+notify_deployment_started "${ENVIRONMENT:-production}" "$BRANCH"
+
+# Deployment error handler
+deployment_error_handler() {
+    local exit_code=$?
+    log_error "Deployment failed with exit code: $exit_code"
+
+    notify_deployment_failure "${ENVIRONMENT:-production}" "Deployment script failed at line $BASH_LINENO"
+
+    # Automatic rollback
+    log_warning "Initiating automatic rollback"
+
+    if bash "${SCRIPT_DIR}/rollback.sh" --auto-confirm; then
+        log_success "Automatic rollback completed"
+    else
+        log_error "Automatic rollback failed - manual intervention required"
+    fi
+
+    exit "$exit_code"
+}
+
+# Set error trap
+trap deployment_error_handler ERR
+
+# Generate release ID
+generate_release_id() {
+    echo "$(date +%Y%m%d_%H%M%S)"
+}
+
+# Create new release directory
+create_release_directory() {
+    local release_id="$1"
+    local release_path="${RELEASES_DIR}/${release_id}"
+
+    log_step "Creating release directory: $release_id"
+
+    mkdir -p "$release_path"
+    log_success "Release directory created: $release_path"
+
+    echo "$release_path"
+}
+
+# Clone repository
+clone_repository() {
+    local release_path="$1"
+
+    log_step "Cloning repository: $REPO_URL (branch: $BRANCH)"
+
+    # Use git credentials if provided
+    local git_url="$REPO_URL"
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        # Insert token into HTTPS URL
+        git_url=$(echo "$REPO_URL" | sed "s|https://|https://${GITHUB_TOKEN}@|")
+    fi
+
+    if git clone --branch "$BRANCH" --depth 1 "$git_url" "$release_path" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Repository cloned successfully"
+
+        # Get commit information
+        cd "$release_path"
+        local commit_hash=$(git rev-parse HEAD)
+        local commit_message=$(git log -1 --pretty=%B)
+
+        log_info "Commit: $commit_hash"
+        log_info "Message: $commit_message"
+
+        # Save deployment metadata
+        cat > "${release_path}/.deployment-info" <<EOF
+release_id=$(basename "$release_path")
+deployed_at=$(date -Iseconds)
+deployed_by=$(whoami)
+commit_hash=$commit_hash
+commit_message=$commit_message
+branch=$BRANCH
+EOF
+
+        return 0
+    else
+        log_error "Repository clone failed"
+        return 1
+    fi
+}
+
+# Link shared directories
+link_shared_directories() {
+    local release_path="$1"
+
+    log_step "Linking shared directories"
+
+    cd "$release_path"
+
+    # Remove storage directory and link to shared
+    if [[ -d "storage" ]]; then
+        rm -rf storage
+    fi
+    ln -sf "${SHARED_DIR}/storage" storage
+
+    # Link .env file
+    if [[ -f "${SHARED_DIR}/.env" ]]; then
+        ln -sf "${SHARED_DIR}/.env" .env
+        log_success "Shared directories linked"
+    else
+        log_warning "No .env file found in shared directory"
+        log_warning "Make sure to create ${SHARED_DIR}/.env before deployment"
+    fi
+}
+
+# Install Composer dependencies
+install_composer_dependencies() {
+    local release_path="$1"
+
+    log_step "Installing Composer dependencies"
+
+    cd "$release_path"
+
+    if composer install \
+        --no-dev \
+        --no-interaction \
+        --prefer-dist \
+        --optimize-autoloader \
+        --no-progress \
+        2>&1 | tee -a "$LOG_FILE"; then
+
+        log_success "Composer dependencies installed"
+        return 0
+    else
+        log_error "Composer install failed"
+        return 1
+    fi
+}
+
+# Install NPM dependencies and build assets
+build_assets() {
+    local release_path="$1"
+
+    log_step "Building frontend assets"
+
+    cd "$release_path"
+
+    # Check if package.json exists
+    if [[ ! -f "package.json" ]]; then
+        log_info "No package.json found, skipping asset build"
+        return 0
+    fi
+
+    # Install dependencies
+    log_info "Installing NPM dependencies"
+    if npm ci --production 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "NPM dependencies installed"
+    else
+        log_warning "NPM install failed, but continuing deployment"
+    fi
+
+    # Build assets
+    log_info "Building assets"
+    if npm run build 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Assets built successfully"
+    else
+        log_warning "Asset build failed, but continuing deployment"
+    fi
+}
+
+# Run database migrations
+run_migrations() {
+    local release_path="$1"
+
+    if [[ "$SKIP_MIGRATIONS" == true ]]; then
+        log_info "Skipping database migrations (--skip-migrations flag)"
+        return 0
+    fi
+
+    log_step "Running database migrations"
+
+    cd "$release_path"
+
+    # Check if there are pending migrations
+    if php artisan migrate:status 2>&1 | grep -q "Pending"; then
+        log_info "Pending migrations found, running migrations"
+
+        if php artisan migrate --force 2>&1 | tee -a "$LOG_FILE"; then
+            log_success "Database migrations completed"
+            return 0
+        else
+            log_error "Database migrations failed"
+            return 1
+        fi
+    else
+        log_success "No pending migrations"
+        return 0
+    fi
+}
+
+# Optimize application
+optimize_application() {
+    local release_path="$1"
+
+    log_step "Optimizing application"
+
+    cd "$release_path"
+
+    # Cache configuration
+    php artisan config:cache
+
+    # Cache routes
+    php artisan route:cache
+
+    # Cache views
+    php artisan view:cache
+
+    # Optimize autoloader
+    composer dump-autoload --optimize --no-dev
+
+    log_success "Application optimized"
+}
+
+# Set proper permissions
+set_permissions() {
+    local release_path="$1"
+
+    log_step "Setting file permissions"
+
+    # Set ownership
+    sudo chown -R ${DEPLOY_USER:-stilgar}:www-data "$release_path"
+
+    # Set directory permissions
+    find "$release_path" -type d -exec chmod 755 {} \;
+
+    # Set file permissions
+    find "$release_path" -type f -exec chmod 644 {} \;
+
+    # Make artisan executable
+    chmod +x "${release_path}/artisan"
+
+    # Ensure storage is writable
+    sudo chmod -R 775 "${SHARED_DIR}/storage"
+
+    log_success "Permissions set"
+}
+
+# Switch to new release (atomic swap)
+switch_release() {
+    local release_path="$1"
+
+    log_step "Switching to new release"
+
+    # Create temporary symlink
+    local temp_link="${APP_DIR}/current.tmp.$$"
+
+    ln -sf "$release_path" "$temp_link"
+
+    # Atomic swap
+    mv -Tf "$temp_link" "$CURRENT_LINK"
+
+    log_success "Release switched (symlink updated)"
+}
+
+# Reload services
+reload_services() {
+    log_step "Reloading services"
+
+    # Reload PHP-FPM
+    log_info "Reloading PHP-FPM"
+    sudo systemctl reload php${PHP_VERSION}-fpm
+
+    # Reload Nginx
+    log_info "Reloading Nginx"
+    sudo systemctl reload nginx
+
+    # Restart queue workers via supervisor
+    log_info "Restarting queue workers"
+    if command -v supervisorctl &> /dev/null; then
+        sudo supervisorctl restart chom-worker:* 2>&1 | tee -a "$LOG_FILE" || true
+    fi
+
+    log_success "Services reloaded"
+}
+
+# Clean old releases
+clean_old_releases() {
+    log_step "Cleaning old releases (keeping last $KEEP_RELEASES)"
+
+    local release_count=$(ls -1t "$RELEASES_DIR" | wc -l)
+
+    if [[ $release_count -le $KEEP_RELEASES ]]; then
+        log_success "Release count ($release_count) is within limit ($KEEP_RELEASES)"
+        return 0
+    fi
+
+    local releases_to_delete=$((release_count - KEEP_RELEASES))
+
+    log_info "Deleting $releases_to_delete old release(s)"
+
+    # Get list of old releases (excluding current)
+    local current_release=$(basename "$(readlink -f "$CURRENT_LINK")")
+
+    ls -1t "$RELEASES_DIR" | tail -n "$releases_to_delete" | while read release; do
+        if [[ "$release" != "$current_release" ]]; then
+            log_info "Deleting release: $release"
+            rm -rf "${RELEASES_DIR}/${release}"
+        fi
+    done
+
+    log_success "Old releases cleaned up"
+}
+
+# Run health checks
+run_health_checks() {
+    local release_path="$1"
+
+    if [[ "$SKIP_HEALTH_CHECK" == true ]]; then
+        log_info "Skipping health checks (--skip-health-check flag)"
+        return 0
+    fi
+
+    log_step "Running health checks"
+
+    if bash "${SCRIPT_DIR}/health-check.sh" --release-path "$release_path"; then
+        log_success "Health checks passed"
+        return 0
+    else
+        log_error "Health checks failed"
+        return 1
+    fi
+}
+
+# Main execution
+main() {
+    start_timer
+
+    print_header "CHOM Application Deployment"
+    log_info "Branch: $BRANCH"
+    log_info "Environment: ${ENVIRONMENT:-production}"
+
+    # Pre-deployment backup
+    if [[ "$SKIP_BACKUP" == false ]]; then
+        log_section "Pre-Deployment Backup"
+        bash "${SCRIPT_DIR}/backup-before-deploy.sh"
+    else
+        log_warning "Skipping backup (--skip-backup flag)"
+    fi
+
+    # Create new release
+    log_section "Creating New Release"
+    RELEASE_ID=$(generate_release_id)
+    RELEASE_PATH=$(create_release_directory "$RELEASE_ID")
+
+    # Deploy application
+    log_section "Deploying Application"
+    clone_repository "$RELEASE_PATH"
+    link_shared_directories "$RELEASE_PATH"
+    install_composer_dependencies "$RELEASE_PATH"
+    build_assets "$RELEASE_PATH"
+    run_migrations "$RELEASE_PATH"
+    optimize_application "$RELEASE_PATH"
+    set_permissions "$RELEASE_PATH"
+
+    # Pre-switch health check
+    log_section "Pre-Switch Validation"
+    run_health_checks "$RELEASE_PATH"
+
+    # Switch release
+    log_section "Activating New Release"
+    switch_release "$RELEASE_PATH"
+    reload_services
+
+    # Post-deployment health check
+    log_section "Post-Deployment Validation"
+    sleep 2  # Give services time to reload
+    run_health_checks "$CURRENT_LINK"
+
+    # Cleanup
+    log_section "Cleanup"
+    clean_old_releases
+
+    end_timer "Deployment"
+
+    print_header "Deployment Successful"
+    log_success "Application deployed: $RELEASE_ID"
+    log_success "Current release: $(basename "$(readlink -f "$CURRENT_LINK")")"
+
+    notify_deployment_success "${ENVIRONMENT:-production}" "$(( $(date +%s) - TIMER_START ))s"
+
+    exit 0
+}
+
+main

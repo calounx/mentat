@@ -1,0 +1,40 @@
+# Grafana datasources configuration
+apiVersion: 1
+
+datasources:
+  # Prometheus
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+    version: 1
+
+  # Loki for logs
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+    version: 1
+
+  # PostgreSQL (optional - for direct database queries)
+  - name: PostgreSQL
+    type: postgres
+    url: landsraad.arewel.com:5432
+    database: chom
+    user: grafana
+    secureJsonData:
+      password: 'YOUR_GRAFANA_DB_PASSWORD'
+    jsonData:
+      sslmode: 'require'
+      postgresVersion: 1500
+      timescaledb: false
+    editable: true
+    version: 1
