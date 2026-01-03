@@ -540,15 +540,18 @@ phase_prepare_landsraad() {
     log_section "Phase 5: Preparing Landsraad (Application Server)"
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Copy prepare script to landsraad and run with sudo
+        # Copy prepare script to landsraad using current user (has file access)
         log_info "Copying scripts to $LANDSRAAD_HOST"
-        sudo -u "$DEPLOY_USER" scp -r \
+        scp -r \
             "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
             "${SCRIPT_DIR}/utils" \
-            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/"
+            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/" || {
+            log_error "Failed to copy scripts to $LANDSRAAD_HOST"
+            return 1
+        }
 
         log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST"
-        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
+        ssh "${CURRENT_USER}@$LANDSRAAD_HOST" \
             "sudo bash /tmp/prepare-landsraad.sh" || {
             log_error "Landsraad preparation failed"
             return 1
