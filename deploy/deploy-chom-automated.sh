@@ -435,20 +435,23 @@ phase_ssh_setup() {
             fi
         "
 
-        # Copy SSH key to landsraad
+        # Copy SSH key to landsraad using current user with sudo
+        # (Cannot use ssh-copy-id because stilgar doesn't have password auth set up)
         log_info "Copying SSH key to $LANDSRAAD_HOST"
-        sudo -u "$DEPLOY_USER" bash -c "
-            ssh-copy-id -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${LANDSRAAD_HOST}
+        local pub_key=$(sudo cat /home/${DEPLOY_USER}/.ssh/id_ed25519.pub)
+
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "
+            sudo mkdir -p /home/${DEPLOY_USER}/.ssh
+            echo '$pub_key' | sudo tee -a /home/${DEPLOY_USER}/.ssh/authorized_keys >/dev/null
+            sudo chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
+            sudo chmod 700 /home/${DEPLOY_USER}/.ssh
+            sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
         " || {
-            log_warning "ssh-copy-id failed, trying manual method"
-            local pub_key=$(sudo -u "$DEPLOY_USER" cat /home/${DEPLOY_USER}/.ssh/id_ed25519.pub)
-            ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "
-                sudo mkdir -p /home/${DEPLOY_USER}/.ssh
-                echo '$pub_key' | sudo tee -a /home/${DEPLOY_USER}/.ssh/authorized_keys
-                sudo chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
-                sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
-            "
+            log_error "Failed to copy SSH key to $LANDSRAAD_HOST"
+            return 1
         }
+
+        log_success "SSH key copied to $LANDSRAAD_HOST"
 
         # Test connection
         log_info "Testing SSH connection"
