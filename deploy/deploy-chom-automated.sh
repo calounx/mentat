@@ -388,24 +388,24 @@ phase_user_setup() {
     # Create user on mentat (local)
     log_step "Creating user on $MENTAT_HOST (local)"
     if [[ "$DRY_RUN" != "true" ]]; then
-        bash "${SCRIPT_DIR}/scripts/setup-stilgar-user.sh"
+        sudo bash "${SCRIPT_DIR}/scripts/setup-stilgar-user-standalone.sh" "$DEPLOY_USER"
     else
-        log_info "[DRY RUN] Would run: setup-stilgar-user.sh"
+        log_info "[DRY RUN] Would run: setup-stilgar-user-standalone.sh"
     fi
 
     # Create user on landsraad (remote)
     log_step "Creating user on $LANDSRAAD_HOST (remote)"
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Copy script to remote and execute with sudo
-        scp "${SCRIPT_DIR}/scripts/setup-stilgar-user.sh" "${CURRENT_USER}@${LANDSRAAD_HOST}:/tmp/setup-stilgar-user.sh" || {
+        # Copy standalone script to remote and execute with sudo
+        scp "${SCRIPT_DIR}/scripts/setup-stilgar-user-standalone.sh" "${CURRENT_USER}@${LANDSRAAD_HOST}:/tmp/setup-stilgar-user-standalone.sh" || {
             log_error "Failed to copy script to $LANDSRAAD_HOST"
             return 1
         }
-        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo bash /tmp/setup-stilgar-user.sh && rm /tmp/setup-stilgar-user.sh" || {
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo bash /tmp/setup-stilgar-user-standalone.sh ${DEPLOY_USER} && rm /tmp/setup-stilgar-user-standalone.sh" || {
             log_error "Failed to create user on $LANDSRAAD_HOST"
             log_info "You may need to run this manually on $LANDSRAAD_HOST:"
             log_info "  ssh ${CURRENT_USER}@$LANDSRAAD_HOST"
-            log_info "  sudo bash /tmp/setup-stilgar-user.sh"
+            log_info "  sudo bash /tmp/setup-stilgar-user-standalone.sh ${DEPLOY_USER}"
             return 1
         }
     else
