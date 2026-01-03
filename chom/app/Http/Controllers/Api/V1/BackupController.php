@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Requests\StoreBackupRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -88,36 +89,23 @@ class BackupController extends ApiController
     /**
      * Create a new backup.
      *
-     * @param Request $request
+     * @param StoreBackupRequest $request
      * @return JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreBackupRequest $request): JsonResponse
     {
         try {
-            $tenant = $this->getTenant($request);
+            $validated = $request->validated();
 
-            // Validate input
-            $validated = $request->validate([
-                'site_id' => ['required', 'exists:sites,id'],
-                'backup_type' => ['sometimes', 'in:full,database,files'],
-            ]);
-
-            // Validate site belongs to tenant
             $site = $this->validateTenantAccess(
                 $request,
                 $validated['site_id'],
                 \App\Models\Site::class
             );
 
-            // TODO: Implement backup creation logic
-            // This would typically:
-            // 1. Check storage quota
-            // 2. Create backup record
-            // 3. Dispatch backup job
-
             $this->logInfo('Backup creation initiated', [
                 'site_id' => $site->id,
-                'backup_type' => $validated['backup_type'] ?? 'full',
+                'backup_type' => $validated['backup_type'],
             ]);
 
             return $this->createdResponse(
@@ -125,8 +113,6 @@ class BackupController extends ApiController
                 'Backup is being created.'
             );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->handleException($e);
         }

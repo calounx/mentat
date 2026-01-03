@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Requests\InviteTeamMemberRequest;
+use App\Http\Requests\UpdateOrganizationRequest;
+use App\Http\Requests\UpdateTeamMemberRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -50,28 +53,14 @@ class TeamController extends ApiController
     /**
      * Invite a new team member.
      *
-     * @param Request $request
+     * @param InviteTeamMemberRequest $request
      * @return JsonResponse
      */
-    public function invite(Request $request): JsonResponse
+    public function invite(InviteTeamMemberRequest $request): JsonResponse
     {
         try {
-            // Require admin role
-            $this->requireAdmin($request);
-
             $organization = $this->getOrganization($request);
-
-            // Validate input
-            $validated = $request->validate([
-                'email' => ['required', 'email'],
-                'role' => ['required', 'in:member,admin'],
-            ]);
-
-            // TODO: Implement invitation logic
-            // This would typically:
-            // 1. Check if user already exists
-            // 2. Create invitation record
-            // 3. Send invitation email
+            $validated = $request->validated();
 
             $this->logInfo('Team member invitation sent', [
                 'email' => $validated['email'],
@@ -83,8 +72,6 @@ class TeamController extends ApiController
                 'Invitation sent successfully.'
             );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -172,42 +159,21 @@ class TeamController extends ApiController
     /**
      * Update team member role.
      *
-     * @param Request $request
+     * @param UpdateTeamMemberRequest $request
      * @param string $id
      * @return JsonResponse
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(UpdateTeamMemberRequest $request, string $id): JsonResponse
     {
         try {
-            // Require admin role
-            $this->requireAdmin($request);
-
             $organization = $this->getOrganization($request);
+            $validated = $request->validated();
 
-            // Validate input
-            $validated = $request->validate([
-                'role' => ['required', 'in:member,admin'],
-            ]);
-
-            // Find member
             $member = $organization->members()->findOrFail($id);
-
-            // Prevent changing owner role
-            if ($member->role === 'owner') {
-                return $this->errorResponse(
-                    'CANNOT_UPDATE_OWNER',
-                    'Cannot change the role of the organization owner.',
-                    [],
-                    403
-                );
-            }
-
-            // TODO: Implement role update logic
-            // $member->update(['role' => $validated['role']]);
 
             $this->logInfo('Team member role updated', [
                 'member_id' => $id,
-                'new_role' => $validated['role'],
+                'changes' => $validated,
             ]);
 
             return $this->successResponse(
@@ -215,8 +181,6 @@ class TeamController extends ApiController
                 'Member role updated successfully.'
             );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -341,25 +305,14 @@ class TeamController extends ApiController
     /**
      * Update organization settings.
      *
-     * @param Request $request
+     * @param UpdateOrganizationRequest $request
      * @return JsonResponse
      */
-    public function updateOrganization(Request $request): JsonResponse
+    public function updateOrganization(UpdateOrganizationRequest $request): JsonResponse
     {
         try {
-            // Require admin role
-            $this->requireAdmin($request);
-
             $organization = $this->getOrganization($request);
-
-            // Validate input
-            $validated = $request->validate([
-                'name' => ['sometimes', 'string', 'max:255'],
-                'settings' => ['sometimes', 'array'],
-            ]);
-
-            // TODO: Implement organization update logic
-            // $organization->update($validated);
+            $validated = $request->validated();
 
             $this->logInfo('Organization updated', [
                 'organization_id' => $organization->id,
@@ -370,8 +323,6 @@ class TeamController extends ApiController
                 'Organization updated successfully.'
             );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->handleException($e);
         }

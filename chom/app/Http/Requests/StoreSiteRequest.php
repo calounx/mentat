@@ -20,28 +20,11 @@ class StoreSiteRequest extends BaseFormRequest
      *
      * Authorization checks:
      * - User must be authenticated
-     * - User must have site management permissions (owner/admin/member)
-     * - Tenant must be active
-     * - Tenant must not exceed site limit
+     * - User must have a current tenant
      */
     public function authorize(): bool
     {
-        if (!$this->user() || !$this->canManageSites()) {
-            return false;
-        }
-
-        $tenant = $this->user()->currentTenant();
-
-        if (!$tenant || !$tenant->isActive()) {
-            return false;
-        }
-
-        // Check if tenant can create more sites
-        if (!$tenant->canCreateSite()) {
-            return false;
-        }
-
-        return true;
+        return $this->user() && $this->user()->current_tenant_id;
     }
 
     /**
@@ -77,13 +60,6 @@ class StoreSiteRequest extends BaseFormRequest
                 'sometimes',
                 'string',
                 'exists:vps_servers,id',
-                function ($attribute, $value, $fail) {
-                    // If VPS ID provided, verify it's available
-                    $vps = VpsServer::find($value);
-                    if ($vps && !$vps->isAvailable()) {
-                        $fail('The selected VPS server is not available.');
-                    }
-                },
             ],
             'ssl_enabled' => [
                 'sometimes',

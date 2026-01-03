@@ -19,32 +19,12 @@ class UpdateSiteRequest extends BaseFormRequest
      *
      * Authorization checks:
      * - User must be authenticated
-     * - User must have site management permissions
-     * - Site must belong to user's tenant
+     * - User must have a current tenant
+     * - Site must belong to user's tenant (validated in controller)
      */
     public function authorize(): bool
     {
-        if (!$this->user() || !$this->canManageSites()) {
-            return false;
-        }
-
-        // Get the site from route parameter
-        $siteId = $this->route('id') ?? $this->route('site');
-
-        if (!$siteId) {
-            return false;
-        }
-
-        $site = Site::find($siteId);
-
-        if (!$site) {
-            return false;
-        }
-
-        // Verify site belongs to user's tenant
-        $tenantId = $this->getTenantId();
-
-        return $site->tenant_id === $tenantId;
+        return $this->user() && $this->user()->current_tenant_id;
     }
 
     /**

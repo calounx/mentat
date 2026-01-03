@@ -28,71 +28,12 @@ class StoreBackupRequest extends BaseFormRequest
      *
      * Authorization checks:
      * - User must be authenticated
-     * - User must have site management permissions
-     * - Site must belong to user's tenant
-     * - Backup quota must not be exceeded
+     * - User must have a current tenant
+     * - Site ownership validated in controller
      */
     public function authorize(): bool
     {
-        if (!$this->user() || !$this->canManageSites()) {
-            return false;
-        }
-
-        // Get site ID from request or route
-        $siteId = $this->input('site_id') ?? $this->route('siteId') ?? $this->route('site');
-
-        if (!$siteId) {
-            return false;
-        }
-
-        $site = Site::find($siteId);
-
-        if (!$site) {
-            return false;
-        }
-
-        // Verify site belongs to user's tenant
-        $tenantId = $this->getTenantId();
-
-        if ($site->tenant_id !== $tenantId) {
-            return false;
-        }
-
-        // Check backup quota
-        if (!$this->checkBackupQuota($site)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Check if site has remaining backup quota.
-     *
-     * @param Site $site
-     * @return bool
-     */
-    protected function checkBackupQuota(Site $site): bool
-    {
-        $tenant = $this->user()->currentTenant();
-
-        if (!$tenant) {
-            return false;
-        }
-
-        $tier = $tenant->getCurrentTier();
-        $limit = self::BACKUP_LIMITS[$tier] ?? self::BACKUP_LIMITS['starter'];
-
-        // -1 means unlimited
-        if ($limit === -1) {
-            return true;
-        }
-
-        $currentBackupCount = SiteBackup::where('site_id', $site->id)
-            ->where('status', '!=', 'failed')
-            ->count();
-
-        return $currentBackupCount < $limit;
+        return $this->user() && $this->user()->current_tenant_id;
     }
 
     /**
@@ -171,19 +112,10 @@ class StoreBackupRequest extends BaseFormRequest
             ]);
         }
 
-        // Set default retention days based on tier
+        // Set default retention days
         if (!$this->has('retention_days')) {
-            $tenant = $this->user()?->currentTenant();
-            $tier = $tenant?->getCurrentTier() ?? 'starter';
-
-            $defaultRetention = match ($tier) {
-                'enterprise' => 90,
-                'pro' => 60,
-                default => 30,
-            };
-
             $this->merge([
-                'retention_days' => $defaultRetention,
+                'retention_days' => 30,
             ]);
         }
 

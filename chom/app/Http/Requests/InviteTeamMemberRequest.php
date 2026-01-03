@@ -36,7 +36,7 @@ class InviteTeamMemberRequest extends BaseFormRequest
 
         // Owners can invite as admin, member, or viewer
         // Admins can only invite as member or viewer
-        $allowedRoles = $user->isOwner()
+        $allowedRoles = $this->isOwner()
             ? ['admin', 'member', 'viewer']
             : ['member', 'viewer'];
 

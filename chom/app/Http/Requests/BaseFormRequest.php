@@ -66,7 +66,7 @@ abstract class BaseFormRequest extends FormRequest
      */
     protected function getTenantId(): ?string
     {
-        return $this->user()?->currentTenant()?->id;
+        return $this->user()?->current_tenant_id;
     }
 
     /**
@@ -86,7 +86,8 @@ abstract class BaseFormRequest extends FormRequest
      */
     protected function canManageSites(): bool
     {
-        return $this->user() && $this->user()->canManageSites();
+        $user = $this->user();
+        return $user && in_array($user->role, ['owner', 'admin', 'member']);
     }
 
     /**
@@ -96,7 +97,8 @@ abstract class BaseFormRequest extends FormRequest
      */
     protected function isAdmin(): bool
     {
-        return $this->user() && $this->user()->isAdmin();
+        $user = $this->user();
+        return $user && in_array($user->role, ['owner', 'admin']);
     }
 
     /**
@@ -106,7 +108,8 @@ abstract class BaseFormRequest extends FormRequest
      */
     protected function isOwner(): bool
     {
-        return $this->user() && $this->user()->isOwner();
+        $user = $this->user();
+        return $user && $user->role === 'owner';
     }
 
     /**

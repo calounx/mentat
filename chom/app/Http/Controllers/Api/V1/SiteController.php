@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Requests\StoreSiteRequest;
+use App\Http\Requests\UpdateSiteRequest;
 use App\Http\Resources\SiteResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 /**
  * Site Controller
@@ -73,48 +74,25 @@ class SiteController extends ApiController
     /**
      * Create a new site.
      *
-     * @param Request $request
+     * @param StoreSiteRequest $request
      * @return JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreSiteRequest $request): JsonResponse
     {
         try {
             $tenant = $this->getTenant($request);
-
-            // Validate input
-            $validated = $request->validate([
-                'domain' => [
-                    'required',
-                    'string',
-                    'max:253',
-                    'regex:/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$/i',
-                    Rule::unique('sites')->where('tenant_id', $tenant->id),
-                ],
-                'site_type' => ['sometimes', 'in:wordpress,html,laravel'],
-                'php_version' => ['sometimes', 'in:8.2,8.4'],
-                'ssl_enabled' => ['sometimes', 'boolean'],
-            ]);
-
-            // TODO: Implement site creation logic
-            // This would typically:
-            // 1. Check quota limits
-            // 2. Find available VPS
-            // 3. Create site record
-            // 4. Dispatch provisioning job
+            $validated = $request->validated();
 
             $this->logInfo('Site creation initiated', [
                 'domain' => $validated['domain'],
                 'tenant_id' => $tenant->id,
             ]);
 
-            // Placeholder response
             return $this->createdResponse(
                 ['domain' => $validated['domain'], 'status' => 'creating'],
                 'Site is being created.'
             );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -150,28 +128,20 @@ class SiteController extends ApiController
     /**
      * Update a site.
      *
-     * @param Request $request
+     * @param UpdateSiteRequest $request
      * @param string $id Site ID
      * @return JsonResponse
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(UpdateSiteRequest $request, string $id): JsonResponse
     {
         try {
-            // Validate tenant access
             $site = $this->validateTenantAccess(
                 $request,
                 $id,
                 \App\Models\Site::class
             );
 
-            // Validate input
-            $validated = $request->validate([
-                'php_version' => ['sometimes', 'in:8.2,8.4'],
-                'ssl_enabled' => ['sometimes', 'boolean'],
-            ]);
-
-            // TODO: Implement site update logic
-            // $site->update($validated);
+            $validated = $request->validated();
 
             $this->logInfo('Site updated', [
                 'site_id' => $id,
@@ -183,8 +153,6 @@ class SiteController extends ApiController
                 'Site updated successfully.'
             );
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->handleException($e);
         }

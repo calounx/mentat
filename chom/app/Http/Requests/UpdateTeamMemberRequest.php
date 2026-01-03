@@ -55,7 +55,7 @@ class UpdateTeamMemberRequest extends BaseFormRequest
         }
 
         // Admins cannot update owners
-        if (!$this->isOwner() && $member->isOwner()) {
+        if (!$this->isOwner() && $member->role === 'owner') {
             return false;
         }
 
@@ -69,11 +69,9 @@ class UpdateTeamMemberRequest extends BaseFormRequest
      */
     public function rules(): array
     {
-        $user = $this->user();
-
         // Owners can set any role except owner
         // Admins can only set member or viewer
-        $allowedRoles = $user->isOwner()
+        $allowedRoles = $this->isOwner()
             ? ['admin', 'member', 'viewer']
             : ['member', 'viewer'];
 
@@ -163,7 +161,7 @@ class UpdateTeamMemberRequest extends BaseFormRequest
             // Prevent changing role of the only owner
             if ($this->has('role')) {
                 $member = User::find($memberId);
-                if ($member && $member->isOwner()) {
+                if ($member && $member->role === 'owner') {
                     $ownerCount = User::where('organization_id', $this->getOrganizationId())
                         ->where('role', 'owner')
                         ->count();
