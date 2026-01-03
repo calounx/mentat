@@ -19,6 +19,7 @@ class SiteBackup extends Model
         'checksum',
         'retention_days',
         'expires_at',
+        'status',
     ];
 
     protected $casts = [
