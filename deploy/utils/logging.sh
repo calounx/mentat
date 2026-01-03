@@ -2,11 +2,11 @@
 # Logging utilities for deployment scripts
 # Usage: source "$(dirname "$0")/../utils/logging.sh"
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get utility directory (use local variable to avoid overwriting caller's SCRIPT_DIR)
+_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source colors
-source "${SCRIPT_DIR}/colors.sh"
+source "${_UTILS_DIR}/colors.sh"
 
 # Default log directory
 export LOG_DIR="${LOG_DIR:-/var/log/chom-deploy}"
