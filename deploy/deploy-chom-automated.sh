@@ -107,6 +107,7 @@ source "${SCRIPT_DIR}/utils/dependency-validation.sh"
 
 # Configuration
 DEPLOY_USER="${DEPLOY_USER:-stilgar}"
+CURRENT_USER="${SUDO_USER:-$(whoami)}"  # User running this script (e.g., calounx)
 MENTAT_HOST="${MENTAT_HOST:-mentat.arewel.com}"
 LANDSRAAD_HOST="${LANDSRAAD_HOST:-landsraad.arewel.com}"
 SECRETS_FILE="${SCRIPT_DIR}/.deployment-secrets"
@@ -259,7 +260,7 @@ preflight_checks() {
 
     # Check SSH access to landsraad
     log_step "Checking SSH access to $LANDSRAAD_HOST"
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
+    if ssh -o ConnectTimeout=5 -o BatchMode=yes "${CURRENT_USER}@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
         log_success "SSH access to $LANDSRAAD_HOST OK"
     else
         log_warning "Cannot connect to $LANDSRAAD_HOST as root with key-based auth"
@@ -395,11 +396,16 @@ phase_user_setup() {
     # Create user on landsraad (remote)
     log_step "Creating user on $LANDSRAAD_HOST (remote)"
     if [[ "$DRY_RUN" != "true" ]]; then
-        ssh root@"$LANDSRAAD_HOST" "bash -s" < "${SCRIPT_DIR}/scripts/setup-stilgar-user.sh" || {
+        # Copy script to remote and execute with sudo
+        scp "${SCRIPT_DIR}/scripts/setup-stilgar-user.sh" "${CURRENT_USER}@${LANDSRAAD_HOST}:/tmp/setup-stilgar-user.sh" || {
+            log_error "Failed to copy script to $LANDSRAAD_HOST"
+            return 1
+        }
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo bash /tmp/setup-stilgar-user.sh && rm /tmp/setup-stilgar-user.sh" || {
             log_error "Failed to create user on $LANDSRAAD_HOST"
             log_info "You may need to run this manually on $LANDSRAAD_HOST:"
-            log_info "  scp ${SCRIPT_DIR}/scripts/setup-stilgar-user.sh root@$LANDSRAAD_HOST:/tmp/"
-            log_info "  ssh root@$LANDSRAAD_HOST 'bash /tmp/setup-stilgar-user.sh'"
+            log_info "  ssh ${CURRENT_USER}@$LANDSRAAD_HOST"
+            log_info "  sudo bash /tmp/setup-stilgar-user.sh"
             return 1
         }
     else
@@ -436,11 +442,11 @@ phase_ssh_setup() {
         " || {
             log_warning "ssh-copy-id failed, trying manual method"
             local pub_key=$(sudo -u "$DEPLOY_USER" cat /home/${DEPLOY_USER}/.ssh/id_ed25519.pub)
-            ssh root@"$LANDSRAAD_HOST" "
-                mkdir -p /home/${DEPLOY_USER}/.ssh
-                echo '$pub_key' >> /home/${DEPLOY_USER}/.ssh/authorized_keys
-                chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
-                chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
+            ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "
+                sudo mkdir -p /home/${DEPLOY_USER}/.ssh
+                echo '$pub_key' | sudo tee -a /home/${DEPLOY_USER}/.ssh/authorized_keys
+                sudo chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
+                sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
             "
         }
 
