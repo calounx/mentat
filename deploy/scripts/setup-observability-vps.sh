@@ -38,8 +38,9 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Check Debian version
-if ! grep -q "bookworm\|13" /etc/os-release 2>/dev/null; then
-    log_warn "This script is designed for Debian 13 (Bookworm)"
+if ! grep -q "trixie\|13" /etc/os-release 2>/dev/null; then
+    log_warn "This script is designed for Debian 13 (Trixie)"
+    log_info "Detected: $(lsb_release -sc 2>/dev/null || echo 'unknown')"
 fi
 
 log_info "Starting Observability Stack installation..."
@@ -53,12 +54,13 @@ apt-get update -qq
 apt-get upgrade -y -qq
 
 log_info "Installing dependencies..."
+# Install essential packages for Debian 13 (Trixie)
 apt-get install -y -qq \
     curl \
     wget \
     gnupg \
+    lsb-release \
     apt-transport-https \
-    software-properties-common \
     unzip \
     jq \
     nginx \

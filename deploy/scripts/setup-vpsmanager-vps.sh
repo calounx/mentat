@@ -53,12 +53,13 @@ apt-get update -qq
 apt-get upgrade -y -qq
 
 log_info "Installing base dependencies..."
+# Install essential packages for Debian 13 (Trixie)
 apt-get install -y -qq \
     curl \
     wget \
     gnupg \
+    lsb-release \
     apt-transport-https \
-    software-properties-common \
     unzip \
     git \
     jq \
@@ -131,8 +132,15 @@ EOF
 log_info "Installing PHP..."
 
 # Add PHP repository
-wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
-echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+# Install lsb-release if not present
+apt-get install -y -qq lsb-release 2>/dev/null || true
+
+# Get Debian codename (e.g., trixie for Debian 13)
+DEBIAN_CODENAME=$(lsb_release -sc)
+
+# Download and install GPG key
+wget -qO - https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/php.gpg
+echo "deb https://packages.sury.org/php/ ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/php.list
 apt-get update -qq
 
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
@@ -177,8 +185,12 @@ done
 log_info "Installing MariaDB ${MARIADB_VERSION}..."
 
 # Add MariaDB repository
+# Get Debian codename
+DEBIAN_CODENAME=$(lsb_release -sc)
+
+# Download and install GPG key
 curl -sS https://mariadb.org/mariadb_release_signing_key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg
-echo "deb [arch=amd64] https://mirrors.xtom.de/mariadb/repo/${MARIADB_VERSION}/debian $(lsb_release -sc) main" > /etc/apt/sources.list.d/mariadb.list
+echo "deb [arch=amd64] https://mirrors.xtom.de/mariadb/repo/${MARIADB_VERSION}/debian ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/mariadb.list
 apt-get update -qq
 apt-get install -y -qq mariadb-server mariadb-client
 

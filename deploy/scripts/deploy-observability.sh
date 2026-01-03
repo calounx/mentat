@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deploy observability stack to mentat.arewel.com
+# NATIVE INSTALLATION - No Docker, uses systemd services
 # Usage: ./deploy-observability.sh [--config-dir /path/to/config]
 
 set -euo pipefail
@@ -9,7 +10,7 @@ source "${SCRIPT_DIR}/../utils/logging.sh"
 
 # Configuration
 OBSERVABILITY_DIR="${OBSERVABILITY_DIR:-/opt/observability}"
-CONFIG_DIR="${CONFIG_DIR:-${SCRIPT_DIR}/../config/mentat}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/observability}"
 DATA_DIR="${DATA_DIR:-/var/lib/observability}"
 DEPLOY_USER="${DEPLOY_USER:-stilgar}"
 
@@ -17,7 +18,7 @@ DEPLOY_USER="${DEPLOY_USER:-stilgar}"
 while [[ $# -gt 0 ]]; do
     case $1 in
         --config-dir)
-            CONFIG_DIR="$2"
+            SRC_CONFIG_DIR="$2"
             shift 2
             ;;
         *)
@@ -27,139 +28,163 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-init_deployment_log "deploy-observability-$(date +%Y%m%d_%H%M%S)"
-log_section "Observability Stack Deployment"
+SRC_CONFIG_DIR="${SRC_CONFIG_DIR:-${SCRIPT_DIR}/../config/mentat}"
 
-# Copy configuration files
+init_deployment_log "deploy-observability-$(date +%Y%m%d_%H%M%S)"
+log_section "Observability Stack Deployment (NATIVE)"
+
+# Deploy configuration files
 deploy_configuration() {
     log_step "Deploying configuration files"
 
-    # Create config directory
-    sudo mkdir -p "${OBSERVABILITY_DIR}/config"
-
-    # Copy Prometheus configuration
-    if [[ -f "${CONFIG_DIR}/prometheus.yml" ]]; then
-        sudo cp "${CONFIG_DIR}/prometheus.yml" "${OBSERVABILITY_DIR}/config/"
+    # Copy Prometheus configuration if exists
+    if [[ -f "${SRC_CONFIG_DIR}/prometheus.yml" ]]; then
+        sudo cp "${SRC_CONFIG_DIR}/prometheus.yml" "${CONFIG_DIR}/prometheus/"
+        sudo chown observability:observability "${CONFIG_DIR}/prometheus/prometheus.yml"
         log_success "Prometheus configuration deployed"
     else
-        log_warning "Prometheus configuration not found: ${CONFIG_DIR}/prometheus.yml"
+        log_info "Using default Prometheus configuration"
     fi
 
-    # Copy AlertManager configuration
-    if [[ -f "${CONFIG_DIR}/alertmanager.yml" ]]; then
-        sudo cp "${CONFIG_DIR}/alertmanager.yml" "${OBSERVABILITY_DIR}/config/"
+    # Copy AlertManager configuration if exists
+    if [[ -f "${SRC_CONFIG_DIR}/alertmanager.yml" ]]; then
+        sudo cp "${SRC_CONFIG_DIR}/alertmanager.yml" "${CONFIG_DIR}/alertmanager/"
+        sudo chown observability:observability "${CONFIG_DIR}/alertmanager/alertmanager.yml"
         log_success "AlertManager configuration deployed"
     else
-        log_warning "AlertManager configuration not found: ${CONFIG_DIR}/alertmanager.yml"
+        log_info "Using default AlertManager configuration"
     fi
 
-    # Copy Grafana datasources
-    if [[ -f "${CONFIG_DIR}/grafana-datasources.yml" ]]; then
-        sudo mkdir -p "${OBSERVABILITY_DIR}/config/grafana/provisioning/datasources"
-        sudo cp "${CONFIG_DIR}/grafana-datasources.yml" "${OBSERVABILITY_DIR}/config/grafana/provisioning/datasources/"
+    # Copy Grafana datasources if exists
+    if [[ -f "${SRC_CONFIG_DIR}/grafana-datasources.yml" ]]; then
+        sudo mkdir -p /etc/grafana/provisioning/datasources
+        sudo cp "${SRC_CONFIG_DIR}/grafana-datasources.yml" /etc/grafana/provisioning/datasources/datasources.yaml
         log_success "Grafana datasources deployed"
     else
-        log_warning "Grafana datasources not found: ${CONFIG_DIR}/grafana-datasources.yml"
+        log_info "Using default Grafana datasources"
     fi
 
-    # Copy Loki configuration
-    if [[ -f "${CONFIG_DIR}/loki-config.yml" ]]; then
-        sudo cp "${CONFIG_DIR}/loki-config.yml" "${OBSERVABILITY_DIR}/config/"
+    # Copy Loki configuration if exists
+    if [[ -f "${SRC_CONFIG_DIR}/loki-config.yml" ]]; then
+        sudo cp "${SRC_CONFIG_DIR}/loki-config.yml" "${CONFIG_DIR}/loki/"
+        sudo chown observability:observability "${CONFIG_DIR}/loki/loki-config.yml"
         log_success "Loki configuration deployed"
     else
-        log_warning "Loki configuration not found: ${CONFIG_DIR}/loki-config.yml"
+        log_info "Using default Loki configuration"
     fi
 
-    # Copy Docker Compose file
-    if [[ -f "${CONFIG_DIR}/docker-compose.prod.yml" ]]; then
-        sudo cp "${CONFIG_DIR}/docker-compose.prod.yml" "${OBSERVABILITY_DIR}/docker-compose.yml"
-        log_success "Docker Compose configuration deployed"
+    # Copy Promtail configuration if exists
+    if [[ -f "${SRC_CONFIG_DIR}/promtail-config.yml" ]]; then
+        sudo cp "${SRC_CONFIG_DIR}/promtail-config.yml" "${CONFIG_DIR}/promtail/"
+        sudo chown observability:observability "${CONFIG_DIR}/promtail/promtail-config.yml"
+        log_success "Promtail configuration deployed"
     else
-        log_error "Docker Compose configuration not found: ${CONFIG_DIR}/docker-compose.prod.yml"
-        return 1
+        log_info "Using default Promtail configuration"
     fi
-
-    # Set ownership
-    sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} "${OBSERVABILITY_DIR}/config"
 
     log_success "Configuration files deployed"
 }
 
-# Create necessary directories
-create_directories() {
-    log_step "Creating data directories"
+# Validate configuration files
+validate_configuration() {
+    log_step "Validating configuration files"
 
-    sudo mkdir -p "${DATA_DIR}/prometheus"
-    sudo mkdir -p "${DATA_DIR}/grafana"
-    sudo mkdir -p "${DATA_DIR}/alertmanager"
-    sudo mkdir -p "${DATA_DIR}/loki"
+    local validation_failed=0
 
-    # Set permissions
-    sudo chown -R 65534:65534 "${DATA_DIR}/prometheus"
-    sudo chown -R 472:472 "${DATA_DIR}/grafana"
-    sudo chown -R 65534:65534 "${DATA_DIR}/alertmanager"
-    sudo chown -R 10001:10001 "${DATA_DIR}/loki"
-
-    log_success "Data directories created"
-}
-
-# Pull Docker images
-pull_images() {
-    log_step "Pulling Docker images"
-
-    cd "$OBSERVABILITY_DIR"
-
-    if sudo -u ${DEPLOY_USER} docker compose pull 2>&1 | tee -a "$LOG_FILE"; then
-        log_success "Docker images pulled"
-        return 0
+    # Validate Prometheus configuration
+    if sudo -u observability ${OBSERVABILITY_DIR}/bin/promtool check config "${CONFIG_DIR}/prometheus/prometheus.yml" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Prometheus configuration is valid"
     else
-        log_error "Failed to pull Docker images"
+        log_error "Prometheus configuration validation failed"
+        validation_failed=1
+    fi
+
+    # Validate AlertManager configuration
+    if sudo -u observability ${OBSERVABILITY_DIR}/bin/amtool check-config "${CONFIG_DIR}/alertmanager/alertmanager.yml" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "AlertManager configuration is valid"
+    else
+        log_error "AlertManager configuration validation failed"
+        validation_failed=1
+    fi
+
+    if [[ $validation_failed -eq 1 ]]; then
+        log_error "Configuration validation failed"
         return 1
     fi
+
+    log_success "All configurations are valid"
 }
 
-# Stop existing stack
-stop_stack() {
-    log_step "Stopping existing observability stack"
+# Stop all services
+stop_services() {
+    log_step "Stopping existing observability services"
 
-    cd "$OBSERVABILITY_DIR"
+    local services=("prometheus" "grafana-server" "loki" "promtail" "alertmanager" "node_exporter")
 
-    if sudo -u ${DEPLOY_USER} docker compose down 2>&1 | tee -a "$LOG_FILE"; then
-        log_success "Existing stack stopped"
-    else
-        log_info "No existing stack to stop"
-    fi
+    for service in "${services[@]}"; do
+        if sudo systemctl is-active --quiet "$service"; then
+            sudo systemctl stop "$service"
+            log_info "$service stopped"
+        fi
+    done
+
+    log_success "All services stopped"
 }
 
-# Start observability stack
-start_stack() {
-    log_step "Starting observability stack"
+# Start all services
+start_services() {
+    log_step "Starting observability services"
 
-    cd "$OBSERVABILITY_DIR"
+    sudo systemctl daemon-reload
 
-    if sudo -u ${DEPLOY_USER} docker compose up -d 2>&1 | tee -a "$LOG_FILE"; then
-        log_success "Observability stack started"
-        return 0
-    else
-        log_error "Failed to start observability stack"
-        return 1
-    fi
+    local services=("prometheus" "node_exporter" "loki" "promtail" "alertmanager" "grafana-server")
+
+    for service in "${services[@]}"; do
+        if sudo systemctl start "$service"; then
+            log_success "$service started"
+        else
+            log_error "Failed to start $service"
+            return 1
+        fi
+    done
+
+    log_success "All services started"
 }
 
-# Wait for services to be healthy
+# Wait for services to be ready
 wait_for_services() {
-    log_step "Waiting for services to be healthy"
+    log_step "Waiting for services to be ready"
 
     local max_attempts=30
     local attempt=0
 
     while [[ $attempt -lt $max_attempts ]]; do
-        local healthy_count=$(docker compose ps --format json 2>/dev/null | jq -r '.Health' | grep -c "healthy" || echo "0")
+        local healthy=0
 
-        log_info "Attempt $((attempt + 1))/$max_attempts - Healthy services: $healthy_count"
+        # Check Prometheus
+        if curl -sf http://localhost:9090/-/healthy > /dev/null 2>&1; then
+            ((healthy++))
+        fi
 
-        if [[ $healthy_count -ge 3 ]]; then
-            log_success "Services are healthy"
+        # Check Grafana
+        if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+            ((healthy++))
+        fi
+
+        # Check AlertManager
+        if curl -sf http://localhost:9093/-/healthy > /dev/null 2>&1; then
+            ((healthy++))
+        fi
+
+        # Check Loki
+        if curl -sf http://localhost:3100/ready > /dev/null 2>&1; then
+            ((healthy++))
+        fi
+
+        log_info "Attempt $((attempt + 1))/$max_attempts - Healthy services: $healthy/4"
+
+        if [[ $healthy -ge 4 ]]; then
+            log_success "All services are healthy"
             return 0
         fi
 
@@ -167,8 +192,8 @@ wait_for_services() {
         sleep 5
     done
 
-    log_warning "Timeout waiting for services to be healthy"
-    return 0  # Don't fail deployment
+    log_warning "Timeout waiting for services, but continuing anyway"
+    return 0
 }
 
 # Check service health
@@ -179,37 +204,50 @@ check_services() {
 
     # Check Prometheus
     log_info "Checking Prometheus..."
-    if curl -sf http://localhost:9090/-/healthy > /dev/null; then
-        log_success "Prometheus is healthy"
+    if curl -sf http://localhost:9090/-/healthy > /dev/null 2>&1; then
+        log_success "Prometheus is healthy (http://localhost:9090)"
     else
         log_error "Prometheus is not healthy"
+        sudo systemctl status prometheus --no-pager | tail -n 10
         failed=1
     fi
 
     # Check Grafana
     log_info "Checking Grafana..."
-    if curl -sf http://localhost:3000/api/health > /dev/null; then
-        log_success "Grafana is healthy"
+    if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+        log_success "Grafana is healthy (http://localhost:3000)"
     else
         log_error "Grafana is not healthy"
+        sudo systemctl status grafana-server --no-pager | tail -n 10
         failed=1
     fi
 
     # Check AlertManager
     log_info "Checking AlertManager..."
-    if curl -sf http://localhost:9093/-/healthy > /dev/null; then
-        log_success "AlertManager is healthy"
+    if curl -sf http://localhost:9093/-/healthy > /dev/null 2>&1; then
+        log_success "AlertManager is healthy (http://localhost:9093)"
     else
         log_error "AlertManager is not healthy"
+        sudo systemctl status alertmanager --no-pager | tail -n 10
         failed=1
     fi
 
     # Check Loki
     log_info "Checking Loki..."
-    if curl -sf http://localhost:3100/ready > /dev/null; then
-        log_success "Loki is healthy"
+    if curl -sf http://localhost:3100/ready > /dev/null 2>&1; then
+        log_success "Loki is healthy (http://localhost:3100)"
     else
         log_warning "Loki is not responding (may still be starting)"
+        sudo systemctl status loki --no-pager | tail -n 10
+    fi
+
+    # Check Node Exporter
+    log_info "Checking Node Exporter..."
+    if curl -sf http://localhost:9100/metrics > /dev/null 2>&1; then
+        log_success "Node Exporter is healthy (http://localhost:9100)"
+    else
+        log_warning "Node Exporter is not responding"
+        sudo systemctl status node_exporter --no-pager | tail -n 10
     fi
 
     if [[ $failed -eq 1 ]]; then
@@ -223,20 +261,24 @@ check_services() {
 show_status() {
     log_step "Service status"
 
-    cd "$OBSERVABILITY_DIR"
+    local services=("prometheus" "grafana-server" "loki" "promtail" "alertmanager" "node_exporter")
 
-    sudo -u ${DEPLOY_USER} docker compose ps
+    for service in "${services[@]}"; do
+        echo "---"
+        sudo systemctl status "$service" --no-pager | head -n 10
+    done
 }
 
-# Enable systemd service
-enable_systemd_service() {
-    log_step "Enabling systemd service"
+# Get Grafana admin password
+get_grafana_password() {
+    log_step "Retrieving Grafana admin password"
 
-    if [[ -f /etc/systemd/system/observability-stack.service ]]; then
-        sudo systemctl enable observability-stack.service
-        log_success "Systemd service enabled"
+    local password=$(sudo grep 'admin_password' /etc/grafana/grafana.ini | grep -v '^;' | cut -d'=' -f2 | tr -d ' ')
+
+    if [[ -n "$password" ]]; then
+        log_info "Grafana admin password: $password"
     else
-        log_warning "Systemd service file not found, skipping"
+        log_info "Grafana admin password: admin (default)"
     fi
 }
 
@@ -244,13 +286,12 @@ enable_systemd_service() {
 main() {
     start_timer
 
-    print_header "Observability Stack Deployment"
+    print_header "Observability Stack Deployment (NATIVE - No Docker)"
 
-    create_directories
     deploy_configuration
-    pull_images
-    stop_stack
-    start_stack
+    validate_configuration
+    stop_services
+    start_services
 
     # Wait for services
     sleep 5
@@ -264,20 +305,28 @@ main() {
     log_section "Service Status"
     show_status
 
-    # Enable systemd service
-    enable_systemd_service
+    # Get Grafana password
+    get_grafana_password
 
     end_timer "Observability deployment"
 
-    print_header "Observability Stack Deployed"
-    log_success "Stack is running on mentat.arewel.com"
-    log_info "Access points:"
-    log_info "  Prometheus: http://mentat.arewel.com:9090"
-    log_info "  Grafana: http://mentat.arewel.com:3000 (admin/admin)"
-    log_info "  AlertManager: http://mentat.arewel.com:9093"
+    print_header "Observability Stack Deployed (NATIVE)"
+    log_success "Stack is running on mentat.arewel.com using systemd services"
     log_info ""
-    log_info "To view logs: docker compose -f ${OBSERVABILITY_DIR}/docker-compose.yml logs -f"
-    log_info "To stop stack: docker compose -f ${OBSERVABILITY_DIR}/docker-compose.yml down"
+    log_info "Access points:"
+    log_info "  Prometheus:   http://mentat.arewel.com:9090"
+    log_info "  Grafana:      http://mentat.arewel.com:3000"
+    log_info "  AlertManager: http://mentat.arewel.com:9093"
+    log_info "  Loki:         http://mentat.arewel.com:3100"
+    log_info "  Node Exporter: http://mentat.arewel.com:9100"
+    log_info ""
+    log_info "Service management:"
+    log_info "  View logs:     sudo journalctl -u <service-name> -f"
+    log_info "  Restart:       sudo systemctl restart <service-name>"
+    log_info "  Stop:          sudo systemctl stop <service-name>"
+    log_info "  Status:        sudo systemctl status <service-name>"
+    log_info ""
+    log_info "Services: prometheus, grafana-server, loki, promtail, alertmanager, node_exporter"
 }
 
 main

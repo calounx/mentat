@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Prepare mentat.arewel.com for observability stack deployment
-# This script installs Docker and configures the system
+# This script installs observability tools NATIVELY (no Docker)
 # Usage: ./prepare-mentat.sh
+#
+# IDEMPOTENT: Safe to run multiple times - checks before installing
+# - Skips if software already installed
+# - Preserves existing configurations
+# - Only installs/updates what's needed
 
 set -euo pipefail
 
@@ -12,11 +17,19 @@ source "${SCRIPT_DIR}/../utils/logging.sh"
 DEPLOY_USER="${DEPLOY_USER:-stilgar}"
 OBSERVABILITY_DIR="${OBSERVABILITY_DIR:-/opt/observability}"
 DATA_DIR="${DATA_DIR:-/var/lib/observability}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/observability}"
+
+# Versions
+PROMETHEUS_VERSION="2.48.0"
+LOKI_VERSION="2.9.3"
+PROMTAIL_VERSION="2.9.3"
+ALERTMANAGER_VERSION="0.26.0"
+NODE_EXPORTER_VERSION="1.7.0"
 
 init_deployment_log "prepare-mentat-$(date +%Y%m%d_%H%M%S)"
 log_section "Preparing mentat.arewel.com"
 
-# Update system packages
+# Update system packages (Debian 13 compatible)
 update_system() {
     log_step "Updating system packages"
 
@@ -26,9 +39,6 @@ update_system() {
         ca-certificates \
         curl \
         gnupg \
-        lsb-release \
-        software-properties-common \
-        apt-transport-https \
         wget \
         git \
         unzip \
@@ -36,66 +46,12 @@ update_system() {
         vim \
         net-tools \
         dnsutils \
-        jq
+        jq \
+        nginx \
+        certbot \
+        python3-certbot-nginx
 
     log_success "System packages updated"
-}
-
-# Install Docker
-install_docker() {
-    log_step "Installing Docker"
-
-    if command -v docker &> /dev/null; then
-        log_success "Docker is already installed"
-        docker --version | tee -a "$LOG_FILE"
-        return 0
-    fi
-
-    # Add Docker's official GPG key
-    sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-    # Add Docker repository
-    echo \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    # Install Docker
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-    # Enable and start Docker
-    sudo systemctl enable docker
-    sudo systemctl start docker
-
-    log_success "Docker installed"
-    docker --version | tee -a "$LOG_FILE"
-}
-
-# Configure Docker
-configure_docker() {
-    log_step "Configuring Docker"
-
-    # Create Docker daemon configuration
-    sudo tee /etc/docker/daemon.json > /dev/null <<EOF
-{
-    "log-driver": "json-file",
-    "log-opts": {
-        "max-size": "10m",
-        "max-file": "3"
-    },
-    "storage-driver": "overlay2",
-    "metrics-addr": "127.0.0.1:9323",
-    "experimental": false
-}
-EOF
-
-    # Restart Docker to apply configuration
-    sudo systemctl restart docker
-
-    log_success "Docker configured"
 }
 
 # Create deployment user
@@ -110,25 +66,35 @@ create_deploy_user() {
         log_success "User $DEPLOY_USER created"
     fi
 
-    # Add user to docker group
-    sudo usermod -aG docker "$DEPLOY_USER"
-
     # Create .ssh directory
     sudo mkdir -p /home/${DEPLOY_USER}/.ssh
     sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
     sudo chmod 700 /home/${DEPLOY_USER}/.ssh
 
-    log_success "User $DEPLOY_USER configured for Docker access"
+    log_success "User $DEPLOY_USER configured"
+}
+
+# Create observability system user
+create_observability_user() {
+    log_step "Creating observability system user"
+
+    if ! id observability &>/dev/null; then
+        sudo useradd --system --no-create-home --shell /usr/sbin/nologin observability
+        log_success "Observability user created"
+    else
+        log_success "Observability user already exists"
+    fi
 }
 
 # Setup observability directories
 setup_observability_directories() {
     log_step "Setting up observability directories"
 
-    # Create main directory
-    sudo mkdir -p "$OBSERVABILITY_DIR"
-    sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} "$OBSERVABILITY_DIR"
-    sudo chmod 755 "$OBSERVABILITY_DIR"
+    # Create main directories
+    sudo mkdir -p "$OBSERVABILITY_DIR/bin"
+    sudo mkdir -p "$CONFIG_DIR"/{prometheus,grafana,loki,alertmanager,promtail}
+    sudo mkdir -p "$CONFIG_DIR/prometheus/rules"
+    sudo mkdir -p "$CONFIG_DIR/prometheus/targets"
 
     # Create data directories
     sudo mkdir -p "${DATA_DIR}/prometheus"
@@ -136,98 +102,411 @@ setup_observability_directories() {
     sudo mkdir -p "${DATA_DIR}/alertmanager"
     sudo mkdir -p "${DATA_DIR}/loki"
 
-    # Set permissions (Prometheus runs as nobody:nobody, UID/GID 65534)
-    sudo chown -R 65534:65534 "${DATA_DIR}/prometheus"
-    sudo chown -R 472:472 "${DATA_DIR}/grafana"  # Grafana UID
-    sudo chown -R 65534:65534 "${DATA_DIR}/alertmanager"
-    sudo chown -R 10001:10001 "${DATA_DIR}/loki"  # Loki UID
-
-    # Create configuration directory
-    sudo mkdir -p "${OBSERVABILITY_DIR}/config"
-    sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} "${OBSERVABILITY_DIR}/config"
+    # Set ownership
+    sudo chown -R observability:observability "$OBSERVABILITY_DIR"
+    sudo chown -R observability:observability "$CONFIG_DIR"
+    sudo chown -R observability:observability "$DATA_DIR"
 
     log_success "Observability directories configured"
 }
 
-# Install Docker Compose standalone (if needed)
-install_docker_compose_standalone() {
-    log_step "Checking Docker Compose"
+# Install Prometheus natively
+install_prometheus() {
+    log_step "Installing Prometheus ${PROMETHEUS_VERSION}"
 
-    if docker compose version &> /dev/null; then
-        log_success "Docker Compose (plugin) is available"
-        docker compose version | tee -a "$LOG_FILE"
-        return 0
+    # Check if already installed
+    if [[ -f "${OBSERVABILITY_DIR}/bin/prometheus" ]]; then
+        local installed_version=$("${OBSERVABILITY_DIR}/bin/prometheus" --version 2>&1 | head -1 | awk '{print $3}')
+        if [[ "$installed_version" == "$PROMETHEUS_VERSION" ]]; then
+            log_success "Prometheus ${PROMETHEUS_VERSION} already installed"
+            return 0
+        else
+            log_info "Upgrading Prometheus from $installed_version to ${PROMETHEUS_VERSION}"
+        fi
     fi
-
-    if command -v docker-compose &> /dev/null; then
-        log_success "Docker Compose (standalone) is available"
-        docker-compose --version | tee -a "$LOG_FILE"
-        return 0
-    fi
-
-    log_info "Installing Docker Compose standalone"
-
-    local compose_version="2.24.0"
-    sudo curl -L "https://github.com/docker/compose/releases/download/v${compose_version}/docker-compose-$(uname -s)-$(uname -m)" \
-        -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-
-    log_success "Docker Compose installed"
-    docker-compose --version | tee -a "$LOG_FILE"
-}
-
-# Install monitoring tools
-install_monitoring() {
-    log_step "Installing monitoring tools"
-
-    # Install Node Exporter for Prometheus
-    local node_exporter_version="1.7.0"
-    local node_exporter_url="https://github.com/prometheus/node_exporter/releases/download/v${node_exporter_version}/node_exporter-${node_exporter_version}.linux-amd64.tar.gz"
 
     cd /tmp
-    wget -q "$node_exporter_url"
-    tar xzf "node_exporter-${node_exporter_version}.linux-amd64.tar.gz"
-    sudo mv "node_exporter-${node_exporter_version}.linux-amd64/node_exporter" /usr/local/bin/
-    rm -rf "node_exporter-${node_exporter_version}.linux-amd64"*
+    if [[ ! -f "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" ]]; then
+        wget -q "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+    fi
+    tar xzf "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+    sudo cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" "${OBSERVABILITY_DIR}/bin/"
+    sudo cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" "${OBSERVABILITY_DIR}/bin/"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/prometheus"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/promtool"
+    rm -rf "prometheus-${PROMETHEUS_VERSION}.linux-amd64"*
 
-    # Create systemd service for node_exporter
-    sudo tee /etc/systemd/system/node_exporter.service > /dev/null <<EOF
+    # Create default configuration if not exists
+    if [[ ! -f "${CONFIG_DIR}/prometheus/prometheus.yml" ]]; then
+        sudo tee "${CONFIG_DIR}/prometheus/prometheus.yml" > /dev/null <<'EOF'
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - localhost:9093
+
+rule_files:
+  - /etc/observability/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+EOF
+    else
+        log_success "Prometheus configuration already exists"
+    fi
+
+    # Create systemd service if not exists
+    if [[ ! -f /etc/systemd/system/prometheus.service ]]; then
+        sudo tee /etc/systemd/system/prometheus.service > /dev/null <<EOF
 [Unit]
-Description=Node Exporter
-After=network.target
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
 
 [Service]
+User=observability
+Group=observability
 Type=simple
-User=nobody
-ExecStart=/usr/local/bin/node_exporter
-Restart=on-failure
+ExecStart=${OBSERVABILITY_DIR}/bin/prometheus \\
+    --config.file=${CONFIG_DIR}/prometheus/prometheus.yml \\
+    --storage.tsdb.path=${DATA_DIR}/prometheus \\
+    --storage.tsdb.retention.time=30d \\
+    --storage.tsdb.retention.size=50GB \\
+    --web.listen-address=:9090 \\
+    --web.enable-lifecycle \\
+    --web.enable-admin-api
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    else
+        log_success "Prometheus systemd service already exists"
+    fi
+
+    sudo chown -R observability:observability "${CONFIG_DIR}/prometheus"
+    sudo chown -R observability:observability "${DATA_DIR}/prometheus"
+
+    log_success "Prometheus installed"
+}
+
+# Install Grafana from APT repository
+install_grafana() {
+    log_step "Installing Grafana from official repository"
+
+    # Check if Grafana is already installed
+    if command -v grafana-server &>/dev/null; then
+        log_success "Grafana is already installed"
+        local installed_version=$(grafana-server -v 2>&1 | head -1 | awk '{print $2}')
+        log_info "Installed version: $installed_version"
+    else
+        # Add Grafana GPG key and repository
+        sudo mkdir -p /etc/apt/keyrings
+        if [[ ! -f /etc/apt/keyrings/grafana.gpg ]]; then
+            wget -q -O - https://apt.grafana.com/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+        fi
+
+        if [[ ! -f /etc/apt/sources.list.d/grafana.list ]]; then
+            echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | \
+                sudo tee /etc/apt/sources.list.d/grafana.list
+        fi
+
+        sudo apt-get update
+        sudo apt-get install -y grafana
+    fi
+
+    # Configure Grafana datasources if not already configured
+    sudo mkdir -p /etc/grafana/provisioning/datasources
+    if [[ ! -f /etc/grafana/provisioning/datasources/datasources.yaml ]]; then
+        sudo tee /etc/grafana/provisioning/datasources/datasources.yaml > /dev/null <<'EOF'
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://localhost:3100
+EOF
+    else
+        log_success "Grafana datasources already configured"
+    fi
+
+    log_success "Grafana installed from APT repository"
+}
+
+# Install Loki natively
+install_loki() {
+    log_step "Installing Loki ${LOKI_VERSION}"
+
+    cd /tmp
+    wget -q "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip"
+    unzip -qq "loki-linux-amd64.zip"
+    sudo mv loki-linux-amd64 "${OBSERVABILITY_DIR}/bin/loki"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/loki"
+    rm -f loki-linux-amd64.zip
+
+    # Create Loki configuration
+    sudo tee "${CONFIG_DIR}/loki/loki-config.yml" > /dev/null <<EOF
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: ${DATA_DIR}/loki
+  storage:
+    filesystem:
+      chunks_directory: ${DATA_DIR}/loki/chunks
+      rules_directory: ${DATA_DIR}/loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 720h
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
+
+compactor:
+  working_directory: ${DATA_DIR}/loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+EOF
+
+    sudo mkdir -p "${DATA_DIR}/loki"/{chunks,rules,compactor}
+
+    # Create systemd service
+    sudo tee /etc/systemd/system/loki.service > /dev/null <<EOF
+[Unit]
+Description=Loki
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/loki -config.file=${CONFIG_DIR}/loki/loki-config.yml
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable node_exporter
-    sudo systemctl start node_exporter
+    sudo chown -R observability:observability "${CONFIG_DIR}/loki"
+    sudo chown -R observability:observability "${DATA_DIR}/loki"
 
-    log_success "Node Exporter installed and running"
+    log_success "Loki installed"
 }
 
-# Configure system limits for containers
+# Install Promtail natively
+install_promtail() {
+    log_step "Installing Promtail ${PROMTAIL_VERSION}"
+
+    cd /tmp
+    wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
+    unzip -qq "promtail-linux-amd64.zip"
+    sudo mv promtail-linux-amd64 "${OBSERVABILITY_DIR}/bin/promtail"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/promtail"
+    rm -f promtail-linux-amd64.zip
+
+    # Create Promtail configuration
+    sudo tee "${CONFIG_DIR}/promtail/promtail-config.yml" > /dev/null <<EOF
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: ${DATA_DIR}/loki/positions.yaml
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log
+EOF
+
+    # Create systemd service
+    sudo tee /etc/systemd/system/promtail.service > /dev/null <<EOF
+[Unit]
+Description=Promtail
+Wants=network-online.target
+After=network-online.target loki.service
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/promtail -config.file=${CONFIG_DIR}/promtail/promtail-config.yml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo chown -R observability:observability "${CONFIG_DIR}/promtail"
+
+    log_success "Promtail installed"
+}
+
+# Install AlertManager natively
+install_alertmanager() {
+    log_step "Installing AlertManager ${ALERTMANAGER_VERSION}"
+
+    cd /tmp
+    wget -q "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+    tar xzf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
+    sudo cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/alertmanager" "${OBSERVABILITY_DIR}/bin/"
+    sudo cp "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" "${OBSERVABILITY_DIR}/bin/"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/alertmanager"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/amtool"
+    rm -rf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64"*
+
+    # Create AlertManager configuration
+    sudo tee "${CONFIG_DIR}/alertmanager/alertmanager.yml" > /dev/null <<'EOF'
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default'
+
+receivers:
+  - name: 'default'
+    # Configure your notification channels here
+    # webhook_configs:
+    #   - url: 'http://localhost:5001/webhook'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+EOF
+
+    # Create systemd service
+    sudo tee /etc/systemd/system/alertmanager.service > /dev/null <<EOF
+[Unit]
+Description=AlertManager
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/alertmanager \\
+    --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
+    --storage.path=${DATA_DIR}/alertmanager \\
+    --web.external-url=http://mentat.arewel.com:9093
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo chown -R observability:observability "${CONFIG_DIR}/alertmanager"
+    sudo chown -R observability:observability "${DATA_DIR}/alertmanager"
+
+    log_success "AlertManager installed"
+}
+
+# Install Node Exporter
+install_node_exporter() {
+    log_step "Installing Node Exporter ${NODE_EXPORTER_VERSION}"
+
+    cd /tmp
+    wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+    tar xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+    sudo cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" "${OBSERVABILITY_DIR}/bin/"
+    sudo chmod +x "${OBSERVABILITY_DIR}/bin/node_exporter"
+    rm -rf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64"*
+
+    # Create systemd service
+    sudo tee /etc/systemd/system/node_exporter.service > /dev/null <<EOF
+[Unit]
+Description=Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/node_exporter
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    log_success "Node Exporter installed"
+}
+
+# Configure system limits
 configure_system_limits() {
     log_step "Configuring system limits"
 
     # Increase file descriptor limits
-    sudo tee -a /etc/security/limits.conf > /dev/null <<EOF
+    if ! grep -q "# Limits for observability stack" /etc/security/limits.conf; then
+        sudo tee -a /etc/security/limits.conf > /dev/null <<EOF
 
 # Limits for observability stack
-* soft nofile 65536
-* hard nofile 65536
-* soft nproc 32768
-* hard nproc 32768
+observability soft nofile 65536
+observability hard nofile 65536
+observability soft nproc 32768
+observability hard nproc 32768
 EOF
+        log_success "System limits added to limits.conf"
+    else
+        log_success "System limits already configured in limits.conf"
+    fi
 
-    # Configure sysctl for containers
+    # Configure sysctl for observability
     sudo tee /etc/sysctl.d/99-observability.conf > /dev/null <<EOF
 # Increase connection tracking
 net.netfilter.nf_conntrack_max = 262144
@@ -247,43 +526,28 @@ net.ipv4.tcp_congestion_control = bbr
 EOF
 
     # Apply sysctl settings
-    sudo sysctl -p /etc/sysctl.d/99-observability.conf
+    sudo sysctl -p /etc/sysctl.d/99-observability.conf 2>/dev/null || true
 
     log_success "System limits configured"
 }
 
-# Setup log rotation for Docker containers
+# Setup log rotation
 setup_log_rotation() {
-    log_step "Setting up log rotation for Docker"
+    log_step "Setting up log rotation for observability services"
 
-    sudo tee /etc/logrotate.d/docker-containers > /dev/null <<EOF
-/var/lib/docker/containers/*/*.log {
+    sudo tee /etc/logrotate.d/observability > /dev/null <<EOF
+/var/log/observability/*.log {
     daily
     rotate 7
     compress
     delaycompress
     missingok
     notifempty
-    copytruncate
+    create 0640 observability observability
 }
 EOF
 
     log_success "Log rotation configured"
-}
-
-# Install utility tools
-install_utilities() {
-    log_step "Installing utility tools"
-
-    # Install ctop for container monitoring
-    sudo wget -q https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-amd64 \
-        -O /usr/local/bin/ctop
-    sudo chmod +x /usr/local/bin/ctop
-
-    # Install lazydocker for container management
-    curl -sS https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
-
-    log_success "Utility tools installed"
 }
 
 # Harden system security
@@ -299,7 +563,7 @@ harden_security() {
     sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
 
     # Restart SSH
-    sudo systemctl restart sshd
+    sudo systemctl restart sshd 2>/dev/null || sudo systemctl restart ssh
 
     # Configure automatic security updates
     sudo apt-get install -y unattended-upgrades
@@ -308,72 +572,61 @@ harden_security() {
     log_success "Security hardening applied"
 }
 
-# Create systemd service for observability stack
-create_systemd_service() {
-    log_step "Creating systemd service for observability stack"
-
-    sudo tee /etc/systemd/system/observability-stack.service > /dev/null <<EOF
-[Unit]
-Description=CHOM Observability Stack
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=${OBSERVABILITY_DIR}
-User=${DEPLOY_USER}
-Group=${DEPLOY_USER}
-
-# Start the stack
-ExecStart=/usr/bin/docker compose -f ${OBSERVABILITY_DIR}/docker-compose.yml up -d
-
-# Stop the stack
-ExecStop=/usr/bin/docker compose -f ${OBSERVABILITY_DIR}/docker-compose.yml down
-
-# Reload the stack
-ExecReload=/usr/bin/docker compose -f ${OBSERVABILITY_DIR}/docker-compose.yml restart
-
-Restart=on-failure
-RestartSec=10s
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Enable all services
+enable_services() {
+    log_step "Enabling observability services"
 
     sudo systemctl daemon-reload
 
-    log_success "Systemd service created (will be enabled after stack deployment)"
+    # Enable services (they will be started by deploy-observability.sh)
+    sudo systemctl enable prometheus
+    sudo systemctl enable grafana-server
+    sudo systemctl enable loki
+    sudo systemctl enable promtail
+    sudo systemctl enable alertmanager
+    sudo systemctl enable node_exporter
+
+    log_success "All services enabled"
 }
 
 # Main execution
 main() {
     start_timer
 
-    print_header "Preparing mentat.arewel.com for observability stack"
+    print_header "Preparing mentat.arewel.com for observability stack (NATIVE INSTALLATION)"
 
     update_system
     create_deploy_user
-    install_docker
-    configure_docker
-    install_docker_compose_standalone
+    create_observability_user
     setup_observability_directories
-    install_monitoring
+    install_prometheus
+    install_grafana
+    install_loki
+    install_promtail
+    install_alertmanager
+    install_node_exporter
     configure_system_limits
     setup_log_rotation
-    install_utilities
     harden_security
-    create_systemd_service
+    enable_services
 
     end_timer "Server preparation"
 
     print_header "Server Preparation Complete"
     log_success "mentat.arewel.com is ready for observability stack deployment"
+    log_info "All components installed NATIVELY using systemd services"
     log_info "Next steps:"
     log_info "  1. Run setup-firewall.sh --server mentat"
     log_info "  2. Run setup-ssl.sh for Grafana domain (optional)"
     log_info "  3. Deploy observability stack with deploy-observability.sh"
-    log_warning "Remember to logout and login again for docker group to take effect"
+    log_info ""
+    log_info "Installed components:"
+    log_info "  - Prometheus ${PROMETHEUS_VERSION} (systemd)"
+    log_info "  - Grafana (APT package)"
+    log_info "  - Loki ${LOKI_VERSION} (systemd)"
+    log_info "  - Promtail ${PROMTAIL_VERSION} (systemd)"
+    log_info "  - AlertManager ${ALERTMANAGER_VERSION} (systemd)"
+    log_info "  - Node Exporter ${NODE_EXPORTER_VERSION} (systemd)"
 }
 
 main

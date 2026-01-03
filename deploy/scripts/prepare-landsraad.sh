@@ -2,6 +2,11 @@
 # Prepare landsraad.arewel.com for CHOM application deployment
 # This script installs and configures all required software
 # Usage: ./prepare-landsraad.sh
+#
+# IDEMPOTENT: Safe to run multiple times - checks before installing
+# - Skips if software already installed
+# - Preserves existing configurations
+# - Only installs/updates what's needed
 
 set -euo pipefail
 
@@ -25,12 +30,11 @@ update_system() {
 
     sudo apt-get update
     sudo apt-get upgrade -y
+    # Install essential packages for Debian 13 (Trixie)
     sudo apt-get install -y \
         ca-certificates \
         curl \
         gnupg \
-        lsb-release \
-        software-properties-common \
         apt-transport-https \
         wget \
         git \
@@ -48,10 +52,29 @@ update_system() {
 install_php() {
     log_step "Installing PHP ${PHP_VERSION} and extensions"
 
+    # Check if PHP is already installed
+    if command -v php &>/dev/null; then
+        local installed_version=$(php -v | head -1 | awk '{print $2}' | cut -d. -f1,2)
+        if [[ "$installed_version" == "$PHP_VERSION" ]]; then
+            log_success "PHP ${PHP_VERSION} already installed"
+            php -v | head -1 | tee -a "$LOG_FILE"
+            return 0
+        else
+            log_info "PHP $installed_version found, installing PHP ${PHP_VERSION}"
+        fi
+    fi
+
     # Add Sury PHP repository for latest PHP versions
     if [[ ! -f /etc/apt/sources.list.d/php.list ]]; then
-        wget -qO - https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/php.gpg
-        echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list
+
+        # Get Debian codename (e.g., trixie for Debian 13)
+        DEBIAN_CODENAME=$(lsb_release -sc)
+
+        # Download and install GPG key using proper keyring location
+        if [[ ! -f /etc/apt/trusted.gpg.d/php.gpg ]]; then
+            wget -qO - https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/php.gpg
+        fi
+        echo "deb https://packages.sury.org/php/ ${DEBIAN_CODENAME} main" | sudo tee /etc/apt/sources.list.d/php.list
         sudo apt-get update
     fi
 
@@ -125,10 +148,28 @@ install_nodejs() {
 install_postgresql() {
     log_step "Installing PostgreSQL ${POSTGRES_VERSION}"
 
+    # Check if PostgreSQL is already installed
+    if command -v psql &>/dev/null; then
+        local installed_version=$(psql --version | awk '{print $3}' | cut -d. -f1)
+        if [[ "$installed_version" == "$POSTGRES_VERSION" ]]; then
+            log_success "PostgreSQL ${POSTGRES_VERSION} already installed"
+            psql --version | tee -a "$LOG_FILE"
+            return 0
+        else
+            log_info "PostgreSQL $installed_version found, upgrading to ${POSTGRES_VERSION}"
+        fi
+    fi
+
     # Add PostgreSQL repository
     if [[ ! -f /etc/apt/sources.list.d/pgdg.list ]]; then
-        wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
-        echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+        # Get Debian codename
+        DEBIAN_CODENAME=$(lsb_release -cs)
+
+        # Download and install GPG key
+        if [[ ! -f /etc/apt/trusted.gpg.d/postgresql.gpg ]]; then
+            wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+        fi
+        echo "deb http://apt.postgresql.org/pub/repos/apt ${DEBIAN_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
         sudo apt-get update
     fi
 
