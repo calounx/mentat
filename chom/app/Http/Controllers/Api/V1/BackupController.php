@@ -3,24 +3,30 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Requests\StoreBackupRequest;
+use App\Http\Resources\BackupResource;
+use App\Repositories\BackupRepository;
+use App\Services\BackupService;
+use App\Services\QuotaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Backup Controller
  *
- * Handles backup management operations:
- * - List backups (all or for specific site)
- * - Create new backup
- * - View backup details
- * - Download backup
- * - Restore from backup
- * - Delete backup
+ * Handles backup management operations through repository and service patterns.
+ * Controllers are kept thin - business logic delegated to services.
  *
  * @package App\Http\Controllers\Api\V1
  */
 class BackupController extends ApiController
 {
+    public function __construct(
+        private readonly BackupRepository $backupRepository,
+        private readonly BackupService $backupService,
+        private readonly QuotaService $quotaService
+    ) {}
+
     /**
      * List all backups for the current tenant.
      *
@@ -34,24 +40,22 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            // Build query
-            $query = \App\Models\SiteBackup::whereHas('site', function ($q) use ($tenant) {
-                $q->where('tenant_id', $tenant->id);
-            })->with(['site:id,domain']);
+            $filters = [
+                'site_id' => $request->input('site_id'),
+                'status' => $request->input('status'),
+                'type' => $request->input('type'),
+            ];
 
-            // Filter by site if provided
-            if ($request->filled('site_id')) {
-                $query->where('site_id', $request->input('site_id'));
-            }
+            $backups = $this->backupRepository->findByTenant(
+                $tenant->id,
+                $filters,
+                $this->getPaginationLimit($request)
+            );
 
-            // Apply common filters
-            $this->applyFilters($query, $request);
-
-            // Paginate
-            $backups = $query->paginate($this->getPaginationLimit($request));
-
-            return $this->paginatedResponse($backups);
-
+            return $this->paginatedResponse(
+                $backups,
+                fn($backup) => new BackupResource($backup)
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -67,20 +71,17 @@ class BackupController extends ApiController
     public function indexForSite(Request $request, string $siteId): JsonResponse
     {
         try {
-            // Validate site access
-            $site = $this->validateTenantAccess(
-                $request,
+            $this->validateTenantAccess($request, $siteId, \App\Models\Site::class);
+
+            $backups = $this->backupRepository->findBySite(
                 $siteId,
-                \App\Models\Site::class
+                $this->getPaginationLimit($request)
             );
 
-            // Get backups for this site
-            $backups = $site->backups()
-                ->orderBy('created_at', 'desc')
-                ->paginate($this->getPaginationLimit($request));
-
-            return $this->paginatedResponse($backups);
-
+            return $this->paginatedResponse(
+                $backups,
+                fn($backup) => new BackupResource($backup)
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -95,24 +96,21 @@ class BackupController extends ApiController
     public function store(StoreBackupRequest $request): JsonResponse
     {
         try {
-            $validated = $request->validated();
-
-            $site = $this->validateTenantAccess(
+            $this->validateTenantAccess(
                 $request,
-                $validated['site_id'],
+                $request->validated()['site_id'],
                 \App\Models\Site::class
             );
 
-            $this->logInfo('Backup creation initiated', [
-                'site_id' => $site->id,
-                'backup_type' => $validated['backup_type'],
-            ]);
-
-            return $this->createdResponse(
-                ['site_id' => $site->id, 'status' => 'pending'],
-                'Backup is being created.'
+            $backup = $this->backupService->createBackup(
+                $request->validated()['site_id'],
+                $request->validated()['backup_type'] ?? 'full'
             );
 
+            return $this->createdResponse(
+                new BackupResource($backup),
+                'Backup is being created.'
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -130,15 +128,13 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            // Find backup and validate access
-            $backup = \App\Models\SiteBackup::with('site')->findOrFail($id);
+            $backup = $this->backupRepository->findById($id);
 
-            if ($backup->site->tenant_id !== $tenant->id) {
-                abort(403, 'You do not have access to this backup.');
+            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+                abort(404, 'Backup not found.');
             }
 
-            return $this->successResponse($backup);
-
+            return $this->successResponse(new BackupResource($backup));
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -156,25 +152,36 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            // Find backup and validate access
-            $backup = \App\Models\SiteBackup::with('site')->findOrFail($id);
+            $backup = $this->backupRepository->findById($id);
 
-            if ($backup->site->tenant_id !== $tenant->id) {
-                abort(403, 'You do not have access to this backup.');
+            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+                abort(404, 'Backup not found.');
             }
 
-            // TODO: Implement download logic
-            // return Storage::download($backup->file_path);
+            if ($backup->status !== 'completed' || !$backup->file_path) {
+                return $this->errorResponse(
+                    'BACKUP_NOT_READY',
+                    'Backup is not ready for download.',
+                    [],
+                    400
+                );
+            }
+
+            if (!Storage::exists($backup->file_path)) {
+                return $this->errorResponse(
+                    'FILE_NOT_FOUND',
+                    'Backup file not found.',
+                    [],
+                    404
+                );
+            }
 
             $this->logInfo('Backup download initiated', ['backup_id' => $id]);
 
-            return $this->errorResponse(
-                'NOT_IMPLEMENTED',
-                'Backup download not yet implemented.',
-                [],
-                501
+            return Storage::download(
+                $backup->file_path,
+                basename($backup->file_path)
             );
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -192,29 +199,18 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            // Find backup and validate access
-            $backup = \App\Models\SiteBackup::with('site')->findOrFail($id);
+            $backup = $this->backupRepository->findById($id);
 
-            if ($backup->site->tenant_id !== $tenant->id) {
-                abort(403, 'You do not have access to this backup.');
+            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+                abort(404, 'Backup not found.');
             }
 
-            // TODO: Implement restore logic
-            // This would typically:
-            // 1. Validate backup integrity
-            // 2. Dispatch restore job
-            // 3. Return job status
-
-            $this->logInfo('Backup restore initiated', [
-                'backup_id' => $id,
-                'site_id' => $backup->site_id,
-            ]);
+            $this->backupService->restoreBackup($id);
 
             return $this->successResponse(
                 ['backup_id' => $id, 'status' => 'restoring'],
                 'Backup restore is in progress.'
             );
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -232,23 +228,18 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            // Find backup and validate access
-            $backup = \App\Models\SiteBackup::with('site')->findOrFail($id);
+            $backup = $this->backupRepository->findById($id);
 
-            if ($backup->site->tenant_id !== $tenant->id) {
-                abort(403, 'You do not have access to this backup.');
+            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+                abort(404, 'Backup not found.');
             }
 
-            // TODO: Implement backup deletion logic
-            // $backup->delete();
-
-            $this->logInfo('Backup deleted', ['backup_id' => $id]);
+            $this->backupService->deleteBackup($id);
 
             return $this->successResponse(
                 ['id' => $id],
                 'Backup deleted successfully.'
             );
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }

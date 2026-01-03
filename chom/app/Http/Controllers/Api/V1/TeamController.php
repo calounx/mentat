@@ -5,27 +5,29 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\InviteTeamMemberRequest;
 use App\Http\Requests\UpdateOrganizationRequest;
 use App\Http\Requests\UpdateTeamMemberRequest;
+use App\Http\Resources\TeamMemberResource;
+use App\Repositories\TenantRepository;
+use App\Repositories\UserRepository;
+use App\Services\TeamManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Team Controller
  *
- * Handles team/organization management:
- * - List team members
- * - Invite new members
- * - List pending invitations
- * - Cancel invitations
- * - View member details
- * - Update member role
- * - Remove team member
- * - Transfer ownership
- * - View/update organization settings
+ * Handles team/organization management through repository and service patterns.
+ * Controllers are kept thin - business logic delegated to services.
  *
  * @package App\Http\Controllers\Api\V1
  */
 class TeamController extends ApiController
 {
+    public function __construct(
+        private readonly UserRepository $userRepository,
+        private readonly TenantRepository $tenantRepository,
+        private readonly TeamManagementService $teamManagementService
+    ) {}
+
     /**
      * List team members.
      *
@@ -37,14 +39,15 @@ class TeamController extends ApiController
         try {
             $organization = $this->getOrganization($request);
 
-            // Get members
-            $members = $organization->members()
-                ->orderBy('role')
-                ->orderBy('created_at')
-                ->paginate($this->getPaginationLimit($request));
+            $members = $this->userRepository->findByOrganization(
+                $organization->id,
+                $this->getPaginationLimit($request)
+            );
 
-            return $this->paginatedResponse($members);
-
+            return $this->paginatedResponse(
+                $members,
+                fn($member) => new TeamMemberResource($member)
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -60,18 +63,18 @@ class TeamController extends ApiController
     {
         try {
             $organization = $this->getOrganization($request);
-            $validated = $request->validated();
 
-            $this->logInfo('Team member invitation sent', [
-                'email' => $validated['email'],
-                'role' => $validated['role'],
-            ]);
-
-            return $this->createdResponse(
-                ['email' => $validated['email'], 'status' => 'pending'],
-                'Invitation sent successfully.'
+            $invitation = $this->teamManagementService->inviteMember(
+                $organization->id,
+                $request->validated()['email'],
+                $request->validated()['role'],
+                $request->user()->id
             );
 
+            return $this->createdResponse(
+                $invitation,
+                'Invitation sent successfully.'
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -88,14 +91,12 @@ class TeamController extends ApiController
         try {
             $organization = $this->getOrganization($request);
 
-            // Get pending invitations
-            $invitations = $organization->invitations()
-                ->where('status', 'pending')
-                ->orderBy('created_at', 'desc')
-                ->paginate($this->getPaginationLimit($request));
+            $invitations = $this->teamManagementService->getPendingInvitations(
+                $organization->id,
+                $this->getPaginationLimit($request)
+            );
 
             return $this->paginatedResponse($invitations);
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -111,24 +112,16 @@ class TeamController extends ApiController
     public function cancelInvitation(Request $request, string $id): JsonResponse
     {
         try {
-            // Require admin role
             $this->requireAdmin($request);
 
             $organization = $this->getOrganization($request);
 
-            // Find invitation
-            $invitation = $organization->invitations()->findOrFail($id);
-
-            // TODO: Implement cancellation logic
-            // $invitation->update(['status' => 'cancelled']);
-
-            $this->logInfo('Team invitation cancelled', ['invitation_id' => $id]);
+            $this->teamManagementService->cancelInvitation($id, $organization->id);
 
             return $this->successResponse(
                 ['id' => $id],
                 'Invitation cancelled successfully.'
             );
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -146,11 +139,13 @@ class TeamController extends ApiController
         try {
             $organization = $this->getOrganization($request);
 
-            // Find member
-            $member = $organization->members()->findOrFail($id);
+            $member = $this->userRepository->findById($id);
 
-            return $this->successResponse($member);
+            if (!$member || $member->organization_id !== $organization->id) {
+                abort(404, 'Team member not found.');
+            }
 
+            return $this->successResponse(new TeamMemberResource($member));
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -167,20 +162,17 @@ class TeamController extends ApiController
     {
         try {
             $organization = $this->getOrganization($request);
-            $validated = $request->validated();
 
-            $member = $organization->members()->findOrFail($id);
-
-            $this->logInfo('Team member role updated', [
-                'member_id' => $id,
-                'changes' => $validated,
-            ]);
-
-            return $this->successResponse(
-                $member,
-                'Member role updated successfully.'
+            $member = $this->teamManagementService->updateMemberRole(
+                $id,
+                $organization->id,
+                $request->validated()['role']
             );
 
+            return $this->successResponse(
+                new TeamMemberResource($member),
+                'Member role updated successfully.'
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -196,26 +188,11 @@ class TeamController extends ApiController
     public function destroy(Request $request, string $id): JsonResponse
     {
         try {
-            // Require admin role
             $this->requireAdmin($request);
 
             $organization = $this->getOrganization($request);
 
-            // Find member
-            $member = $organization->members()->findOrFail($id);
-
-            // Prevent removing owner
-            if ($member->role === 'owner') {
-                return $this->errorResponse(
-                    'CANNOT_REMOVE_OWNER',
-                    'Cannot remove the organization owner.',
-                    [],
-                    403
-                );
-            }
-
-            // Prevent self-removal
-            if ($member->id === $request->user()->id) {
+            if ($id === $request->user()->id) {
                 return $this->errorResponse(
                     'CANNOT_REMOVE_SELF',
                     'Cannot remove yourself from the organization.',
@@ -224,16 +201,12 @@ class TeamController extends ApiController
                 );
             }
 
-            // TODO: Implement member removal logic
-            // $member->delete();
-
-            $this->logInfo('Team member removed', ['member_id' => $id]);
+            $this->teamManagementService->removeMember($id, $organization->id);
 
             return $this->successResponse(
                 ['id' => $id],
                 'Member removed successfully.'
             );
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -248,35 +221,24 @@ class TeamController extends ApiController
     public function transferOwnership(Request $request): JsonResponse
     {
         try {
-            // Require owner role
             $this->requireOwner($request);
 
             $organization = $this->getOrganization($request);
 
-            // Validate input
             $validated = $request->validate([
                 'new_owner_id' => ['required', 'exists:users,id'],
             ]);
 
-            // Find new owner
-            $newOwner = $organization->members()->findOrFail($validated['new_owner_id']);
-
-            // TODO: Implement ownership transfer logic
-            // This would typically:
-            // 1. Update current owner to admin
-            // 2. Update new owner to owner
-            // 3. Log the transfer
-            // 4. Send notifications
-
-            $this->logInfo('Ownership transfer initiated', [
-                'new_owner_id' => $validated['new_owner_id'],
-            ]);
+            $this->teamManagementService->transferOwnership(
+                $organization->id,
+                $request->user()->id,
+                $validated['new_owner_id']
+            );
 
             return $this->successResponse(
                 ['new_owner_id' => $validated['new_owner_id']],
                 'Ownership transferred successfully.'
             );
-
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
@@ -296,7 +258,6 @@ class TeamController extends ApiController
             $organization = $this->getOrganization($request);
 
             return $this->successResponse($organization);
-
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
@@ -312,17 +273,16 @@ class TeamController extends ApiController
     {
         try {
             $organization = $this->getOrganization($request);
-            $validated = $request->validated();
 
-            $this->logInfo('Organization updated', [
-                'organization_id' => $organization->id,
-            ]);
-
-            return $this->successResponse(
-                $organization,
-                'Organization updated successfully.'
+            $updatedOrganization = $this->tenantRepository->update(
+                $organization->id,
+                $request->validated()
             );
 
+            return $this->successResponse(
+                $updatedOrganization,
+                'Organization updated successfully.'
+            );
         } catch (\Exception $e) {
             return $this->handleException($e);
         }
