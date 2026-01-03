@@ -1,0 +1,181 @@
+{
+  "dashboard": {
+    "title": "CHOM - Business Metrics",
+    "tags": ["chom", "business", "metrics"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "1m",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Site Provisioning Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(chom_laravel_site_provisioning_total[5m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "provisions/s", "format": "short"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Site Provisioning Success Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(chom_laravel_site_provisioning_total{status=\"success\"}[5m])) / sum(rate(chom_laravel_site_provisioning_total[5m])) * 100",
+            "legendFormat": "Success Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "%", "format": "percent"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [90], "type": "lt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "name": "Low Site Provisioning Success Rate"
+        }
+      },
+      {
+        "id": 3,
+        "title": "VPS Operations Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(chom_laravel_vps_operations_total[5m])) by (operation, status)",
+            "legendFormat": "{{operation}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "operations/s", "format": "short"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "VPS Operation Duration (p95)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(chom_laravel_vps_operation_duration_seconds_bucket[5m])) by (le, operation))",
+            "legendFormat": "{{operation}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "seconds", "format": "s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Queue Job Processing Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(chom_laravel_queue_jobs_total[5m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "jobs/s", "format": "short"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Queue Job Success Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(chom_laravel_queue_jobs_total{status=\"success\"}[5m])) / sum(rate(chom_laravel_queue_jobs_total[5m])) * 100",
+            "legendFormat": "Success Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "%", "format": "percent"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Tenant Resource Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(chom_laravel_tenant_sites_count) by (tenant_id)",
+            "legendFormat": "Sites - {{tenant_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "count", "format": "short"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Tenant Storage Usage",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(chom_laravel_tenant_storage_gb) by (tenant_id)",
+            "legendFormat": "Storage GB - {{tenant_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "GB", "format": "decgbytes"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "API Requests by Tenant",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(chom_laravel_tenant_requests_total[5m])) by (tenant_id))",
+            "legendFormat": "{{tenant_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "req/s", "format": "short"},
+          {"format": "short"}
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    }
+  }
+}
