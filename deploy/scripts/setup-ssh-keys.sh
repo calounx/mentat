@@ -121,8 +121,7 @@ Host mentat mentat.arewel.com
     HostName mentat.arewel.com
     User $DEPLOY_USER
     IdentityFile $SSH_KEY_PATH
-    StrictHostKeyChecking no
-    UserKnownHostsFile /dev/null
+    StrictHostKeyChecking accept-new
     ServerAliveInterval 60
     ServerAliveCountMax 3
 
@@ -130,8 +129,7 @@ Host landsraad landsraad.arewel.com
     HostName landsraad.arewel.com
     User $DEPLOY_USER
     IdentityFile $SSH_KEY_PATH
-    StrictHostKeyChecking no
-    UserKnownHostsFile /dev/null
+    StrictHostKeyChecking accept-new
     ServerAliveInterval 60
     ServerAliveCountMax 3
 EOF
