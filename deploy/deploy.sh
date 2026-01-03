@@ -67,7 +67,7 @@ remote_exec() {
     local cmd=$4
     local key_path="${KEYS_DIR}/chom_deploy_key"
 
-    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    ssh -o StrictHostKeyChecking=accept-new \
         -i "$key_path" -p "$port" "${user}@${host}" "$cmd"
 }
 
@@ -80,7 +80,7 @@ remote_copy() {
     local dest=$5
     local key_path="${KEYS_DIR}/chom_deploy_key"
 
-    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    scp -o StrictHostKeyChecking=accept-new \
         -i "$key_path" -P "$port" "$src" "${user}@${host}:${dest}"
 }
 
@@ -123,8 +123,19 @@ deploy_vpsmanager() {
     local hostname=$(get_config '.vpsmanager.hostname')
     local obs_ip=$(get_config '.observability.ip')
 
+    # Validate IP addresses to prevent command injection
     if [[ "$ip" == "0.0.0.0" ]]; then
         log_error "Please configure vpsmanager.ip in configs/inventory.yaml"
+        exit 1
+    fi
+
+    if [[ ! "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        log_error "Invalid IP address format: $ip"
+        exit 1
+    fi
+
+    if [[ ! "$obs_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        log_error "Invalid observability IP address format: $obs_ip"
         exit 1
     fi
 
