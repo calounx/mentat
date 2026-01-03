@@ -517,9 +517,9 @@ phase_prepare_mentat() {
     log_section "Phase 4: Preparing Mentat (Observability Server)"
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Run prepare script as stilgar user
+        # Run prepare script with sudo (needs root for system packages)
         log_info "Running prepare-mentat.sh"
-        sudo -u "$DEPLOY_USER" bash "${SCRIPT_DIR}/scripts/prepare-mentat.sh" || {
+        sudo bash "${SCRIPT_DIR}/scripts/prepare-mentat.sh" || {
             log_error "Mentat preparation failed"
             return 1
         }
@@ -540,7 +540,7 @@ phase_prepare_landsraad() {
     log_section "Phase 5: Preparing Landsraad (Application Server)"
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Copy prepare script to landsraad and run
+        # Copy prepare script to landsraad and run with sudo
         log_info "Copying scripts to $LANDSRAAD_HOST"
         sudo -u "$DEPLOY_USER" scp -r \
             "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
@@ -549,7 +549,7 @@ phase_prepare_landsraad() {
 
         log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST"
         sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
-            "bash /tmp/prepare-landsraad.sh" || {
+            "sudo bash /tmp/prepare-landsraad.sh" || {
             log_error "Landsraad preparation failed"
             return 1
         }
