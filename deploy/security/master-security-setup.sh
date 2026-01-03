@@ -9,8 +9,65 @@
 
 set -euo pipefail
 
-# Configuration
+# Dependency validation - MUST run before sourcing any files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Validate dependencies before doing anything else
+validate_deployment_dependencies() {
+    local script_dir="$1"
+    local deploy_root="$2"
+    local script_name="$(basename "$0")"
+    local errors=()
+
+    if [[ ! -d "$deploy_root" ]]; then
+        errors+=("Deploy root directory not found: $deploy_root")
+    fi
+
+    local utils_dir="${deploy_root}/utils"
+    if [[ ! -d "$utils_dir" ]]; then
+        errors+=("Utils directory not found: $utils_dir")
+    else
+        local required_utils=(
+            "${utils_dir}/logging.sh"
+            "${utils_dir}/colors.sh"
+            "${utils_dir}/dependency-validation.sh"
+        )
+
+        for util_file in "${required_utils[@]}"; do
+            if [[ ! -f "$util_file" ]]; then
+                errors+=("Required utility file not found: $util_file")
+            elif [[ ! -r "$util_file" ]]; then
+                errors+=("Required utility file not readable: $util_file")
+            fi
+        done
+    fi
+
+    local security_dir="${deploy_root}/security"
+    if [[ ! -d "$security_dir" ]]; then
+        errors+=("Security directory not found: $security_dir")
+    fi
+
+    if [[ ${#errors[@]} -gt 0 ]]; then
+        echo "" >&2
+        echo "ERROR: Missing required dependencies for ${script_name}" >&2
+        echo "" >&2
+        echo "Script location: ${script_dir}" >&2
+        echo "Deploy root: ${deploy_root}" >&2
+        echo "" >&2
+        echo "Missing dependencies:" >&2
+        for error in "${errors[@]}"; do
+            echo "  - ${error}" >&2
+        done
+        echo "" >&2
+        echo "Run from repository root: sudo ./deploy/security/${script_name}" >&2
+        exit 1
+    fi
+}
+
+validate_deployment_dependencies "$SCRIPT_DIR" "$DEPLOY_ROOT"
+
+# Configuration
 LOG_FILE="/var/log/chom/master-security-setup.log"
 SERVER_ROLE="${SERVER_ROLE:-}"
 DEPLOY_USER="${DEPLOY_USER:-stilgar}"

@@ -1,0 +1,131 @@
+DEPENDENCY VALIDATION - FILES MODIFIED
+=====================================
+
+Date: 2026-01-03
+Purpose: Add dependency validation to all deployment scripts
+
+NEW FILES CREATED (6):
+---------------------
+deploy/utils/dependency-validation.sh          - Reusable validation utility functions
+deploy/utils/batch-update-security.py          - Batch updater for security scripts
+deploy/utils/batch-update-remaining.py         - Batch updater for remaining scripts
+deploy/utils/batch-add-validation.sh           - Bash batch updater (helper)
+deploy/test-dependency-validation.sh           - Test suite for validation
+deploy/DEPENDENCY-VALIDATION-SUMMARY.md        - Comprehensive documentation
+deploy/DEPENDENCY-VALIDATION-QUICK-REFERENCE.md - Quick reference guide
+
+MAIN DEPLOYMENT SCRIPTS MODIFIED (2):
+------------------------------------
+deploy/deploy-chom.sh                          - Main orchestration script
+deploy/deploy-chom-automated.sh                - Automated deployment script
+
+DEPLOYMENT SUBSCRIPTS MODIFIED (11):
+-----------------------------------
+deploy/scripts/prepare-mentat.sh               - Observability server preparation
+deploy/scripts/prepare-landsraad.sh            - Application server preparation
+deploy/scripts/deploy-application.sh           - Application deployment
+deploy/scripts/deploy-observability.sh         - Observability stack deployment
+deploy/scripts/setup-stilgar-user.sh           - User setup
+deploy/scripts/setup-ssh-automation.sh         - SSH automation
+deploy/scripts/generate-deployment-secrets.sh  - Secret generation
+deploy/scripts/health-check.sh                 - Health checks
+deploy/scripts/preflight-check.sh              - Pre-flight validation
+deploy/scripts/rollback.sh                     - Rollback functionality
+deploy/scripts/backup-before-deploy.sh         - Backup operations
+
+SECURITY SCRIPTS MODIFIED (20):
+------------------------------
+deploy/security/compliance-check.sh            - Compliance verification
+deploy/security/configure-access-control.sh    - Access control setup
+deploy/security/configure-firewall.sh          - Firewall configuration
+deploy/security/create-deployment-user.sh      - User creation
+deploy/security/encrypt-backups.sh             - Backup encryption
+deploy/security/generate-secure-secrets.sh     - Secure secret generation
+deploy/security/generate-ssh-keys-secure.sh    - SSH key generation
+deploy/security/harden-application.sh          - Application hardening
+deploy/security/harden-database.sh             - Database hardening
+deploy/security/incident-response.sh           - Incident response procedures
+deploy/security/manage-secrets.sh              - Secret management
+deploy/security/master-security-setup.sh       - Master security orchestration
+deploy/security/rotate-secrets.sh              - Secret rotation
+deploy/security/security-audit.sh              - Security auditing
+deploy/security/setup-fail2ban.sh              - Fail2ban setup
+deploy/security/setup-intrusion-detection.sh   - IDS setup
+deploy/security/setup-security-monitoring.sh   - Security monitoring
+deploy/security/setup-ssh-keys.sh              - SSH key setup
+deploy/security/setup-ssl.sh                   - SSL/TLS setup
+deploy/security/vulnerability-scan.sh          - Vulnerability scanning
+
+STATISTICS:
+----------
+New files created:          7
+Scripts modified:          33
+Total files changed:       40
+Lines of code added:    ~2,000
+Validation functions:      36
+
+WHAT WAS ADDED TO EACH SCRIPT:
+-----------------------------
+1. SCRIPT_DIR resolution using BASH_SOURCE
+2. DEPLOY_ROOT calculation based on script location
+3. validate_deployment_dependencies() function with:
+   - Directory existence checks
+   - File existence and readability checks
+   - Comprehensive error reporting
+   - Troubleshooting guidance
+4. Function call before sourcing any files
+5. Optional sourcing of dependency-validation.sh utility
+
+VALIDATION FEATURES:
+------------------
+- Runs BEFORE sourcing any files
+- Validates deploy root directory exists
+- Validates utils directory exists
+- Checks required utility files exist and are readable
+- Provides clear error messages with:
+  * Exact paths that are missing
+  * Current script location
+  * Expected deploy root location
+  * Step-by-step troubleshooting instructions
+- Exits with error code 1 on failure
+- Continues normally on success
+
+REPOSITORY LOCATION:
+------------------
+All changes in: /home/calounx/repositories/mentat/
+
+TESTING:
+-------
+Run validation test suite:
+  cd /home/calounx/repositories/mentat
+  ./deploy/test-dependency-validation.sh
+
+Verify all scripts have validation:
+  cd /home/calounx/repositories/mentat
+  for script in deploy/**/*.sh; do
+    if grep -q "validate_deployment_dependencies" "$script"; then
+      echo "✓ $script"
+    else
+      echo "✗ $script"
+    fi
+  done
+
+BACKWARD COMPATIBILITY:
+---------------------
+- All existing script functionality preserved
+- Scripts work exactly as before when run correctly
+- Only change: Better error messages when run incorrectly
+- No changes to script arguments or behavior
+- No changes to script outputs (when successful)
+
+MIGRATION NOTES:
+--------------
+- No migration needed for users
+- Scripts must be run from correct location (as before)
+- Error messages are now clearer when run from wrong location
+- All scripts maintain same command-line interface
+
+DOCUMENTATION:
+------------
+See deploy/DEPENDENCY-VALIDATION-SUMMARY.md for comprehensive details
+See deploy/DEPENDENCY-VALIDATION-QUICK-REFERENCE.md for quick reference

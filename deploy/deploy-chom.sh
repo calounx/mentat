@@ -7,9 +7,89 @@
 
 set -euo pipefail
 
+# Dependency validation - MUST run before sourcing any files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Validate dependencies before doing anything else
+validate_deployment_dependencies() {
+    local script_dir="$1"
+    local script_name="$(basename "$0")"
+    local deploy_root="$script_dir"
+    local errors=()
+
+    # Validate deploy root structure
+    if [[ ! -d "$deploy_root" ]]; then
+        errors+=("Deploy root directory not found: $deploy_root")
+    fi
+
+    # Validate utils directory
+    local utils_dir="${deploy_root}/utils"
+    if [[ ! -d "$utils_dir" ]]; then
+        errors+=("Utils directory not found: $utils_dir")
+    else
+        # Validate required utility files
+        local required_utils=(
+            "${utils_dir}/logging.sh"
+            "${utils_dir}/colors.sh"
+            "${utils_dir}/notifications.sh"
+            "${utils_dir}/idempotence.sh"
+            "${utils_dir}/dependency-validation.sh"
+        )
+
+        for util_file in "${required_utils[@]}"; do
+            if [[ ! -f "$util_file" ]]; then
+                errors+=("Required utility file not found: $util_file")
+            elif [[ ! -r "$util_file" ]]; then
+                errors+=("Required utility file not readable: $util_file")
+            fi
+        done
+    fi
+
+    # Validate scripts directory
+    local scripts_dir="${deploy_root}/scripts"
+    if [[ ! -d "$scripts_dir" ]]; then
+        errors+=("Scripts directory not found: $scripts_dir")
+    fi
+
+    # If errors found, print comprehensive error message and exit
+    if [[ ${#errors[@]} -gt 0 ]]; then
+        echo ""
+        echo "ERROR: Missing required dependencies for ${script_name}" >&2
+        echo ""
+        echo "Script location: ${script_dir}" >&2
+        echo "Deploy root: ${deploy_root}" >&2
+        echo "Utils directory: ${utils_dir}" >&2
+        echo ""
+        echo "Missing dependencies:" >&2
+        for error in "${errors[@]}"; do
+            echo "  - ${error}" >&2
+        done
+        echo ""
+        echo "Troubleshooting:" >&2
+        echo "  1. Verify you are in the correct repository:" >&2
+        echo "     cd /home/calounx/repositories/mentat" >&2
+        echo "" >&2
+        echo "  2. Run the script from the repository root:" >&2
+        echo "     sudo ./deploy/${script_name}" >&2
+        echo "" >&2
+        echo "  3. Check that all deployment files are present:" >&2
+        echo "     ls -la deploy/utils/" >&2
+        echo "" >&2
+        echo "  4. If files are missing, ensure git repository is complete:" >&2
+        echo "     git status" >&2
+        echo "     git pull" >&2
+        echo "" >&2
+        exit 1
+    fi
+}
+
+# Run validation before sourcing
+validate_deployment_dependencies "$SCRIPT_DIR"
+
+# Now safe to source utility files
 source "${SCRIPT_DIR}/utils/logging.sh"
 source "${SCRIPT_DIR}/utils/notifications.sh"
+source "${SCRIPT_DIR}/utils/dependency-validation.sh"
 
 # Default configuration
 ENVIRONMENT="${ENVIRONMENT:-production}"
