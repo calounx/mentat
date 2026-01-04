@@ -540,19 +540,28 @@ phase_prepare_landsraad() {
     log_section "Phase 5: Preparing Landsraad (Application Server)"
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Copy prepare script to landsraad using current user (has file access)
-        log_info "Copying scripts to $LANDSRAAD_HOST"
-        scp -r \
-            "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
-            "${SCRIPT_DIR}/utils" \
-            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/" || {
-            log_error "Failed to copy scripts to $LANDSRAAD_HOST"
+        # Copy deploy directory to landsraad using current user (has file access)
+        log_info "Copying deployment files to $LANDSRAAD_HOST"
+
+        # Create proper directory structure on remote
+        ssh "${CURRENT_USER}@$LANDSRAAD_HOST" "mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
+
+        # Copy files maintaining structure
+        scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
+            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
+            log_error "Failed to copy prepare-landsraad.sh"
+            return 1
+        }
+
+        scp -r "${SCRIPT_DIR}/utils/"* \
+            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/utils/" || {
+            log_error "Failed to copy utils"
             return 1
         }
 
         log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST"
         ssh "${CURRENT_USER}@$LANDSRAAD_HOST" \
-            "sudo bash /tmp/prepare-landsraad.sh" || {
+            "cd /tmp/chom-deploy && sudo bash scripts/prepare-landsraad.sh" || {
             log_error "Landsraad preparation failed"
             return 1
         }
