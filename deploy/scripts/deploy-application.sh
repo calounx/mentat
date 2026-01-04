@@ -261,9 +261,9 @@ build_assets() {
         return 0
     fi
 
-    # Install dependencies
+    # Install dependencies (including dev for build tools like vite)
     log_info "Installing NPM dependencies"
-    if npm ci --production 2>&1 | tee -a "$LOG_FILE"; then
+    if npm ci 2>&1 | tee -a "$LOG_FILE"; then
         log_success "NPM dependencies installed"
     else
         log_warning "NPM install failed, but continuing deployment"
@@ -273,6 +273,8 @@ build_assets() {
     log_info "Building assets"
     if npm run build 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Assets built successfully"
+        # Prune dev dependencies after build to save space
+        npm prune --production 2>&1 | tee -a "$LOG_FILE" || true
     else
         log_warning "Asset build failed, but continuing deployment"
     fi
