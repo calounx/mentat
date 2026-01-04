@@ -427,6 +427,14 @@ phase_ssh_setup() {
     log_step "Setting up passwordless SSH: $MENTAT_HOST -> $LANDSRAAD_HOST"
 
     if [[ "$DRY_RUN" != "true" ]]; then
+        # Check if SSH already works
+        log_info "Checking if passwordless SSH already configured"
+        if sudo -u "$DEPLOY_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
+            log_success "Passwordless SSH already working - skipping setup"
+            log_success "Phase 2: SSH automation completed"
+            return 0
+        fi
+
         # Generate SSH key on mentat
         log_info "Generating SSH key on mentat for $DEPLOY_USER"
         sudo -u "$DEPLOY_USER" bash -c "
@@ -455,7 +463,7 @@ phase_ssh_setup() {
 
         # Test connection
         log_info "Testing SSH connection"
-        if sudo -u "$DEPLOY_USER" ssh -o BatchMode=yes "$DEPLOY_USER@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
+        if sudo -u "$DEPLOY_USER" ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
             log_success "Passwordless SSH connection verified"
         else
             log_warning "SSH connection test failed - may need manual intervention"

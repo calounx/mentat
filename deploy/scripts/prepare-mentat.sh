@@ -464,6 +464,12 @@ EOF
 install_alertmanager() {
     log_step "Installing AlertManager ${ALERTMANAGER_VERSION}"
 
+    # Check if already installed and running
+    if systemctl is-active --quiet alertmanager 2>/dev/null; then
+        log_info "Stopping alertmanager service before update"
+        sudo systemctl stop alertmanager
+    fi
+
     cd /tmp
     wget -q "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}/alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
     tar xzf "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz"
