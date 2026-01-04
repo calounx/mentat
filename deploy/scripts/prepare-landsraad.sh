@@ -333,6 +333,11 @@ server {
         deny all;
     }
 
+    # Livewire assets (served via PHP route, not static files)
+    location /livewire {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
     # Static files caching
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$ {
         expires 1y;
@@ -477,6 +482,11 @@ server {
 
     location ~ /\. {
         deny all;
+    }
+
+    # Livewire assets (served via PHP route, not static files)
+    location /livewire {
+        try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$ {
