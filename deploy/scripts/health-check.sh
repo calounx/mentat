@@ -406,43 +406,43 @@ main() {
     log_info "App URL: $APP_URL"
     echo ""
 
-    # System checks
+    # System checks (|| true prevents set -e from exiting on failures)
     log_section "System Services"
-    check_service "nginx"
-    check_service "php${PHP_VERSION}-fpm"
-    check_service "postgresql"
-    check_service "redis-server"
+    check_service "nginx" || true
+    check_service "php${PHP_VERSION}-fpm" || true
+    check_service "postgresql" || true
+    check_service "redis-server" || true
 
-    # Port checks
+    # Port checks (|| true prevents set -e from exiting on failures)
     log_section "Port Availability"
-    check_port 80 "Nginx HTTP"
-    check_port 443 "Nginx HTTPS" || true  # Don't fail if HTTPS not configured
-    check_port 5432 "PostgreSQL"
-    check_port 6379 "Redis"
+    check_port 80 "Nginx HTTP" || true
+    check_port 443 "Nginx HTTPS" || true
+    check_port 5432 "PostgreSQL" || true
+    check_port 6379 "Redis" || true
 
-    # Application checks
+    # Application checks (|| true prevents set -e from exiting on failures)
     log_section "Application Health"
-    check_laravel_app
-    check_environment
-    check_permissions
-    check_database
-    check_redis
-    check_queue_workers
+    check_laravel_app || true
+    check_environment || true
+    check_permissions || true
+    check_database || true
+    check_redis || true
+    check_queue_workers || true
 
     # HTTP checks
     log_section "HTTP Endpoints"
-    check_http_response "$APP_URL"
-    check_metrics_endpoint
+    check_http_response "$APP_URL" || true
+    check_metrics_endpoint || true
 
     # System resource checks
     log_section "System Resources"
-    check_disk_space 90
-    check_memory 90
+    check_disk_space 90 || true
+    check_memory 90 || true
 
     # SSL checks (optional)
     if [[ -n "${DOMAIN:-}" ]]; then
         log_section "SSL Certificate"
-        check_ssl_certificate "$DOMAIN"
+        check_ssl_certificate "$DOMAIN" || true
     fi
 
     end_timer "Health check"
