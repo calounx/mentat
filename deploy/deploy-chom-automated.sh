@@ -603,8 +603,9 @@ phase_prepare_landsraad() {
         }
 
         log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST as $DEPLOY_USER"
+        # Pass DB_PASSWORD so prepare-landsraad.sh uses the same password as .env
         sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
-            "cd /tmp/chom-deploy && sudo bash scripts/prepare-landsraad.sh" || {
+            "cd /tmp/chom-deploy && sudo DB_PASSWORD='${DB_PASSWORD}' bash scripts/prepare-landsraad.sh" || {
             log_error "Landsraad preparation failed"
             return 1
         }

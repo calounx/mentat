@@ -329,9 +329,12 @@ configure_database() {
     local db_user="${DB_USER:-chom}"
     local db_password="${DB_PASSWORD:-$(openssl rand -base64 32)}"
 
-    # Create database user
+    # Create database user (or update password if exists)
     if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$db_user'" | grep -q 1; then
         log_success "Database user $db_user already exists"
+        # Always update password to ensure it matches secrets/env
+        sudo -u postgres psql -c "ALTER USER $db_user WITH ENCRYPTED PASSWORD '$db_password';"
+        log_info "Database user password synchronized"
     else
         sudo -u postgres psql -c "CREATE USER $db_user WITH ENCRYPTED PASSWORD '$db_password';"
         log_success "Database user $db_user created"
