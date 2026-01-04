@@ -421,6 +421,11 @@ phase_user_setup() {
         sudo mkdir -p /opt/chom-deploy
         sudo cp -r "${SCRIPT_DIR}"/* /opt/chom-deploy/
         sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /opt/chom-deploy
+
+        # Ensure log directory is owned by deploy user
+        sudo mkdir -p /var/log/chom-deploy
+        sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /var/log/chom-deploy
+
         log_success "Deployment directory ready at /opt/chom-deploy"
     fi
 }
