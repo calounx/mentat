@@ -334,7 +334,8 @@ server {
     }
 
     # Livewire assets (served via PHP route, not static files)
-    location /livewire {
+    # ^~ makes prefix match take priority over regex matches
+    location ^~ /livewire {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
@@ -485,7 +486,8 @@ server {
     }
 
     # Livewire assets (served via PHP route, not static files)
-    location /livewire {
+    # ^~ makes prefix match take priority over regex matches
+    location ^~ /livewire {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
