@@ -145,7 +145,7 @@ check_port() {
 }
 
 # Check HTTP response
-# Supports both HTTP and HTTPS, with fallback for self-signed certs
+# Supports both HTTP and HTTPS, follows redirects, handles self-signed certs
 check_http_response() {
     local url="$1"
     local expected_code="${2:-200}"
@@ -153,20 +153,22 @@ check_http_response() {
 
     log_step "Checking HTTP response from $url"
 
-    local curl_opts="-s -o /dev/null -w %{http_code} --max-time $TIMEOUT"
+    # Use -L to follow redirects (HTTP->HTTPS), -k for self-signed certs on localhost
+    local curl_opts="-s -o /dev/null -w %{http_code} --max-time $TIMEOUT -L"
 
-    # For HTTPS, try with cert verification first, then without
-    if [[ "$url" == https://* ]]; then
-        local response_code=$(curl $curl_opts "$url" 2>/dev/null || echo "000")
-        if [[ "$response_code" == "000" ]]; then
-            # Try without cert verification (self-signed or pending cert)
-            response_code=$(curl $curl_opts -k "$url" 2>/dev/null || echo "000")
-            if [[ "$response_code" != "000" ]]; then
-                log_warning "HTTPS works but certificate may not be trusted"
-            fi
+    # For localhost, always use -k since cert won't match localhost
+    if [[ "$url" == *"localhost"* ]]; then
+        curl_opts="$curl_opts -k"
+    fi
+
+    local response_code=$(curl $curl_opts "$url" 2>/dev/null || echo "000")
+
+    # If HTTPS URL fails cert verification, try with -k
+    if [[ "$response_code" == "000" ]] && [[ "$url" == https://* ]]; then
+        response_code=$(curl $curl_opts -k "$url" 2>/dev/null || echo "000")
+        if [[ "$response_code" != "000" ]]; then
+            log_warning "HTTPS works but certificate may not be trusted"
         fi
-    else
-        local response_code=$(curl $curl_opts "$url" 2>/dev/null || echo "000")
     fi
 
     if [[ "$response_code" == "$expected_code" ]]; then
