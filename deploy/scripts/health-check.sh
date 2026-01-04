@@ -468,11 +468,14 @@ main() {
 
     # HTTP checks
     log_section "HTTP Endpoints"
-    # Local check is critical - app must respond locally
-    check_http_response "http://localhost" || true
-    # Public URL check is optional (may fail if DNS/SSL not ready)
+    # Public HTTPS check is primary when configured
     if [[ "$APP_URL" != "http://localhost" ]]; then
-        check_http_response "$APP_URL" 200 "true" || true
+        check_http_response "$APP_URL" 200 || true
+        # Local HTTP check accepts 301 (redirect to HTTPS is expected)
+        check_http_response "http://localhost" "301" "true" || true
+    else
+        # No public URL, localhost must return 200
+        check_http_response "http://localhost" || true
     fi
     check_metrics_endpoint || true
 
