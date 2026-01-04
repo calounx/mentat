@@ -112,9 +112,12 @@ check_service() {
 }
 
 # Check if a port is listening
+# Usage: check_port <port> <service_name> [optional]
+# If optional=true, failure is a warning not an error
 check_port() {
     local port="$1"
     local service_name="$2"
+    local optional="${3:-false}"
 
     log_step "Checking if $service_name is listening on port $port"
 
@@ -122,9 +125,14 @@ check_port() {
         log_success "$service_name is listening on port $port"
         return 0
     else
-        log_error "$service_name is not listening on port $port"
-        HEALTH_CHECK_FAILED=1
-        return 1
+        if [[ "$optional" == "true" ]]; then
+            log_warning "$service_name is not listening on port $port (optional)"
+            return 0
+        else
+            log_error "$service_name is not listening on port $port"
+            HEALTH_CHECK_FAILED=1
+            return 1
+        fi
     fi
 }
 
@@ -416,7 +424,7 @@ main() {
     # Port checks (|| true prevents set -e from exiting on failures)
     log_section "Port Availability"
     check_port 80 "Nginx HTTP" || true
-    check_port 443 "Nginx HTTPS" || true
+    check_port 443 "Nginx HTTPS" "true" || true  # Optional - SSL may not be configured
     check_port 5432 "PostgreSQL" || true
     check_port 6379 "Redis" || true
 
