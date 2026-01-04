@@ -413,6 +413,16 @@ phase_user_setup() {
     fi
 
     log_success "Phase 1: User setup completed"
+
+    # After user setup, prepare deployment directory for stilgar
+    log_step "Preparing deployment directory for $DEPLOY_USER"
+    if [[ "$DRY_RUN" != "true" ]]; then
+        # Copy deployment files to stilgar-owned location
+        sudo mkdir -p /opt/chom-deploy
+        sudo cp -r "${SCRIPT_DIR}"/* /opt/chom-deploy/
+        sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /opt/chom-deploy
+        log_success "Deployment directory ready at /opt/chom-deploy"
+    fi
 }
 
 # Phase 2: Setup SSH automation
@@ -473,6 +483,18 @@ phase_ssh_setup() {
     fi
 
     log_success "Phase 2: SSH automation completed"
+
+    # Switch execution context to stilgar for remaining phases
+    log_section "Switching to $DEPLOY_USER for deployment operations"
+
+    if [[ "$DRY_RUN" != "true" ]]; then
+        # Update SCRIPT_DIR to stilgar-owned location
+        export SCRIPT_DIR="/opt/chom-deploy"
+        export SECRETS_FILE="${SCRIPT_DIR}/.deployment-secrets"
+
+        log_info "Deployment operations will now run as $DEPLOY_USER"
+        log_info "Using deployment directory: $SCRIPT_DIR"
+    fi
 }
 
 # Phase 3: Generate deployment secrets
@@ -499,18 +521,19 @@ phase_secrets_generation() {
             interactive_flag="--interactive"
         fi
 
-        bash "${SCRIPT_DIR}/scripts/generate-deployment-secrets.sh" $interactive_flag
+        # Run as stilgar user (owner of deployment)
+        sudo -u "$DEPLOY_USER" bash "${SCRIPT_DIR}/scripts/generate-deployment-secrets.sh" $interactive_flag
 
         # Load generated secrets
         if [[ -f "$SECRETS_FILE" ]]; then
             source "$SECRETS_FILE"
 
             # Add REPO_URL if not already present
-            if ! grep -q "^export REPO_URL=" "$SECRETS_FILE"; then
+            if ! grep -q "^export REPO_URL=" "$SECRETS_FILE" 2>/dev/null; then
                 log_info "Adding REPO_URL to secrets file"
-                echo "" >> "$SECRETS_FILE"
-                echo "# Application Repository" >> "$SECRETS_FILE"
-                echo "export REPO_URL=\"https://github.com/calounx/mentat.git\"" >> "$SECRETS_FILE"
+                sudo -u "$DEPLOY_USER" bash -c "echo '' >> '$SECRETS_FILE'"
+                sudo -u "$DEPLOY_USER" bash -c "echo '# Application Repository' >> '$SECRETS_FILE'"
+                sudo -u "$DEPLOY_USER" bash -c "echo 'export REPO_URL=\"https://github.com/calounx/mentat.git\"' >> '$SECRETS_FILE'"
                 source "$SECRETS_FILE"
             fi
 
@@ -558,35 +581,35 @@ phase_prepare_landsraad() {
     log_section "Phase 5: Preparing Landsraad (Application Server)"
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Copy deploy directory to landsraad using current user (has file access)
-        log_info "Copying deployment files to $LANDSRAAD_HOST"
+        # Copy deployment files to landsraad as stilgar
+        log_info "Copying deployment files to $LANDSRAAD_HOST as $DEPLOY_USER"
 
-        # Create proper directory structure on remote
-        ssh "${CURRENT_USER}@$LANDSRAAD_HOST" "mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
+        # Create proper directory structure on remote as stilgar
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
 
-        # Copy files maintaining structure
-        scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
+        # Copy files maintaining structure (using stilgar's SSH)
+        sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
             "${SCRIPT_DIR}/scripts/deploy-application.sh" \
             "${SCRIPT_DIR}/scripts/setup-ssl.sh" \
             "${SCRIPT_DIR}/scripts/health-check.sh" \
             "${SCRIPT_DIR}/scripts/rollback.sh" \
-            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || {
+            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || {
             log_warning "Some deployment scripts not found, copying available ones"
-            scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
-                "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
+            sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
+                "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
                 log_error "Failed to copy prepare-landsraad.sh"
                 return 1
             }
         }
 
-        scp -r "${SCRIPT_DIR}/utils/"* \
-            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/utils/" || {
+        sudo -u "$DEPLOY_USER" scp -r "${SCRIPT_DIR}/utils/"* \
+            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/utils/" || {
             log_error "Failed to copy utils"
             return 1
         }
 
-        log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST"
-        ssh "${CURRENT_USER}@$LANDSRAAD_HOST" \
+        log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST as $DEPLOY_USER"
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
             "cd /tmp/chom-deploy && sudo bash scripts/prepare-landsraad.sh" || {
             log_error "Landsraad preparation failed"
             return 1
@@ -616,10 +639,10 @@ phase_deploy_application() {
             # shellcheck source=/dev/null
             source "$SECRETS_FILE"
 
-            # Create .env file on remote server
-            ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo -u $DEPLOY_USER bash" <<'ENVEOF'
-mkdir -p /var/www/chom/shared
-cat > /var/www/chom/shared/.env <<'INNEREOF'
+            # Create .env file on remote server as stilgar
+            sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "bash" <<'ENVEOF'
+sudo mkdir -p /var/www/chom/shared
+sudo bash -c 'cat > /var/www/chom/shared/.env' <<'INNEREOF'
 APP_NAME=CHOM
 APP_ENV=${APP_ENV:-production}
 APP_KEY=${APP_KEY}
@@ -656,7 +679,8 @@ MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-null}
 MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-noreply@chom.arewel.com}
 MAIL_FROM_NAME="${APP_NAME:-CHOM}"
 INNEREOF
-chmod 600 /var/www/chom/shared/.env
+sudo chmod 600 /var/www/chom/shared/.env
+sudo chown stilgar:stilgar /var/www/chom/shared/.env
 ENVEOF
 
             log_success ".env file created on $LANDSRAAD_HOST"
@@ -666,12 +690,12 @@ ENVEOF
             log_info "  Location: /var/www/chom/shared/.env"
         fi
 
-        # Run deployment script
+        # Run deployment script as stilgar
         if [[ -n "${REPO_URL:-}" ]]; then
-            log_info "Deploying application from $REPO_URL"
-            # Use current user for SSH, then sudo to deploy user on remote
-            ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" \
-                "cd /tmp/chom-deploy && sudo -u $DEPLOY_USER bash -c 'export REPO_URL=\"$REPO_URL\" && bash scripts/deploy-application.sh'" || {
+            log_info "Deploying application from $REPO_URL as $DEPLOY_USER"
+            # Use stilgar's SSH connection
+            sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" \
+                "cd /tmp/chom-deploy && bash -c 'export REPO_URL=\"$REPO_URL\" && bash scripts/deploy-application.sh'" || {
                 log_error "Application deployment failed"
                 return 1
             }
@@ -681,24 +705,24 @@ ENVEOF
             log_info "This should not happen - REPO_URL should be set in Phase 3"
         fi
 
-        # Configure Nginx for the application
+        # Configure Nginx for the application (as stilgar)
         log_step "Configuring Nginx for chom.arewel.com"
-        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo bash /tmp/chom-deploy/scripts/configure-nginx.sh" 2>/dev/null || {
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "sudo bash /tmp/chom-deploy/scripts/configure-nginx.sh" 2>/dev/null || {
             log_warning "Nginx configuration script not found, will configure SSL manually"
         }
 
-        # Setup SSL with Certbot
+        # Setup SSL with Certbot (as stilgar)
         log_step "Setting up SSL with Let's Encrypt"
         local email="${ADMIN_EMAIL:-admin@chom.arewel.com}"
-        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" \
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" \
             "sudo certbot --nginx -d chom.arewel.com --non-interactive --agree-tos --email $email --redirect" || {
             log_warning "SSL setup failed - you may need to run this manually:"
             log_info "  sudo certbot --nginx -d chom.arewel.com"
         }
 
-        # Setup firewall on landsraad
+        # Setup firewall on landsraad (as stilgar)
         log_step "Configuring firewall on $LANDSRAAD_HOST"
-        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo ufw --force enable && \
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "sudo ufw --force enable && \
             sudo ufw default deny incoming && \
             sudo ufw default allow outgoing && \
             sudo ufw allow 22/tcp && \
@@ -791,10 +815,10 @@ phase_verification() {
             fi
         done
 
-        # Check landsraad services
+        # Check landsraad services (as stilgar)
         log_step "Verifying landsraad services"
-        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "
-            for service in nginx postgresql redis-server php*-fpm; do
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "
+            for service in nginx postgresql redis-server php8.2-fpm; do
                 if systemctl is-active --quiet \$service 2>/dev/null; then
                     echo \"OK: \$service\"
                 else
