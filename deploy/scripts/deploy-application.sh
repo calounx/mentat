@@ -318,6 +318,12 @@ optimize_application() {
 
     cd "$release_path"
 
+    # Publish Livewire assets
+    php artisan livewire:publish --assets 2>/dev/null || true
+
+    # Create storage symlink (to shared storage)
+    php artisan storage:link 2>/dev/null || true
+
     # Cache configuration
     php artisan config:cache
 
