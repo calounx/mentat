@@ -380,6 +380,16 @@ display_deployment_plan() {
 phase_user_setup() {
     if [[ "$SKIP_USER_SETUP" == "true" ]]; then
         log_section "Phase 1: User Setup [SKIPPED]"
+        # Still need to ensure deployment directory exists and is updated
+        log_step "Ensuring deployment directory is current"
+        if [[ "$DRY_RUN" != "true" ]]; then
+            sudo mkdir -p /opt/chom-deploy
+            sudo cp -r "${SCRIPT_DIR}"/* /opt/chom-deploy/
+            sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /opt/chom-deploy
+            sudo mkdir -p /var/log/chom-deploy
+            sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /var/log/chom-deploy
+            log_success "Deployment directory updated"
+        fi
         return 0
     fi
 
@@ -603,9 +613,9 @@ phase_prepare_landsraad() {
         }
 
         log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST as $DEPLOY_USER"
-        # Pass DB_PASSWORD so prepare-landsraad.sh uses the same password as .env
+        # Pass all required environment variables
         sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
-            "cd /tmp/chom-deploy && sudo DB_PASSWORD='${DB_PASSWORD}' bash scripts/prepare-landsraad.sh" || {
+            "cd /tmp/chom-deploy && sudo DB_PASSWORD='${DB_PASSWORD}' APP_DOMAIN='${APP_DOMAIN:-chom.arewel.com}' SSL_EMAIL='${SSL_EMAIL:-admin@arewel.com}' bash scripts/prepare-landsraad.sh" || {
             log_error "Landsraad preparation failed"
             return 1
         }
@@ -746,26 +756,71 @@ phase_deploy_observability() {
     log_section "Phase 7: Deploying Observability Stack"
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        log_info "Deploying observability stack on mentat"
+        # Validate observability binaries are installed (Phase 4 should have done this)
+        log_step "Validating observability installation"
+        local observability_dir="/opt/observability"
+        local missing_binaries=()
 
-        # Start observability services
-        sudo systemctl start prometheus grafana-server loki promtail alertmanager node_exporter || {
-            log_warning "Some observability services failed to start"
-        }
+        for binary in prometheus promtool alertmanager loki promtail; do
+            if [[ ! -f "${observability_dir}/bin/${binary}" ]]; then
+                missing_binaries+=("$binary")
+            fi
+        done
+
+        if [[ ${#missing_binaries[@]} -gt 0 ]]; then
+            log_error "Missing binaries: ${missing_binaries[*]}"
+            log_error "Run Phase 4 (prepare-mentat) first to install observability stack"
+            return 1
+        fi
+        log_success "Observability binaries validated"
+
+        # Deploy configuration files using deploy-observability.sh
+        log_step "Deploying observability configuration"
+        if [[ -f "${SCRIPT_DIR}/scripts/deploy-observability.sh" ]]; then
+            sudo bash "${SCRIPT_DIR}/scripts/deploy-observability.sh" || {
+                log_error "Observability configuration deployment failed"
+                return 1
+            }
+        else
+            log_warning "deploy-observability.sh not found, skipping config deployment"
+        fi
+
+        # Reload systemd and start services
+        log_step "Starting observability services"
+        sudo systemctl daemon-reload
+
+        local services=(prometheus grafana-server loki promtail alertmanager node_exporter)
+        local failed_services=()
+
+        for service in "${services[@]}"; do
+            if systemctl list-unit-files | grep -q "^${service}.service"; then
+                sudo systemctl enable "$service" 2>/dev/null || true
+                sudo systemctl restart "$service" || {
+                    failed_services+=("$service")
+                }
+            else
+                log_warning "Service $service not found, skipping"
+            fi
+        done
+
+        # Wait for services to start
+        sleep 5
 
         # Verify services are running
-        sleep 3
-        local failed_services=()
-        for service in prometheus grafana-server loki promtail alertmanager node_exporter; do
-            if ! systemctl is-active --quiet "$service"; then
+        log_step "Verifying observability services"
+        for service in "${services[@]}"; do
+            if systemctl is-active --quiet "$service" 2>/dev/null; then
+                log_success "$service is running"
+            elif systemctl list-unit-files | grep -q "^${service}.service"; then
+                log_error "$service failed to start"
                 failed_services+=("$service")
             fi
         done
 
         if [[ ${#failed_services[@]} -gt 0 ]]; then
-            log_warning "Failed to start: ${failed_services[*]}"
+            log_warning "Some services failed: ${failed_services[*]}"
         else
-            log_success "All observability services started"
+            log_success "All observability services running"
         fi
 
         # Setup firewall on mentat
@@ -780,10 +835,22 @@ phase_deploy_observability() {
             sudo ufw allow 9090/tcp comment "Prometheus" && \
             sudo ufw allow 9093/tcp comment "AlertManager" && \
             sudo ufw allow 3100/tcp comment "Loki" && \
-            sudo ufw allow from "$LANDSRAAD_HOST" to any port 9100 comment "Node Exporter from landsraad" && \
+            sudo ufw allow from any to any port 9100 comment "Node Exporter" && \
             sudo ufw status verbose || {
-            log_warning "Firewall configuration failed"
+            log_warning "Firewall configuration had issues"
         }
+
+        # Verify HTTP endpoints
+        log_step "Verifying observability endpoints"
+        sleep 2
+        for endpoint in "localhost:9090/-/healthy:Prometheus" "localhost:3000/api/health:Grafana" "localhost:3100/ready:Loki" "localhost:9093/-/healthy:AlertManager"; do
+            IFS=':' read -r host port path name <<< "$endpoint"
+            if curl -sf "http://${host}:${port}/${path}" &>/dev/null; then
+                log_success "$name is healthy"
+            else
+                log_warning "$name health check failed (may need more time)"
+            fi
+        done
     else
         log_info "[DRY RUN] Would deploy observability stack"
     fi

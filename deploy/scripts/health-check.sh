@@ -145,16 +145,35 @@ check_port() {
 }
 
 # Check HTTP response
+# Supports both HTTP and HTTPS, with fallback for self-signed certs
 check_http_response() {
     local url="$1"
     local expected_code="${2:-200}"
+    local optional="${3:-false}"
 
     log_step "Checking HTTP response from $url"
 
-    local response_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" "$url" || echo "000")
+    local curl_opts="-s -o /dev/null -w %{http_code} --max-time $TIMEOUT"
+
+    # For HTTPS, try with cert verification first, then without
+    if [[ "$url" == https://* ]]; then
+        local response_code=$(curl $curl_opts "$url" 2>/dev/null || echo "000")
+        if [[ "$response_code" == "000" ]]; then
+            # Try without cert verification (self-signed or pending cert)
+            response_code=$(curl $curl_opts -k "$url" 2>/dev/null || echo "000")
+            if [[ "$response_code" != "000" ]]; then
+                log_warning "HTTPS works but certificate may not be trusted"
+            fi
+        fi
+    else
+        local response_code=$(curl $curl_opts "$url" 2>/dev/null || echo "000")
+    fi
 
     if [[ "$response_code" == "$expected_code" ]]; then
         log_success "HTTP response code: $response_code (expected: $expected_code)"
+        return 0
+    elif [[ "$optional" == "true" ]]; then
+        log_warning "HTTP response code: $response_code (expected: $expected_code) - optional check"
         return 0
     else
         log_error "HTTP response code: $response_code (expected: $expected_code)"
@@ -447,7 +466,12 @@ main() {
 
     # HTTP checks
     log_section "HTTP Endpoints"
-    check_http_response "$APP_URL" || true
+    # Local check is critical - app must respond locally
+    check_http_response "http://localhost" || true
+    # Public URL check is optional (may fail if DNS/SSL not ready)
+    if [[ "$APP_URL" != "http://localhost" ]]; then
+        check_http_response "$APP_URL" 200 "true" || true
+    fi
     check_metrics_endpoint || true
 
     # System resource checks
