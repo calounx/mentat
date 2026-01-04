@@ -205,7 +205,7 @@ class BackupList extends Component
      * Get cached total backup size for tenant.
      * Cache is invalidated when backups are created or deleted.
      */
-    private function getCachedTotalSize(int $tenantId): int
+    private function getCachedTotalSize(string $tenantId): int
     {
         $cacheKey = "tenant_{$tenantId}_backup_total_size";
 
@@ -220,7 +220,7 @@ class BackupList extends Component
     /**
      * Invalidate the total size cache for tenant.
      */
-    private function invalidateTotalSizeCache(int $tenantId): void
+    private function invalidateTotalSizeCache(string $tenantId): void
     {
         Cache::forget("tenant_{$tenantId}_backup_total_size");
     }
