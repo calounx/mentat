@@ -27,11 +27,11 @@ export COLOR_BG_GREEN='\033[0;42m'
 export COLOR_BG_YELLOW='\033[0;43m'
 export COLOR_BG_BLUE='\033[0;44m'
 
-# Print colored text
+# Print colored text (to stderr so it doesn't interfere with captured output)
 print_color() {
     local color="$1"
     local message="$2"
-    echo -e "${color}${message}${COLOR_RESET}"
+    echo -e "${color}${message}${COLOR_RESET}" >&2
 }
 
 # Print success message
@@ -56,18 +56,18 @@ print_info() {
 
 # Print header
 print_header() {
-    echo ""
+    echo "" >&2
     print_color "$COLOR_BOLD_CYAN" "═══════════════════════════════════════════════════════════════"
     print_color "$COLOR_BOLD_CYAN" "  $1"
     print_color "$COLOR_BOLD_CYAN" "═══════════════════════════════════════════════════════════════"
-    echo ""
+    echo "" >&2
 }
 
 # Print section
 print_section() {
-    echo ""
+    echo "" >&2
     print_color "$COLOR_BOLD_BLUE" "▶ $1"
-    echo ""
+    echo "" >&2
 }
 
 # Print step
