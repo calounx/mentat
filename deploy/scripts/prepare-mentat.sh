@@ -245,6 +245,7 @@ EOF
     fi
 
     # Create/update systemd service
+    # Use route-prefix=/prometheus so Prometheus handles the subpath itself
     sudo tee /etc/systemd/system/prometheus.service > /dev/null <<EOF
 [Unit]
 Description=Prometheus
@@ -261,8 +262,8 @@ ExecStart=${OBSERVABILITY_DIR}/bin/prometheus \\
     --storage.tsdb.retention.time=30d \\
     --storage.tsdb.retention.size=50GB \\
     --web.listen-address=:9090 \\
-    --web.external-url=http://mentat.arewel.com/prometheus/ \\
-    --web.route-prefix=/ \\
+    --web.external-url=http://mentat.arewel.com \\
+    --web.route-prefix=/prometheus \\
     --web.enable-lifecycle \\
     --web.enable-admin-api
 Restart=always
@@ -529,6 +530,7 @@ inhibit_rules:
 EOF
 
     # Create systemd service
+    # Use route-prefix=/alertmanager so AlertManager handles the subpath itself
     sudo tee /etc/systemd/system/alertmanager.service > /dev/null <<EOF
 [Unit]
 Description=AlertManager
@@ -542,8 +544,8 @@ Type=simple
 ExecStart=${OBSERVABILITY_DIR}/bin/alertmanager \\
     --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
     --storage.path=${DATA_DIR}/alertmanager \\
-    --web.external-url=http://mentat.arewel.com/alertmanager/ \\
-    --web.route-prefix=/
+    --web.external-url=http://mentat.arewel.com \\
+    --web.route-prefix=/alertmanager
 Restart=always
 RestartSec=5
 
@@ -685,36 +687,17 @@ harden_security() {
 configure_nginx_observability() {
     log_step "Configuring Nginx for observability services"
 
-    # Create nginx configuration for mentat.arewel.com
+    # Services handle their own subpaths via --web.route-prefix
+    # nginx passes full path without stripping
     sudo tee /etc/nginx/sites-available/observability > /dev/null <<'NGINX_CONF'
-# Prometheus on /prometheus
-upstream prometheus {
-    server 127.0.0.1:9090;
-}
-
-# Grafana on root
-upstream grafana {
-    server 127.0.0.1:3000;
-}
-
-# AlertManager on /alertmanager
-upstream alertmanager {
-    server 127.0.0.1:9093;
-}
-
-# Loki on /loki
-upstream loki {
-    server 127.0.0.1:3100;
-}
-
 server {
     listen 80;
     listen [::]:80;
     server_name mentat.arewel.com;
 
-    # Grafana as default
+    # Grafana as default (root)
     location / {
-        proxy_pass http://grafana;
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -726,27 +709,27 @@ server {
         proxy_set_header Connection "upgrade";
     }
 
-    # Prometheus
-    location /prometheus/ {
-        proxy_pass http://prometheus/;
+    # Prometheus - handles /prometheus via --web.route-prefix
+    location /prometheus {
+        proxy_pass http://127.0.0.1:9090;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # AlertManager
-    location /alertmanager/ {
-        proxy_pass http://alertmanager/;
+    # AlertManager - handles /alertmanager via --web.route-prefix
+    location /alertmanager {
+        proxy_pass http://127.0.0.1:9093;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Loki (usually only internal, but available if needed)
-    location /loki/ {
-        proxy_pass http://loki/;
+    # Loki API (internal use)
+    location /loki {
+        proxy_pass http://127.0.0.1:3100;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -857,6 +840,7 @@ update_services_for_https() {
     log_step "Updating services for HTTPS"
 
     # Update Prometheus systemd service with HTTPS external URL
+    # Use route-prefix=/prometheus so Prometheus handles the subpath itself
     sudo tee /etc/systemd/system/prometheus.service > /dev/null <<EOF
 [Unit]
 Description=Prometheus
@@ -873,8 +857,8 @@ ExecStart=${OBSERVABILITY_DIR}/bin/prometheus \\
     --storage.tsdb.retention.time=30d \\
     --storage.tsdb.retention.size=50GB \\
     --web.listen-address=:9090 \\
-    --web.external-url=https://mentat.arewel.com/prometheus/ \\
-    --web.route-prefix=/ \\
+    --web.external-url=https://mentat.arewel.com \\
+    --web.route-prefix=/prometheus \\
     --web.enable-lifecycle \\
     --web.enable-admin-api
 Restart=always
@@ -885,6 +869,7 @@ WantedBy=multi-user.target
 EOF
 
     # Update AlertManager systemd service with HTTPS external URL
+    # Use route-prefix=/alertmanager so AlertManager handles the subpath itself
     sudo tee /etc/systemd/system/alertmanager.service > /dev/null <<EOF
 [Unit]
 Description=AlertManager
@@ -898,8 +883,8 @@ Type=simple
 ExecStart=${OBSERVABILITY_DIR}/bin/alertmanager \\
     --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
     --storage.path=${DATA_DIR}/alertmanager \\
-    --web.external-url=https://mentat.arewel.com/alertmanager/ \\
-    --web.route-prefix=/
+    --web.external-url=https://mentat.arewel.com \\
+    --web.route-prefix=/alertmanager
 Restart=always
 RestartSec=5
 
@@ -918,28 +903,9 @@ EOF
 configure_nginx_https_mentat() {
     log_step "Updating nginx configuration for HTTPS"
 
-    # Let certbot handle the redirect, but ensure our config is correct
+    # Services handle their own subpaths via --web.route-prefix
+    # nginx passes full path without stripping
     sudo tee /etc/nginx/sites-available/observability > /dev/null <<'NGINX_CONF'
-# Prometheus on /prometheus
-upstream prometheus {
-    server 127.0.0.1:9090;
-}
-
-# Grafana on root
-upstream grafana {
-    server 127.0.0.1:3000;
-}
-
-# AlertManager on /alertmanager
-upstream alertmanager {
-    server 127.0.0.1:9093;
-}
-
-# Loki on /loki
-upstream loki {
-    server 127.0.0.1:3100;
-}
-
 # HTTP -> HTTPS redirect
 server {
     listen 80;
@@ -959,9 +925,9 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
-    # Grafana as default
+    # Grafana as default (root)
     location / {
-        proxy_pass http://grafana;
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -973,27 +939,27 @@ server {
         proxy_set_header Connection "upgrade";
     }
 
-    # Prometheus
-    location /prometheus/ {
-        proxy_pass http://prometheus/;
+    # Prometheus - handles /prometheus via --web.route-prefix
+    location /prometheus {
+        proxy_pass http://127.0.0.1:9090;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # AlertManager
-    location /alertmanager/ {
-        proxy_pass http://alertmanager/;
+    # AlertManager - handles /alertmanager via --web.route-prefix
+    location /alertmanager {
+        proxy_pass http://127.0.0.1:9093;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Loki (usually only internal, but available if needed)
-    location /loki/ {
-        proxy_pass http://loki/;
+    # Loki API (internal use)
+    location /loki {
+        proxy_pass http://127.0.0.1:3100;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
