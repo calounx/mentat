@@ -7,11 +7,11 @@ server:
   log_level: info
 
 common:
-  path_prefix: /loki
+  path_prefix: /var/lib/loki
   storage:
     filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
+      chunks_directory: /var/lib/loki/chunks
+      rules_directory: /etc/loki/rules
   replication_factor: 1
   ring:
     instance_addr: 127.0.0.1
@@ -30,15 +30,15 @@ schema_config:
 
 storage_config:
   boltdb_shipper:
-    active_index_directory: /loki/boltdb-shipper-active
-    cache_location: /loki/boltdb-shipper-cache
+    active_index_directory: /var/lib/loki/boltdb-shipper-active
+    cache_location: /var/lib/loki/boltdb-shipper-cache
     cache_ttl: 24h
     shared_store: filesystem
   filesystem:
-    directory: /loki/chunks
+    directory: /var/lib/loki/chunks
 
 compactor:
-  working_directory: /loki/compactor
+  working_directory: /var/lib/loki/compactor
   shared_store: filesystem
   compaction_interval: 10m
   retention_enabled: true
@@ -68,9 +68,9 @@ ruler:
   storage:
     type: local
     local:
-      directory: /loki/rules
-  rule_path: /loki/rules-temp
-  alertmanager_url: http://alertmanager:9093
+      directory: /etc/loki/rules
+  rule_path: /var/lib/loki/rules-temp
+  alertmanager_url: http://localhost:9093
   ring:
     kvstore:
       store: inmemory

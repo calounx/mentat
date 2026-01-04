@@ -576,17 +576,67 @@ phase_deploy_application() {
         # Create .env file on landsraad
         log_info "Creating .env file on $LANDSRAAD_HOST"
 
-        # TODO: This would generate the .env file from secrets
-        # For now, we'll just notify that it needs to be created
-        log_warning "Manual step required: Create .env file on $LANDSRAAD_HOST"
-        log_info "  Location: /var/www/chom/shared/.env"
-        log_info "  Use values from $SECRETS_FILE"
+        # Source secrets file
+        if [[ -f "$SECRETS_FILE" ]]; then
+            # shellcheck source=/dev/null
+            source "$SECRETS_FILE"
+
+            # Create .env file on remote server
+            ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo -u $DEPLOY_USER bash" <<'ENVEOF'
+mkdir -p /var/www/chom/shared
+cat > /var/www/chom/shared/.env <<'INNEREOF'
+APP_NAME=CHOM
+APP_ENV=${APP_ENV:-production}
+APP_KEY=${APP_KEY}
+APP_DEBUG=${APP_DEBUG:-false}
+APP_URL=${APP_URL:-https://chom.arewel.com}
+
+LOG_CHANNEL=stack
+LOG_LEVEL=info
+
+DB_CONNECTION=pgsql
+DB_HOST=localhost
+DB_PORT=5432
+DB_DATABASE=${DB_NAME:-chom}
+DB_USERNAME=${DB_USER:-chom}
+DB_PASSWORD=${DB_PASSWORD}
+
+BROADCAST_DRIVER=log
+CACHE_DRIVER=redis
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+
+REDIS_HOST=localhost
+REDIS_PASSWORD=${REDIS_PASSWORD:-}
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=${MAIL_HOST:-localhost}
+MAIL_PORT=${MAIL_PORT:-1025}
+MAIL_USERNAME=${MAIL_USERNAME:-null}
+MAIL_PASSWORD=${MAIL_PASSWORD:-null}
+MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-null}
+MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-noreply@chom.arewel.com}
+MAIL_FROM_NAME="${APP_NAME:-CHOM}"
+INNEREOF
+chmod 600 /var/www/chom/shared/.env
+ENVEOF
+
+            log_success ".env file created on $LANDSRAAD_HOST"
+        else
+            log_error "Secrets file not found: $SECRETS_FILE"
+            log_warning "Manual step required: Create .env file on $LANDSRAAD_HOST"
+            log_info "  Location: /var/www/chom/shared/.env"
+        fi
 
         # Run deployment script
         if [[ -n "${REPO_URL:-}" ]]; then
             log_info "Deploying application from $REPO_URL"
-            sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
-                "REPO_URL='$REPO_URL' bash /tmp/deploy-application.sh" || {
+            # Use current user for SSH, then sudo to deploy user on remote
+            ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" \
+                "sudo -u $DEPLOY_USER bash -c 'export REPO_URL=\"$REPO_URL\" && bash /tmp/deploy-application.sh'" || {
                 log_error "Application deployment failed"
                 return 1
             }
@@ -662,7 +712,7 @@ phase_verification() {
 
         # Check landsraad services
         log_step "Verifying landsraad services"
-        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "
             for service in nginx postgresql redis-server php*-fpm; do
                 if systemctl is-active --quiet \$service 2>/dev/null; then
                     echo \"OK: \$service\"
