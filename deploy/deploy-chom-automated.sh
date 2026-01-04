@@ -496,6 +496,16 @@ phase_secrets_generation() {
         # Load generated secrets
         if [[ -f "$SECRETS_FILE" ]]; then
             source "$SECRETS_FILE"
+
+            # Add REPO_URL if not already present
+            if ! grep -q "^export REPO_URL=" "$SECRETS_FILE"; then
+                log_info "Adding REPO_URL to secrets file"
+                echo "" >> "$SECRETS_FILE"
+                echo "# Application Repository" >> "$SECRETS_FILE"
+                echo "export REPO_URL=\"https://github.com/calounx/mentat.git\"" >> "$SECRETS_FILE"
+                source "$SECRETS_FILE"
+            fi
+
             log_success "Secrets loaded and ready"
         else
             log_fatal "Secrets file not created"
@@ -548,9 +558,17 @@ phase_prepare_landsraad() {
 
         # Copy files maintaining structure
         scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
-            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
-            log_error "Failed to copy prepare-landsraad.sh"
-            return 1
+            "${SCRIPT_DIR}/scripts/deploy-application.sh" \
+            "${SCRIPT_DIR}/scripts/setup-ssl.sh" \
+            "${SCRIPT_DIR}/scripts/health-check.sh" \
+            "${SCRIPT_DIR}/scripts/rollback.sh" \
+            "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || {
+            log_warning "Some deployment scripts not found, copying available ones"
+            scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
+                "${CURRENT_USER}@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
+                log_error "Failed to copy prepare-landsraad.sh"
+                return 1
+            }
         }
 
         scp -r "${SCRIPT_DIR}/utils/"* \
@@ -645,14 +663,43 @@ ENVEOF
             log_info "Deploying application from $REPO_URL"
             # Use current user for SSH, then sudo to deploy user on remote
             ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" \
-                "sudo -u $DEPLOY_USER bash -c 'export REPO_URL=\"$REPO_URL\" && bash /tmp/deploy-application.sh'" || {
+                "cd /tmp/chom-deploy && sudo -u $DEPLOY_USER bash -c 'export REPO_URL=\"$REPO_URL\" && bash scripts/deploy-application.sh'" || {
                 log_error "Application deployment failed"
                 return 1
             }
+            log_success "Application deployed successfully"
         else
             log_warning "REPO_URL not set - skipping application deployment"
-            log_info "Set REPO_URL in secrets file and run deploy-application.sh manually"
+            log_info "This should not happen - REPO_URL should be set in Phase 3"
         fi
+
+        # Configure Nginx for the application
+        log_step "Configuring Nginx for chom.arewel.com"
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo bash /tmp/chom-deploy/scripts/configure-nginx.sh" 2>/dev/null || {
+            log_warning "Nginx configuration script not found, will configure SSL manually"
+        }
+
+        # Setup SSL with Certbot
+        log_step "Setting up SSL with Let's Encrypt"
+        local email="${ADMIN_EMAIL:-admin@chom.arewel.com}"
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" \
+            "sudo certbot --nginx -d chom.arewel.com --non-interactive --agree-tos --email $email --redirect" || {
+            log_warning "SSL setup failed - you may need to run this manually:"
+            log_info "  sudo certbot --nginx -d chom.arewel.com"
+        }
+
+        # Setup firewall on landsraad
+        log_step "Configuring firewall on $LANDSRAAD_HOST"
+        ssh "${CURRENT_USER}@${LANDSRAAD_HOST}" "sudo ufw --force enable && \
+            sudo ufw default deny incoming && \
+            sudo ufw default allow outgoing && \
+            sudo ufw allow 22/tcp && \
+            sudo ufw allow 80/tcp && \
+            sudo ufw allow 443/tcp && \
+            sudo ufw allow 9100/tcp && \
+            sudo ufw status verbose" || {
+            log_warning "Firewall configuration failed"
+        }
     else
         log_info "[DRY RUN] Would deploy application"
     fi
@@ -691,6 +738,23 @@ phase_deploy_observability() {
         else
             log_success "All observability services started"
         fi
+
+        # Setup firewall on mentat
+        log_step "Configuring firewall on $MENTAT_HOST"
+        sudo ufw --force enable && \
+            sudo ufw default deny incoming && \
+            sudo ufw default allow outgoing && \
+            sudo ufw allow 22/tcp && \
+            sudo ufw allow 80/tcp && \
+            sudo ufw allow 443/tcp && \
+            sudo ufw allow 3000/tcp comment "Grafana" && \
+            sudo ufw allow 9090/tcp comment "Prometheus" && \
+            sudo ufw allow 9093/tcp comment "AlertManager" && \
+            sudo ufw allow 3100/tcp comment "Loki" && \
+            sudo ufw allow from "$LANDSRAAD_HOST" to any port 9100 comment "Node Exporter from landsraad" && \
+            sudo ufw status verbose || {
+            log_warning "Firewall configuration failed"
+        }
     else
         log_info "[DRY RUN] Would deploy observability stack"
     fi
