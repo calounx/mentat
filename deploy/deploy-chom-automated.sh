@@ -483,18 +483,6 @@ phase_ssh_setup() {
     fi
 
     log_success "Phase 2: SSH automation completed"
-
-    # Switch execution context to stilgar for remaining phases
-    log_section "Switching to $DEPLOY_USER for deployment operations"
-
-    if [[ "$DRY_RUN" != "true" ]]; then
-        # Update SCRIPT_DIR to stilgar-owned location
-        export SCRIPT_DIR="/opt/chom-deploy"
-        export SECRETS_FILE="${SCRIPT_DIR}/.deployment-secrets"
-
-        log_info "Deployment operations will now run as $DEPLOY_USER"
-        log_info "Using deployment directory: $SCRIPT_DIR"
-    fi
 }
 
 # Phase 3: Generate deployment secrets
@@ -903,6 +891,17 @@ main() {
     # Execute deployment phases
     phase_user_setup
     phase_ssh_setup
+
+    # Switch execution context to stilgar for remaining phases
+    if [[ "$DRY_RUN" != "true" ]]; then
+        log_section "Switching to $DEPLOY_USER for deployment operations"
+        # Update SCRIPT_DIR to stilgar-owned location (global variable)
+        SCRIPT_DIR="/opt/chom-deploy"
+        SECRETS_FILE="${SCRIPT_DIR}/.deployment-secrets"
+        log_info "Deployment operations will now run as $DEPLOY_USER"
+        log_info "Using deployment directory: $SCRIPT_DIR"
+    fi
+
     phase_secrets_generation
     phase_prepare_mentat
     phase_prepare_landsraad
