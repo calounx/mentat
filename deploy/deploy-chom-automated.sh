@@ -258,13 +258,15 @@ preflight_checks() {
         log_fatal "Internet access is required for deployment"
     fi
 
-    # Check SSH access to landsraad
+    # Check SSH access to landsraad (try stilgar first, then current user)
     log_step "Checking SSH access to $LANDSRAAD_HOST"
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes "${CURRENT_USER}@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
-        log_success "SSH access to $LANDSRAAD_HOST OK"
+    if ssh -o ConnectTimeout=5 -o BatchMode=yes "${DEPLOY_USER}@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
+        log_success "SSH access to $LANDSRAAD_HOST as $DEPLOY_USER OK"
+    elif ssh -o ConnectTimeout=5 -o BatchMode=yes "${CURRENT_USER}@$LANDSRAAD_HOST" "echo 'SSH OK'" &>/dev/null; then
+        log_success "SSH access to $LANDSRAAD_HOST as $CURRENT_USER OK"
     else
-        log_warning "Cannot connect to $LANDSRAAD_HOST as root with key-based auth"
-        log_info "You may be prompted for the root password during deployment"
+        log_warning "Cannot connect to $LANDSRAAD_HOST with key-based auth (tried $DEPLOY_USER and $CURRENT_USER)"
+        log_info "Run Phase 2 (SSH Automation) or manually set up SSH keys"
     fi
 
     # Check required commands
