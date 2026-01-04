@@ -1,15 +1,12 @@
 # AlertManager configuration for CHOM
 global:
   resolve_timeout: 5m
-  smtp_from: 'alertmanager@chom.arewel.com'
-  smtp_smarthost: 'smtp.example.com:587'
-  smtp_auth_username: 'alerts@example.com'
-  smtp_auth_password: 'YOUR_SMTP_PASSWORD'
-  smtp_require_tls: true
-
-# Templates
-templates:
-  - '/etc/alertmanager/templates/*.tmpl'
+  # SMTP settings - uncomment and configure for email alerts
+  # smtp_from: 'alertmanager@chom.arewel.com'
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_auth_username: 'alerts@example.com'
+  # smtp_auth_password: 'YOUR_SMTP_PASSWORD'
+  # smtp_require_tls: true
 
 # Route configuration
 route:
@@ -33,16 +30,6 @@ route:
       receiver: 'warning-alerts'
       repeat_interval: 12h
 
-    # Database alerts
-    - match:
-        service: postgresql
-      receiver: 'database-alerts'
-
-    # Application alerts
-    - match:
-        service: chom
-      receiver: 'application-alerts'
-
 # Inhibit rules
 inhibit_rules:
   # Inhibit warning if critical is firing
@@ -61,66 +48,25 @@ inhibit_rules:
 
 # Receivers
 receivers:
-  # Default receiver
+  # Default receiver - logs to stdout (visible in journalctl)
   - name: 'default'
-    webhook_configs:
-      - url: 'http://localhost:5001/webhook'
-        send_resolved: true
 
-  # Critical alerts
+  # Critical alerts receiver
   - name: 'critical-alerts'
-    email_configs:
-      - to: 'ops-team@example.com'
-        headers:
-          Subject: '[CRITICAL] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
-        html: '{{ template "email.default.html" . }}'
-        send_resolved: true
-
-    slack_configs:
-      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
-        channel: '#alerts-critical'
-        username: 'AlertManager'
-        title: '{{ .GroupLabels.alertname }}'
-        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
-        send_resolved: true
-
-    # PagerDuty for critical alerts (optional)
-    # pagerduty_configs:
-    #   - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+    # Uncomment and configure for Slack integration:
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+    #     channel: '#alerts-critical'
+    #     username: 'AlertManager'
+    #     title: '{{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
     #     send_resolved: true
 
-  # Warning alerts
+  # Warning alerts receiver
   - name: 'warning-alerts'
-    email_configs:
-      - to: 'ops-team@example.com'
-        headers:
-          Subject: '[WARNING] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
-        send_resolved: true
-
-    slack_configs:
-      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
-        channel: '#alerts-warnings'
-        username: 'AlertManager'
-        send_resolved: true
-
-  # Database alerts
-  - name: 'database-alerts'
-    email_configs:
-      - to: 'dba-team@example.com'
-        headers:
-          Subject: '[DB] {{ .GroupLabels.alertname }}'
-        send_resolved: true
-
-  # Application alerts
-  - name: 'application-alerts'
-    email_configs:
-      - to: 'dev-team@example.com'
-        headers:
-          Subject: '[APP] {{ .GroupLabels.alertname }}'
-        send_resolved: true
-
-    slack_configs:
-      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
-        channel: '#alerts-application'
-        username: 'AlertManager'
-        send_resolved: true
+    # Uncomment and configure for email alerts:
+    # email_configs:
+    #   - to: 'ops-team@example.com'
+    #     headers:
+    #       Subject: '[WARNING] {{ .GroupLabels.alertname }}'
+    #     send_resolved: true
