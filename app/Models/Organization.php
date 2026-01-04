@@ -41,12 +41,12 @@ class Organization extends Model
     }
 
     /**
-     * Get the default/primary tenant.
-     * Uses created_at instead of id because PostgreSQL doesn't support MIN() on UUID columns.
+     * Get the default/primary tenant (oldest by created_at).
+     * Note: Cannot use oldestOfMany() because PostgreSQL doesn't support MIN/MAX on UUID columns.
      */
     public function defaultTenant(): HasOne
     {
-        return $this->hasOne(Tenant::class)->oldestOfMany('created_at');
+        return $this->hasOne(Tenant::class)->orderBy('created_at');
     }
 
     /**
