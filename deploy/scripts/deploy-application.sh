@@ -423,7 +423,84 @@ clean_old_releases() {
     log_success "Old releases cleaned up"
 }
 
-# Run health checks
+# Pre-switch validation - structural checks only (no HTTP - symlink doesn't exist yet)
+validate_release_structure() {
+    local release_path="$1"
+
+    log_step "Validating release structure"
+
+    # Check if release directory exists
+    if [[ ! -d "$release_path" ]]; then
+        log_error "Release path does not exist: $release_path"
+        return 1
+    fi
+
+    # Check if artisan exists
+    if [[ ! -f "${release_path}/artisan" ]]; then
+        log_error "artisan file not found in $release_path"
+        return 1
+    fi
+    log_success "artisan file present"
+
+    # Check if vendor directory exists
+    if [[ ! -d "${release_path}/vendor" ]]; then
+        log_error "vendor directory not found in $release_path"
+        return 1
+    fi
+    log_success "vendor directory present"
+
+    # Test artisan command
+    cd "$release_path"
+    if php artisan --version > /dev/null 2>&1; then
+        log_success "Laravel artisan is functional"
+    else
+        log_error "Laravel artisan command failed"
+        return 1
+    fi
+
+    # Check .env file exists (via symlink to shared)
+    if [[ ! -f "${release_path}/.env" ]]; then
+        log_error ".env file not found"
+        return 1
+    fi
+    log_success ".env file present"
+
+    # Check storage directory (via symlink to shared)
+    if [[ ! -d "${release_path}/storage" ]]; then
+        log_error "storage directory not linked"
+        return 1
+    fi
+    log_success "storage directory linked"
+
+    # Test database connectivity
+    log_step "Testing database connectivity"
+    local db_host=$(grep "^DB_HOST=" "${release_path}/.env" | cut -d'=' -f2)
+    local db_port=$(grep "^DB_PORT=" "${release_path}/.env" | cut -d'=' -f2)
+    local db_database=$(grep "^DB_DATABASE=" "${release_path}/.env" | cut -d'=' -f2)
+    local db_username=$(grep "^DB_USERNAME=" "${release_path}/.env" | cut -d'=' -f2)
+    local db_password=$(grep "^DB_PASSWORD=" "${release_path}/.env" | cut -d'=' -f2)
+
+    if PGPASSWORD="$db_password" psql -h "$db_host" -p "$db_port" -U "$db_username" -d "$db_database" -c "SELECT 1;" > /dev/null 2>&1; then
+        log_success "Database connection successful"
+    else
+        log_error "Database connection failed"
+        return 1
+    fi
+
+    # Test Redis connectivity
+    log_step "Testing Redis connectivity"
+    if redis-cli ping > /dev/null 2>&1; then
+        log_success "Redis is responding"
+    else
+        log_error "Redis is not responding"
+        return 1
+    fi
+
+    log_success "Release structure validation passed"
+    return 0
+}
+
+# Run full health checks (including HTTP - requires symlink to exist)
 run_health_checks() {
     local release_path="$1"
 
@@ -432,7 +509,7 @@ run_health_checks() {
         return 0
     fi
 
-    log_step "Running health checks"
+    log_step "Running full health checks"
 
     if bash "${SCRIPT_DIR}/health-check.sh" --release-path "$release_path"; then
         log_success "Health checks passed"
@@ -474,9 +551,9 @@ main() {
     optimize_application "$RELEASE_PATH"
     set_permissions "$RELEASE_PATH"
 
-    # Pre-switch health check
+    # Pre-switch validation (structural checks only - no HTTP, symlink doesn't exist yet)
     log_section "Pre-Switch Validation"
-    run_health_checks "$RELEASE_PATH"
+    validate_release_structure "$RELEASE_PATH"
 
     # Switch release
     log_section "Activating New Release"
