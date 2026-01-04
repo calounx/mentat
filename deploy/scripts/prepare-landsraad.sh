@@ -679,7 +679,9 @@ stdout_logfile=${APP_DIR}/shared/storage/logs/worker.log
 stopwaitsecs=3600
 EOF
 
-    # Note: supervisor will be reloaded after first deployment
+    # Reload supervisor to pick up new config
+    sudo supervisorctl reread
+    sudo supervisorctl update
 
     log_success "Supervisor configured"
 }

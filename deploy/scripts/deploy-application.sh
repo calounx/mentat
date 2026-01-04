@@ -387,9 +387,13 @@ reload_services() {
     sudo systemctl reload nginx
 
     # Restart queue workers via supervisor
-    log_info "Restarting queue workers"
     if command -v supervisorctl &> /dev/null; then
-        sudo supervisorctl restart chom-worker:* 2>&1 | tee -a "$LOG_FILE" || true
+        if sudo supervisorctl status chom-worker:* &> /dev/null; then
+            log_info "Restarting queue workers"
+            sudo supervisorctl restart chom-worker:* 2>&1 | tee -a "$LOG_FILE" || true
+        else
+            log_info "Queue workers not configured in supervisor (run prepare-landsraad.sh to set up)"
+        fi
     fi
 
     log_success "Services reloaded"
