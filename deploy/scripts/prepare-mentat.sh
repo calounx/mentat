@@ -817,6 +817,207 @@ start_services() {
     fi
 }
 
+# Setup SSL certificates for mentat.arewel.com
+setup_ssl_mentat() {
+    local ssl_email="${SSL_EMAIL:-}"
+    local domain="mentat.arewel.com"
+
+    log_step "Setting up SSL certificate for $domain"
+
+    # Check if certificate already exists
+    if [[ -d "/etc/letsencrypt/live/$domain" ]]; then
+        log_success "SSL certificate already exists for $domain"
+        # Still update nginx and services to use HTTPS
+        configure_nginx_https_mentat
+        update_services_for_https
+        return 0
+    fi
+
+    if [[ -z "$ssl_email" ]]; then
+        log_warning "SSL_EMAIL not set - skipping SSL setup"
+        log_info "To enable SSL, run with SSL_EMAIL=your@email.com"
+        return 0
+    fi
+
+    # Obtain certificate using certbot
+    log_info "Obtaining SSL certificate from Let's Encrypt"
+    if sudo certbot --nginx -d "$domain" --non-interactive --agree-tos -m "$ssl_email" --redirect; then
+        log_success "SSL certificate obtained"
+        configure_nginx_https_mentat
+        update_services_for_https
+    else
+        log_error "Failed to obtain SSL certificate"
+        log_info "Ensure DNS is properly configured and port 80 is accessible"
+        return 1
+    fi
+}
+
+# Update Prometheus and AlertManager to use HTTPS external URLs
+update_services_for_https() {
+    log_step "Updating services for HTTPS"
+
+    # Update Prometheus systemd service with HTTPS external URL
+    sudo tee /etc/systemd/system/prometheus.service > /dev/null <<EOF
+[Unit]
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/prometheus \\
+    --config.file=${CONFIG_DIR}/prometheus/prometheus.yml \\
+    --storage.tsdb.path=${DATA_DIR}/prometheus \\
+    --storage.tsdb.retention.time=30d \\
+    --storage.tsdb.retention.size=50GB \\
+    --web.listen-address=:9090 \\
+    --web.external-url=https://mentat.arewel.com/prometheus/ \\
+    --web.route-prefix=/ \\
+    --web.enable-lifecycle \\
+    --web.enable-admin-api
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Update AlertManager systemd service with HTTPS external URL
+    sudo tee /etc/systemd/system/alertmanager.service > /dev/null <<EOF
+[Unit]
+Description=AlertManager
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/alertmanager \\
+    --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
+    --storage.path=${DATA_DIR}/alertmanager \\
+    --web.external-url=https://mentat.arewel.com/alertmanager/ \\
+    --web.route-prefix=/
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Reload and restart services
+    sudo systemctl daemon-reload
+    sudo systemctl restart prometheus alertmanager
+
+    log_success "Services updated for HTTPS"
+}
+
+# Configure nginx with HTTPS for observability
+configure_nginx_https_mentat() {
+    log_step "Updating nginx configuration for HTTPS"
+
+    # Let certbot handle the redirect, but ensure our config is correct
+    sudo tee /etc/nginx/sites-available/observability > /dev/null <<'NGINX_CONF'
+# Prometheus on /prometheus
+upstream prometheus {
+    server 127.0.0.1:9090;
+}
+
+# Grafana on root
+upstream grafana {
+    server 127.0.0.1:3000;
+}
+
+# AlertManager on /alertmanager
+upstream alertmanager {
+    server 127.0.0.1:9093;
+}
+
+# Loki on /loki
+upstream loki {
+    server 127.0.0.1:3100;
+}
+
+# HTTP -> HTTPS redirect
+server {
+    listen 80;
+    listen [::]:80;
+    server_name mentat.arewel.com;
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name mentat.arewel.com;
+
+    ssl_certificate /etc/letsencrypt/live/mentat.arewel.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mentat.arewel.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Grafana as default
+    location / {
+        proxy_pass http://grafana;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for Grafana Live
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Prometheus
+    location /prometheus/ {
+        proxy_pass http://prometheus/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # AlertManager
+    location /alertmanager/ {
+        proxy_pass http://alertmanager/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Loki (usually only internal, but available if needed)
+    location /loki/ {
+        proxy_pass http://loki/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Node exporter metrics (internal)
+    location /node-metrics {
+        proxy_pass http://127.0.0.1:9100/metrics;
+        proxy_set_header Host $host;
+    }
+}
+NGINX_CONF
+
+    # Test and reload nginx
+    if sudo nginx -t; then
+        sudo systemctl reload nginx
+        log_success "Nginx configured for HTTPS"
+    else
+        log_error "Nginx HTTPS configuration test failed"
+        return 1
+    fi
+}
+
 # Main execution
 main() {
     start_timer
@@ -843,6 +1044,9 @@ main() {
     # Wait for services to start
     sleep 3
 
+    # Setup SSL if email provided
+    setup_ssl_mentat
+
     # Verify services are running
     log_section "Service Status"
     for service in prometheus grafana-server loki promtail alertmanager node_exporter; do
@@ -855,26 +1059,26 @@ main() {
 
     end_timer "Server preparation"
 
+    # Determine protocol based on SSL status
+    local protocol="http"
+    if [[ -d "/etc/letsencrypt/live/mentat.arewel.com" ]]; then
+        protocol="https"
+    fi
+
     print_header "Server Preparation Complete"
     log_success "mentat.arewel.com is ready with observability stack"
     log_info "All components installed and running NATIVELY using systemd services"
     log_info ""
     log_info "Access points:"
-    log_info "  - Grafana:      http://mentat.arewel.com/ (admin/admin default)"
-    log_info "  - Prometheus:   http://mentat.arewel.com/prometheus/"
-    log_info "  - AlertManager: http://mentat.arewel.com/alertmanager/"
-    log_info "  - Loki:         http://mentat.arewel.com/loki/"
+    log_info "  - Grafana:      ${protocol}://mentat.arewel.com/ (admin/admin default)"
+    log_info "  - Prometheus:   ${protocol}://mentat.arewel.com/prometheus/"
+    log_info "  - AlertManager: ${protocol}://mentat.arewel.com/alertmanager/"
+    log_info "  - Loki:         ${protocol}://mentat.arewel.com/loki/"
     log_info ""
-    log_info "Direct ports (if needed):"
-    log_info "  - Grafana:      http://mentat.arewel.com:3000"
-    log_info "  - Prometheus:   http://mentat.arewel.com:9090"
-    log_info "  - AlertManager: http://mentat.arewel.com:9093"
-    log_info "  - Loki:         http://mentat.arewel.com:3100"
-    log_info "  - Node Exporter: http://mentat.arewel.com:9100"
-    log_info ""
-    log_info "Next steps:"
-    log_info "  1. Run setup-ssl.sh for HTTPS (optional)"
-    log_info "  2. Configure firewall with ufw"
+    if [[ "$protocol" == "http" ]]; then
+        log_info "To enable HTTPS, run:"
+        log_info "  SSL_EMAIL=your@email.com sudo -E ./prepare-mentat.sh"
+    fi
 }
 
 main
