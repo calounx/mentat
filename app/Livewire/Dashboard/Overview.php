@@ -49,7 +49,7 @@ class Overview extends Component
                 ->selectRaw('
                     COUNT(*) as total_sites,
                     SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as active_sites,
-                    SUM(CASE WHEN ssl_enabled = true AND ssl_expiry_date IS NOT NULL AND ssl_expiry_date <= ? THEN 1 ELSE 0 END) as ssl_expiring_soon
+                    SUM(CASE WHEN ssl_enabled = true AND ssl_expires_at IS NOT NULL AND ssl_expires_at <= ? THEN 1 ELSE 0 END) as ssl_expiring_soon
                 ', ['active', now()->addDays(30)])
                 ->first();
 
