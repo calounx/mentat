@@ -244,9 +244,8 @@ EOF
         log_success "Prometheus configuration already exists"
     fi
 
-    # Create systemd service if not exists
-    if [[ ! -f /etc/systemd/system/prometheus.service ]]; then
-        sudo tee /etc/systemd/system/prometheus.service > /dev/null <<EOF
+    # Create/update systemd service
+    sudo tee /etc/systemd/system/prometheus.service > /dev/null <<EOF
 [Unit]
 Description=Prometheus
 Wants=network-online.target
@@ -262,6 +261,8 @@ ExecStart=${OBSERVABILITY_DIR}/bin/prometheus \\
     --storage.tsdb.retention.time=30d \\
     --storage.tsdb.retention.size=50GB \\
     --web.listen-address=:9090 \\
+    --web.external-url=http://mentat.arewel.com/prometheus/ \\
+    --web.route-prefix=/ \\
     --web.enable-lifecycle \\
     --web.enable-admin-api
 Restart=always
@@ -270,9 +271,7 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-    else
-        log_success "Prometheus systemd service already exists"
-    fi
+    log_success "Prometheus systemd service configured"
 
     sudo chown -R observability:observability "${CONFIG_DIR}/prometheus"
     sudo chown -R observability:observability "${DATA_DIR}/prometheus"
@@ -543,7 +542,8 @@ Type=simple
 ExecStart=${OBSERVABILITY_DIR}/bin/alertmanager \\
     --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
     --storage.path=${DATA_DIR}/alertmanager \\
-    --web.external-url=http://mentat.arewel.com:9093
+    --web.external-url=http://mentat.arewel.com/alertmanager/ \\
+    --web.route-prefix=/
 Restart=always
 RestartSec=5
 
@@ -681,6 +681,102 @@ harden_security() {
     log_success "Security hardening applied"
 }
 
+# Configure Nginx for observability services
+configure_nginx_observability() {
+    log_step "Configuring Nginx for observability services"
+
+    # Create nginx configuration for mentat.arewel.com
+    sudo tee /etc/nginx/sites-available/observability > /dev/null <<'NGINX_CONF'
+# Prometheus on /prometheus
+upstream prometheus {
+    server 127.0.0.1:9090;
+}
+
+# Grafana on root
+upstream grafana {
+    server 127.0.0.1:3000;
+}
+
+# AlertManager on /alertmanager
+upstream alertmanager {
+    server 127.0.0.1:9093;
+}
+
+# Loki on /loki
+upstream loki {
+    server 127.0.0.1:3100;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name mentat.arewel.com;
+
+    # Grafana as default
+    location / {
+        proxy_pass http://grafana;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for Grafana Live
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Prometheus
+    location /prometheus/ {
+        proxy_pass http://prometheus/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # AlertManager
+    location /alertmanager/ {
+        proxy_pass http://alertmanager/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Loki (usually only internal, but available if needed)
+    location /loki/ {
+        proxy_pass http://loki/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Node exporter metrics (internal)
+    location /node-metrics {
+        proxy_pass http://127.0.0.1:9100/metrics;
+        proxy_set_header Host $host;
+    }
+}
+NGINX_CONF
+
+    # Enable the site
+    sudo ln -sf /etc/nginx/sites-available/observability /etc/nginx/sites-enabled/observability
+
+    # Remove default site
+    sudo rm -f /etc/nginx/sites-enabled/default
+
+    # Test and reload nginx
+    if sudo nginx -t; then
+        sudo systemctl reload nginx
+        log_success "Nginx configured for observability services"
+    else
+        log_error "Nginx configuration test failed"
+        return 1
+    fi
+}
+
 # Enable all services
 enable_services() {
     log_step "Enabling observability services"
@@ -696,6 +792,29 @@ enable_services() {
     sudo systemctl enable node_exporter
 
     log_success "All services enabled"
+}
+
+# Start all services
+start_services() {
+    log_step "Starting observability services"
+
+    local services=("prometheus" "grafana-server" "loki" "promtail" "alertmanager" "node_exporter")
+    local failed=()
+
+    for service in "${services[@]}"; do
+        if sudo systemctl start "$service"; then
+            log_success "$service started"
+        else
+            log_error "Failed to start $service"
+            failed+=("$service")
+        fi
+    done
+
+    if [[ ${#failed[@]} -gt 0 ]]; then
+        log_warning "Some services failed to start: ${failed[*]}"
+    else
+        log_success "All services started successfully"
+    fi
 }
 
 # Main execution
@@ -716,26 +835,46 @@ main() {
     install_node_exporter
     configure_system_limits
     setup_log_rotation
+    configure_nginx_observability
     harden_security
     enable_services
+    start_services
+
+    # Wait for services to start
+    sleep 3
+
+    # Verify services are running
+    log_section "Service Status"
+    for service in prometheus grafana-server loki promtail alertmanager node_exporter; do
+        if systemctl is-active --quiet "$service"; then
+            log_success "$service is running"
+        else
+            log_warning "$service is not running"
+        fi
+    done
 
     end_timer "Server preparation"
 
     print_header "Server Preparation Complete"
-    log_success "mentat.arewel.com is ready for observability stack deployment"
-    log_info "All components installed NATIVELY using systemd services"
-    log_info "Next steps:"
-    log_info "  1. Run setup-firewall.sh --server mentat"
-    log_info "  2. Run setup-ssl.sh for Grafana domain (optional)"
-    log_info "  3. Deploy observability stack with deploy-observability.sh"
+    log_success "mentat.arewel.com is ready with observability stack"
+    log_info "All components installed and running NATIVELY using systemd services"
     log_info ""
-    log_info "Installed components:"
-    log_info "  - Prometheus ${PROMETHEUS_VERSION} (systemd)"
-    log_info "  - Grafana (APT package)"
-    log_info "  - Loki ${LOKI_VERSION} (systemd)"
-    log_info "  - Promtail ${PROMTAIL_VERSION} (systemd)"
-    log_info "  - AlertManager ${ALERTMANAGER_VERSION} (systemd)"
-    log_info "  - Node Exporter ${NODE_EXPORTER_VERSION} (systemd)"
+    log_info "Access points:"
+    log_info "  - Grafana:      http://mentat.arewel.com/ (admin/admin default)"
+    log_info "  - Prometheus:   http://mentat.arewel.com/prometheus/"
+    log_info "  - AlertManager: http://mentat.arewel.com/alertmanager/"
+    log_info "  - Loki:         http://mentat.arewel.com/loki/"
+    log_info ""
+    log_info "Direct ports (if needed):"
+    log_info "  - Grafana:      http://mentat.arewel.com:3000"
+    log_info "  - Prometheus:   http://mentat.arewel.com:9090"
+    log_info "  - AlertManager: http://mentat.arewel.com:9093"
+    log_info "  - Loki:         http://mentat.arewel.com:3100"
+    log_info "  - Node Exporter: http://mentat.arewel.com:9100"
+    log_info ""
+    log_info "Next steps:"
+    log_info "  1. Run setup-ssl.sh for HTTPS (optional)"
+    log_info "  2. Configure firewall with ufw"
 }
 
 main
