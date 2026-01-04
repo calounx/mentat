@@ -577,12 +577,13 @@ phase_prepare_landsraad() {
         # Copy deployment files to landsraad as stilgar
         log_info "Copying deployment files to $LANDSRAAD_HOST as $DEPLOY_USER"
 
-        # Create proper directory structure on remote as stilgar
-        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
+        # Clean up and create fresh directory structure (idempotent)
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "rm -rf /tmp/chom-deploy && mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
 
         # Copy files maintaining structure (using stilgar's SSH)
         sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
             "${SCRIPT_DIR}/scripts/deploy-application.sh" \
+            "${SCRIPT_DIR}/scripts/backup-before-deploy.sh" \
             "${SCRIPT_DIR}/scripts/setup-ssl.sh" \
             "${SCRIPT_DIR}/scripts/health-check.sh" \
             "${SCRIPT_DIR}/scripts/rollback.sh" \
