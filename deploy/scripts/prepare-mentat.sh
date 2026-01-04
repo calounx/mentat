@@ -187,6 +187,12 @@ setup_observability_directories() {
 install_prometheus() {
     log_step "Installing Prometheus ${PROMETHEUS_VERSION}"
 
+    # Stop service if running to allow binary update
+    if systemctl is-active --quiet prometheus 2>/dev/null; then
+        log_info "Stopping prometheus service before update"
+        sudo systemctl stop prometheus
+    fi
+
     # Check if already installed
     if [[ -f "${OBSERVABILITY_DIR}/bin/prometheus" ]]; then
         local installed_version=$("${OBSERVABILITY_DIR}/bin/prometheus" --version 2>&1 | head -1 | awk '{print $3}')
@@ -278,6 +284,12 @@ EOF
 install_grafana() {
     log_step "Installing Grafana from official repository"
 
+    # Stop service if running to allow update
+    if systemctl is-active --quiet grafana-server 2>/dev/null; then
+        log_info "Stopping grafana-server service before update"
+        sudo systemctl stop grafana-server
+    fi
+
     # Check if Grafana is already installed
     if command -v grafana-server &>/dev/null; then
         log_success "Grafana is already installed"
@@ -326,6 +338,12 @@ EOF
 # Install Loki natively
 install_loki() {
     log_step "Installing Loki ${LOKI_VERSION}"
+
+    # Stop service if running to allow binary update
+    if systemctl is-active --quiet loki 2>/dev/null; then
+        log_info "Stopping loki service before update"
+        sudo systemctl stop loki
+    fi
 
     cd /tmp
     wget -q "https://github.com/grafana/loki/releases/download/v${LOKI_VERSION}/loki-linux-amd64.zip"
@@ -406,6 +424,12 @@ EOF
 # Install Promtail natively
 install_promtail() {
     log_step "Installing Promtail ${PROMTAIL_VERSION}"
+
+    # Stop service if running to allow binary update
+    if systemctl is-active --quiet promtail 2>/dev/null; then
+        log_info "Stopping promtail service before update"
+        sudo systemctl stop promtail
+    fi
 
     cd /tmp
     wget -q "https://github.com/grafana/loki/releases/download/v${PROMTAIL_VERSION}/promtail-linux-amd64.zip"
@@ -536,6 +560,12 @@ EOF
 # Install Node Exporter
 install_node_exporter() {
     log_step "Installing Node Exporter ${NODE_EXPORTER_VERSION}"
+
+    # Stop service if running to allow binary update
+    if systemctl is-active --quiet node_exporter 2>/dev/null; then
+        log_info "Stopping node_exporter service before update"
+        sudo systemctl stop node_exporter
+    fi
 
     cd /tmp
     wget -q "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
