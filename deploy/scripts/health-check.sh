@@ -89,6 +89,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Read APP_URL from .env if not provided and still at default
+if [[ "$APP_URL" == "http://localhost" ]] && [[ -f "${RELEASE_PATH}/.env" ]]; then
+    env_app_url=$(grep "^APP_URL=" "${RELEASE_PATH}/.env" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+    if [[ -n "$env_app_url" ]]; then
+        APP_URL="$env_app_url"
+    fi
+fi
+
 # Track health check failures
 HEALTH_CHECK_FAILED=0
 
