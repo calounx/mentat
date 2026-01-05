@@ -86,6 +86,90 @@ SRC_CONFIG_DIR="${SRC_CONFIG_DIR:-${SCRIPT_DIR}/../config/mentat}"
 init_deployment_log "deploy-observability-$(date +%Y%m%d_%H%M%S)"
 log_section "Observability Stack Deployment (NATIVE)"
 
+# Deploy systemd service files with correct configuration
+deploy_systemd_services() {
+    log_step "Deploying systemd service files"
+
+    # Prometheus service with external-url for path prefix support
+    cat << EOF | sudo tee /etc/systemd/system/prometheus.service > /dev/null
+[Unit]
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/prometheus \\
+    --config.file=${CONFIG_DIR}/prometheus/prometheus.yml \\
+    --storage.tsdb.path=${DATA_DIR}/prometheus \\
+    --storage.tsdb.retention.time=15d \\
+    --web.listen-address=:9090 \\
+    --web.enable-lifecycle \\
+    --web.external-url=https://mentat.arewel.com/prometheus \\
+    --web.route-prefix=/prometheus
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log_success "Prometheus service deployed"
+
+    # Alertmanager service with external-url
+    cat << EOF | sudo tee /etc/systemd/system/alertmanager.service > /dev/null
+[Unit]
+Description=Alertmanager
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=observability
+Group=observability
+Type=simple
+ExecStart=${OBSERVABILITY_DIR}/bin/alertmanager \\
+    --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
+    --storage.path=${DATA_DIR}/alertmanager \\
+    --web.external-url=https://mentat.arewel.com/alertmanager \\
+    --web.route-prefix=/
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log_success "Alertmanager service deployed"
+
+    sudo systemctl daemon-reload
+    log_success "Systemd daemon reloaded"
+}
+
+# Deploy nginx configuration
+deploy_nginx_config() {
+    log_step "Deploying nginx configuration"
+
+    local nginx_src="${SRC_CONFIG_DIR}/nginx-observability.conf"
+    local nginx_dest="/etc/nginx/sites-available/observability"
+
+    if [[ -f "$nginx_src" ]]; then
+        sudo cp "$nginx_src" "$nginx_dest"
+        sudo ln -sf "$nginx_dest" /etc/nginx/sites-enabled/observability
+        sudo rm -f /etc/nginx/sites-enabled/default
+
+        # Test nginx configuration
+        if sudo nginx -t 2>&1; then
+            sudo systemctl reload nginx
+            log_success "Nginx configuration deployed and reloaded"
+        else
+            log_error "Nginx configuration test failed"
+            return 1
+        fi
+    else
+        log_info "No custom nginx config found, using default"
+    fi
+}
+
 # Deploy Grafana dashboards
 deploy_grafana_dashboards() {
     log_step "Deploying Grafana dashboards"
@@ -260,8 +344,8 @@ wait_for_services() {
     while [[ $attempt -lt $max_attempts ]]; do
         local healthy=0
 
-        # Check Prometheus
-        if curl -sf http://localhost:9090/-/healthy > /dev/null 2>&1; then
+        # Check Prometheus (uses /prometheus prefix)
+        if curl -sf http://localhost:9090/prometheus/-/healthy > /dev/null 2>&1; then
             ((healthy++))
         fi
 
@@ -301,10 +385,10 @@ check_services() {
 
     local failed=0
 
-    # Check Prometheus
+    # Check Prometheus (uses /prometheus prefix)
     log_info "Checking Prometheus..."
-    if curl -sf http://localhost:9090/-/healthy > /dev/null 2>&1; then
-        log_success "Prometheus is healthy (http://localhost:9090)"
+    if curl -sf http://localhost:9090/prometheus/-/healthy > /dev/null 2>&1; then
+        log_success "Prometheus is healthy (https://mentat.arewel.com/prometheus)"
     else
         log_error "Prometheus is not healthy"
         sudo systemctl status prometheus --no-pager | tail -n 10
@@ -387,6 +471,8 @@ main() {
 
     print_header "Observability Stack Deployment (NATIVE - No Docker)"
 
+    deploy_systemd_services
+    deploy_nginx_config
     deploy_configuration
     validate_configuration
     stop_services
@@ -412,12 +498,18 @@ main() {
     print_header "Observability Stack Deployed (NATIVE)"
     log_success "Stack is running on mentat.arewel.com using systemd services"
     log_info ""
-    log_info "Access points:"
-    log_info "  Prometheus:   http://mentat.arewel.com:9090"
-    log_info "  Grafana:      http://mentat.arewel.com:3000"
-    log_info "  AlertManager: http://mentat.arewel.com:9093"
-    log_info "  Loki:         http://mentat.arewel.com:3100"
-    log_info "  Node Exporter: http://mentat.arewel.com:9100"
+    log_info "Access points (HTTPS with path routing):"
+    log_info "  Grafana:      https://mentat.arewel.com/"
+    log_info "  Prometheus:   https://mentat.arewel.com/prometheus"
+    log_info "  AlertManager: https://mentat.arewel.com/alertmanager"
+    log_info "  Loki:         https://mentat.arewel.com/loki"
+    log_info ""
+    log_info "Direct ports (internal/debugging):"
+    log_info "  Prometheus:    localhost:9090"
+    log_info "  Grafana:       localhost:3000"
+    log_info "  AlertManager:  localhost:9093"
+    log_info "  Loki:          localhost:3100"
+    log_info "  Node Exporter: localhost:9100"
     log_info ""
     log_info "Service management:"
     log_info "  View logs:     sudo journalctl -u <service-name> -f"
