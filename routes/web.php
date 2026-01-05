@@ -46,6 +46,13 @@ Route::middleware('guest')->group(function () {
 
         if (auth()->attempt($credentials, request()->boolean('remember'))) {
             request()->session()->regenerate();
+
+            // Super admins without tenant go to admin dashboard
+            $user = auth()->user();
+            if ($user->isSuperAdmin() && !$user->currentTenant()) {
+                return redirect()->intended(route('admin.dashboard'));
+            }
+
             return redirect()->intended(route('dashboard'));
         }
 
@@ -103,23 +110,35 @@ Route::post('/logout', function () {
 
 // Protected routes (require authentication)
 Route::middleware('auth')->group(function () {
-    // Dashboard
-    Route::get('/dashboard', Overview::class)->name('dashboard');
+    // Dashboard - redirect super admins without tenant to admin dashboard
+    Route::get('/dashboard', function () {
+        $user = auth()->user();
 
-    // Sites
-    Route::prefix('sites')->name('sites.')->group(function () {
-        Route::get('/', SiteList::class)->name('index');
-        Route::get('/create', SiteCreate::class)->name('create');
+        // Super admins without a tenant should go to admin dashboard
+        if ($user->isSuperAdmin() && !$user->currentTenant()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        return app(Overview::class);
+    })->name('dashboard');
+
+    // Routes that require a tenant
+    Route::middleware('has-tenant')->group(function () {
+        // Sites
+        Route::prefix('sites')->name('sites.')->group(function () {
+            Route::get('/', SiteList::class)->name('index');
+            Route::get('/create', SiteCreate::class)->name('create');
+        });
+
+        // Backups
+        Route::get('/backups', BackupList::class)->name('backups.index');
+
+        // Observability
+        Route::get('/metrics', MetricsDashboard::class)->name('metrics.index');
+
+        // Team Management
+        Route::get('/team', TeamManager::class)->name('team.index');
     });
-
-    // Backups
-    Route::get('/backups', BackupList::class)->name('backups.index');
-
-    // Observability
-    Route::get('/metrics', MetricsDashboard::class)->name('metrics.index');
-
-    // Team Management
-    Route::get('/team', TeamManager::class)->name('team.index');
 });
 
 /*

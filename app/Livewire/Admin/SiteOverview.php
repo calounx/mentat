@@ -24,8 +24,18 @@ class SiteOverview extends Component
     public string $tenantFilter = '';
     public bool $sslExpiringOnly = false;
 
+    // Edit modal
+    public bool $showEditModal = false;
+    public ?string $selectedSiteId = null;
+    public array $editFormData = [];
+
     public ?string $error = null;
     public ?string $success = null;
+
+    protected $rules = [
+        'editFormData.php_version' => 'required|string|in:7.4,8.0,8.1,8.2,8.3',
+        'editFormData.document_root' => 'nullable|string|max:255',
+    ];
 
     protected $queryString = [
         'search' => ['except' => ''],
@@ -127,6 +137,70 @@ class SiteOverview extends Component
         } catch (\Exception $e) {
             Log::error('SSL renewal error', ['error' => $e->getMessage()]);
             $this->error = 'Failed to renew SSL: ' . $e->getMessage();
+        }
+    }
+
+    public function openEditModal(string $siteId): void
+    {
+        $site = Site::findOrFail($siteId);
+        $this->selectedSiteId = $siteId;
+        $this->editFormData = [
+            'php_version' => $site->php_version,
+            'document_root' => $site->document_root ?? '',
+        ];
+        $this->showEditModal = true;
+        $this->error = null;
+    }
+
+    public function closeEditModal(): void
+    {
+        $this->showEditModal = false;
+        $this->selectedSiteId = null;
+        $this->editFormData = [];
+        $this->error = null;
+    }
+
+    public function saveSite(): void
+    {
+        $this->validate();
+        $this->error = null;
+
+        try {
+            $site = Site::findOrFail($this->selectedSiteId);
+            $site->update($this->editFormData);
+            $this->success = "Site '{$site->domain}' updated successfully.";
+            $this->closeEditModal();
+        } catch (\Exception $e) {
+            Log::error('Site save error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to update site: ' . $e->getMessage();
+        }
+    }
+
+    public function deleteSite(string $siteId): void
+    {
+        try {
+            $site = Site::findOrFail($siteId);
+            $vps = $site->vpsServer;
+            $domain = $site->domain;
+
+            // If VPS is available, try to delete from VPS first
+            if ($vps) {
+                $bridge = app(VPSManagerBridge::class);
+                $result = $bridge->deleteSite($vps, $domain);
+
+                if (!$result['success']) {
+                    Log::warning('Failed to delete site from VPS, proceeding with DB deletion', [
+                        'domain' => $domain,
+                        'error' => $result['error'] ?? 'Unknown error',
+                    ]);
+                }
+            }
+
+            $site->delete();
+            $this->success = "Site '{$domain}' deleted successfully.";
+        } catch (\Exception $e) {
+            Log::error('Site delete error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to delete site: ' . $e->getMessage();
         }
     }
 

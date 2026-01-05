@@ -122,6 +122,26 @@ class TenantManagement extends Component
         }
     }
 
+    public function deleteTenant(string $tenantId): void
+    {
+        try {
+            $tenant = Tenant::findOrFail($tenantId);
+
+            // Check if tenant has sites
+            if ($tenant->sites()->count() > 0) {
+                $this->error = "Cannot delete tenant '{$tenant->name}' because it has {$tenant->sites()->count()} active site(s). Delete the sites first.";
+                return;
+            }
+
+            $name = $tenant->name;
+            $tenant->delete();
+            $this->success = "Tenant '{$name}' deleted successfully.";
+        } catch (\Exception $e) {
+            Log::error('Tenant delete error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to delete tenant: ' . $e->getMessage();
+        }
+    }
+
     public function render()
     {
         $query = Tenant::query()

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureHasTenant;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Foundation\Application;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'super-admin' => EnsureSuperAdmin::class,
+            'has-tenant' => EnsureHasTenant::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
