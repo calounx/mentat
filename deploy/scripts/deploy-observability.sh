@@ -516,6 +516,15 @@ main() {
     # Get Grafana password
     get_grafana_password
 
+    # Deploy exporters automatically
+    log_section "Exporter Deployment"
+    if [[ -x "${SCRIPT_DIR}/deploy-exporters.sh" ]]; then
+        log_info "Deploying exporters for detected services..."
+        "${SCRIPT_DIR}/deploy-exporters.sh"
+    else
+        log_warn "deploy-exporters.sh not found or not executable"
+    fi
+
     end_timer "Observability deployment"
 
     print_header "Observability Stack Deployed (NATIVE)"

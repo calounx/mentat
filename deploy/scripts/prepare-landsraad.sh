@@ -849,6 +849,15 @@ main() {
     harden_security
     setup_ssl_certificates
 
+    # Deploy exporters for all detected services
+    log_section "Exporter Deployment"
+    if [[ -x "${SCRIPT_DIR}/deploy-exporters.sh" ]]; then
+        log_info "Deploying exporters for detected services..."
+        bash "${SCRIPT_DIR}/deploy-exporters.sh" || log_warning "Exporter deployment completed with warnings"
+    else
+        log_warning "deploy-exporters.sh not found - using basic node_exporter only"
+    fi
+
     end_timer "Server preparation"
 
     print_header "Server Preparation Complete"

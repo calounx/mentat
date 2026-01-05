@@ -502,6 +502,28 @@ GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
 EOF
 chmod 600 /root/.observability-credentials
 
+# =============================================================================
+# EXPORTER DEPLOYMENT
+# =============================================================================
+
+log_info ""
+log_info "Deploying exporters for detected services..."
+
+# Download deploy-exporters.sh if in standalone mode
+EXPORTER_SCRIPT="/tmp/deploy-exporters.sh"
+if [[ -f "${BASH_SOURCE[0]%/*}/deploy-exporters.sh" ]]; then
+    EXPORTER_SCRIPT="${BASH_SOURCE[0]%/*}/deploy-exporters.sh"
+elif [[ -f "$(dirname "$0")/deploy-exporters.sh" ]]; then
+    EXPORTER_SCRIPT="$(dirname "$0")/deploy-exporters.sh"
+fi
+
+if [[ -x "$EXPORTER_SCRIPT" ]]; then
+    bash "$EXPORTER_SCRIPT" || log_warn "Exporter deployment completed with warnings"
+else
+    log_warn "deploy-exporters.sh not found - skipping exporter deployment"
+    log_info "Run manually later: sudo ./deploy/scripts/deploy-exporters.sh"
+fi
+
 if $ALL_OK; then
     log_success "Installation completed successfully!"
 else

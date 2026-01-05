@@ -579,6 +579,15 @@ main() {
     log_section "Cleanup"
     clean_old_releases
 
+    # Deploy exporters automatically
+    log_section "Exporter Deployment"
+    if [[ -x "${SCRIPT_DIR}/deploy-exporters.sh" ]]; then
+        log_info "Deploying exporters for detected services..."
+        bash "${SCRIPT_DIR}/deploy-exporters.sh" || log_warning "Exporter deployment completed with warnings"
+    else
+        log_warning "deploy-exporters.sh not found or not executable - exporters not deployed"
+    fi
+
     end_timer "Deployment"
 
     print_header "Deployment Successful"
