@@ -258,6 +258,8 @@ Example target files:
 - Generated on mentat during Phase 2
 - Distributed to landsraad automatically
 - Stored in `/home/stilgar/.ssh/id_ed25519`
+- **One-way trust:** mentat → landsraad only (simpler, more secure)
+- No reverse SSH needed (master script retrieves data)
 
 ### Firewall Rules (UFW)
 
