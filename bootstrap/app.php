@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureSuperAdmin;
+use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Exclude Stripe webhook from CSRF verification
         $middleware->validateCsrfTokens(except: [
             'stripe/webhook',
+        ]);
+
+        // Register middleware aliases
+        $middleware->alias([
+            'admin' => EnsureUserIsAdmin::class,
+            'super-admin' => EnsureSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -1,9 +1,10 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/laravel",
+    "version": "2.0.0",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "CHOM - Cloud Hosting Operations Manager with VPSManager integration",
+    "keywords": ["laravel", "framework", "hosting", "vps", "management"],
     "license": "MIT",
     "require": {
         "php": "^8.2",

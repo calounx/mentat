@@ -61,6 +61,12 @@ class ProvisionSiteJob implements ShouldQueue
                 'wordpress' => $vpsManager->createWordPressSite($vps, $site->domain, [
                     'php_version' => $site->php_version,
                 ]),
+                'laravel' => $vpsManager->createLaravelSite($vps, $site->domain, [
+                    'php_version' => $site->php_version,
+                ]),
+                'php' => $vpsManager->createPhpSite($vps, $site->domain, [
+                    'php_version' => $site->php_version,
+                ]),
                 'html' => $vpsManager->createHtmlSite($vps, $site->domain),
                 default => throw new \InvalidArgumentException("Unsupported site type: {$site->site_type}"),
             };

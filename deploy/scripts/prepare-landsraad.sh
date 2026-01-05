@@ -635,6 +635,87 @@ EOF
     log_success "Node Exporter installed and running"
 }
 
+# Install VPSManager CLI tool
+install_vpsmanager() {
+    log_step "Installing VPSManager CLI tool"
+
+    local vpsmanager_src="${DEPLOY_ROOT}/vpsmanager"
+    local vpsmanager_dest="/opt/vpsmanager"
+
+    # Check if source exists
+    if [[ ! -d "$vpsmanager_src" ]]; then
+        log_warning "VPSManager source not found at ${vpsmanager_src}, skipping"
+        return 0
+    fi
+
+    # Backup existing installation if present
+    if [[ -d "$vpsmanager_dest" ]]; then
+        log_info "Backing up existing VPSManager installation"
+        sudo mv "$vpsmanager_dest" "${vpsmanager_dest}.backup.$(date +%s)"
+    fi
+
+    # Create installation directory
+    sudo mkdir -p "$vpsmanager_dest"
+
+    # Copy files
+    log_info "Copying VPSManager files"
+    sudo cp -r "${vpsmanager_src}/bin" "$vpsmanager_dest/"
+    sudo cp -r "${vpsmanager_src}/lib" "$vpsmanager_dest/"
+    sudo cp -r "${vpsmanager_src}/config" "$vpsmanager_dest/"
+    sudo cp -r "${vpsmanager_src}/templates" "$vpsmanager_dest/"
+
+    # Create data and var directories
+    sudo mkdir -p "${vpsmanager_dest}/data"
+    sudo mkdir -p "${vpsmanager_dest}/var/log"
+
+    # Initialize sites registry
+    if [[ ! -f "${vpsmanager_dest}/data/sites.json" ]]; then
+        echo '{"sites":[]}' | sudo tee "${vpsmanager_dest}/data/sites.json" > /dev/null
+    fi
+
+    # Set permissions
+    sudo chmod +x "${vpsmanager_dest}/bin/vpsmanager"
+    sudo chmod 755 "$vpsmanager_dest"
+    sudo chmod -R 755 "${vpsmanager_dest}/bin"
+    sudo chmod -R 755 "${vpsmanager_dest}/lib"
+    sudo chmod 644 "${vpsmanager_dest}/config/vpsmanager.conf"
+    sudo chmod -R 644 "${vpsmanager_dest}/templates"/*
+    sudo chmod 755 "${vpsmanager_dest}/templates"
+
+    # Create symlink in /usr/local/bin
+    if [[ -L "/usr/local/bin/vpsmanager" ]]; then
+        sudo rm -f "/usr/local/bin/vpsmanager"
+    fi
+    sudo ln -sf "${vpsmanager_dest}/bin/vpsmanager" /usr/local/bin/vpsmanager
+
+    # Create sites directory for VPSManager-managed sites
+    if [[ ! -d "/var/www/sites" ]]; then
+        sudo mkdir -p /var/www/sites
+        sudo chown www-data:www-data /var/www/sites
+        sudo chmod 755 /var/www/sites
+    fi
+
+    # Create backup directory
+    if [[ ! -d "/var/backups/sites" ]]; then
+        sudo mkdir -p /var/backups/sites
+        sudo chown www-data:www-data /var/backups/sites
+        sudo chmod 750 /var/backups/sites
+    fi
+
+    # Install jq if not present (required for vpsmanager)
+    if ! command -v jq &> /dev/null; then
+        log_info "Installing jq for JSON processing"
+        sudo apt-get install -y jq
+    fi
+
+    # Verify installation
+    if /usr/local/bin/vpsmanager --version > /dev/null 2>&1; then
+        log_success "VPSManager installed successfully"
+    else
+        log_warning "VPSManager installation may have issues"
+    fi
+}
+
 # Configure PHP-FPM pool
 configure_php_fpm() {
     log_step "Configuring PHP-FPM pool"
@@ -761,6 +842,7 @@ main() {
     setup_app_directory
     configure_database
     install_monitoring
+    install_vpsmanager
     configure_php_fpm
     configure_supervisor
     setup_log_rotation

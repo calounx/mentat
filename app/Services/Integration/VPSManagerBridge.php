@@ -166,6 +166,34 @@ class VPSManagerBridge
     }
 
     /**
+     * Create a Laravel site.
+     */
+    public function createLaravelSite(VpsServer $vps, string $domain, array $options = []): array
+    {
+        $args = [
+            $domain,
+            'type' => 'laravel',
+            'php-version' => $options['php_version'] ?? '8.2',
+        ];
+
+        return $this->execute($vps, 'site:create', $args);
+    }
+
+    /**
+     * Create a generic PHP site.
+     */
+    public function createPhpSite(VpsServer $vps, string $domain, array $options = []): array
+    {
+        $args = [
+            $domain,
+            'type' => 'php',
+            'php-version' => $options['php_version'] ?? '8.2',
+        ];
+
+        return $this->execute($vps, 'site:create', $args);
+    }
+
+    /**
      * Delete a site.
      */
     public function deleteSite(VpsServer $vps, string $domain, bool $force = false): array
@@ -299,6 +327,14 @@ class VPSManagerBridge
     public function getDashboard(VpsServer $vps): array
     {
         return $this->execute($vps, 'monitor:dashboard');
+    }
+
+    /**
+     * Get VPS stats.
+     */
+    public function getStats(VpsServer $vps): array
+    {
+        return $this->execute($vps, 'monitor:stats');
     }
 
     /**

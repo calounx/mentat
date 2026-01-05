@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\SiteController;
 use App\Http\Controllers\Api\V1\TeamController;
+use App\Http\Controllers\Api\V1\VpsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -64,6 +65,15 @@ Route::prefix('v1')->group(function () {
             Route::post('/{id}/disable', [SiteController::class, 'disable']);
             Route::post('/{id}/ssl', [SiteController::class, 'issueSSL']);
             Route::get('/{id}/metrics', [SiteController::class, 'metrics']);
+
+            // Real-time site operations (VPSManager integration)
+            Route::get('/{id}/info', [SiteController::class, 'info']);
+            Route::post('/{id}/cache/clear', [SiteController::class, 'clearCache']);
+            Route::get('/{id}/ssl/status', [SiteController::class, 'sslStatus']);
+            Route::post('/{id}/database/export', [SiteController::class, 'exportDatabase'])
+                ->middleware('throttle:sensitive');
+            Route::post('/{id}/database/optimize', [SiteController::class, 'optimizeDatabase'])
+                ->middleware('throttle:sensitive');
         });
 
         // =====================================================================
@@ -136,6 +146,23 @@ Route::prefix('v1')->group(function () {
         Route::prefix('organization')->group(function () {
             Route::get('/', [TeamController::class, 'organization']);
             Route::patch('/', [TeamController::class, 'updateOrganization']);
+        });
+
+        // =====================================================================
+        // VPS SERVER MANAGEMENT (Admin-only)
+        // =====================================================================
+        // These endpoints expose infrastructure details and could reveal
+        // information about other tenants on shared VPS servers.
+        Route::prefix('vps')->middleware('admin')->group(function () {
+            // VPS health and monitoring
+            Route::get('/{id}/health', [VpsController::class, 'health']);
+            Route::get('/{id}/dashboard', [VpsController::class, 'dashboard']);
+            Route::get('/{id}/stats', [VpsController::class, 'stats']);
+            Route::get('/{id}/sites', [VpsController::class, 'listSites']);
+
+            // Security audit (potentially slow operation)
+            Route::get('/{id}/security-audit', [VpsController::class, 'securityAudit'])
+                ->middleware('throttle:sensitive');
         });
 
         // TODO: Add more routes as controllers are created

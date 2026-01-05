@@ -71,7 +71,14 @@ class RestoreBackupJob implements ShouldQueue
             $previousStatus = $site->status;
             $site->update(['status' => 'restoring']);
 
-            $result = $vpsManager->restoreBackup($vps, $backup->storage_path);
+            // Extract backup_id from storage_path (format: /path/to/YYYYMMDD_HHMMSS_type.tar.gz)
+            $filename = basename($backup->storage_path);
+            if (!preg_match('/^(\d{8}_\d{6})_/', $filename, $matches)) {
+                throw new \RuntimeException("Cannot extract backup_id from storage_path: {$backup->storage_path}");
+            }
+            $backupId = $matches[1];
+
+            $result = $vpsManager->restoreBackup($vps, $backupId);
 
             if ($result['success']) {
                 // Restore site to previous status

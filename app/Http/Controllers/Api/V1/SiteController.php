@@ -364,6 +364,263 @@ class SiteController extends Controller
         ]);
     }
 
+    /**
+     * Get real-time site info from VPS.
+     */
+    public function info(Request $request, string $id): JsonResponse
+    {
+        $tenant = $this->getTenant($request);
+        $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        if (!$site->vpsServer) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_VPS',
+                    'message' => 'Site has no associated VPS server.',
+                ],
+            ], 400);
+        }
+
+        try {
+            $result = $this->vpsManager->getSiteInfo($site->vpsServer, $site->domain);
+
+            return response()->json([
+                'success' => $result['success'],
+                'data' => [
+                    'site_id' => $site->id,
+                    'domain' => $site->domain,
+                    'info' => $result['data'] ?? null,
+                    'raw_output' => $result['success'] ? null : $result['output'],
+                ],
+            ], $result['success'] ? 200 : 500);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to get site info', [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'INFO_FAILED',
+                    'message' => 'Failed to retrieve site information.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Clear site cache.
+     */
+    public function clearCache(Request $request, string $id): JsonResponse
+    {
+        $tenant = $this->getTenant($request);
+        $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        if (!$site->vpsServer) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_VPS',
+                    'message' => 'Site has no associated VPS server.',
+                ],
+            ], 400);
+        }
+
+        try {
+            $result = $this->vpsManager->clearCache($site->vpsServer, $site->domain);
+
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['success']
+                    ? 'Cache cleared successfully.'
+                    : 'Failed to clear cache.',
+                'data' => $result['data'] ?? null,
+            ], $result['success'] ? 200 : 500);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to clear cache', [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'CACHE_CLEAR_FAILED',
+                    'message' => 'Failed to clear site cache.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get SSL status for site.
+     */
+    public function sslStatus(Request $request, string $id): JsonResponse
+    {
+        $tenant = $this->getTenant($request);
+        $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        if (!$site->vpsServer) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_VPS',
+                    'message' => 'Site has no associated VPS server.',
+                ],
+            ], 400);
+        }
+
+        try {
+            $result = $this->vpsManager->getSSLStatus($site->vpsServer, $site->domain);
+
+            return response()->json([
+                'success' => $result['success'],
+                'data' => [
+                    'site_id' => $site->id,
+                    'domain' => $site->domain,
+                    'ssl_enabled' => $site->ssl_enabled,
+                    'ssl_expires_at' => $site->ssl_expires_at?->toIso8601String(),
+                    'ssl_expiring_soon' => $site->isSslExpiringSoon(),
+                    'ssl_expired' => $site->isSslExpired(),
+                    'vps_status' => $result['data'] ?? null,
+                ],
+            ], $result['success'] ? 200 : 500);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to get SSL status', [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'SSL_STATUS_FAILED',
+                    'message' => 'Failed to retrieve SSL status.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Export site database.
+     */
+    public function exportDatabase(Request $request, string $id): JsonResponse
+    {
+        $tenant = $this->getTenant($request);
+        $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        if (!$site->vpsServer) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_VPS',
+                    'message' => 'Site has no associated VPS server.',
+                ],
+            ], 400);
+        }
+
+        if (!$site->db_name) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_DATABASE',
+                    'message' => 'Site does not have an associated database.',
+                ],
+            ], 400);
+        }
+
+        try {
+            $result = $this->vpsManager->exportDatabase($site->vpsServer, $site->domain);
+
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['success']
+                    ? 'Database export initiated.'
+                    : 'Failed to export database.',
+                'data' => $result['data'] ?? null,
+            ], $result['success'] ? 200 : 500);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to export database', [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'DB_EXPORT_FAILED',
+                    'message' => 'Failed to export database.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Optimize site database.
+     */
+    public function optimizeDatabase(Request $request, string $id): JsonResponse
+    {
+        $tenant = $this->getTenant($request);
+        $site = $tenant->sites()->with('vpsServer')->findOrFail($id);
+
+        if (!$site->vpsServer) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_VPS',
+                    'message' => 'Site has no associated VPS server.',
+                ],
+            ], 400);
+        }
+
+        if (!$site->db_name) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NO_DATABASE',
+                    'message' => 'Site does not have an associated database.',
+                ],
+            ], 400);
+        }
+
+        try {
+            $result = $this->vpsManager->optimizeDatabase($site->vpsServer, $site->domain);
+
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['success']
+                    ? 'Database optimization completed.'
+                    : 'Failed to optimize database.',
+                'data' => $result['data'] ?? null,
+            ], $result['success'] ? 200 : 500);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to optimize database', [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'DB_OPTIMIZE_FAILED',
+                    'message' => 'Failed to optimize database.',
+                ],
+            ], 500);
+        }
+    }
+
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================

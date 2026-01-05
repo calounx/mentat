@@ -1,0 +1,166 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Livewire\Admin;
+
+use App\Models\Tenant;
+use App\Models\Organization;
+use Illuminate\Support\Facades\Log;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+class TenantManagement extends Component
+{
+    use WithPagination;
+
+    // Filters
+    public string $search = '';
+    public string $tierFilter = '';
+    public string $statusFilter = '';
+
+    // Selected tenant for details view
+    public ?string $selectedTenantId = null;
+    public ?Tenant $selectedTenant = null;
+    public bool $showDetailsModal = false;
+
+    // Edit form
+    public bool $showEditModal = false;
+    public array $editFormData = [];
+
+    public ?string $error = null;
+    public ?string $success = null;
+
+    protected $queryString = [
+        'search' => ['except' => ''],
+        'tierFilter' => ['except' => ''],
+        'statusFilter' => ['except' => ''],
+    ];
+
+    protected $rules = [
+        'editFormData.tier' => 'required|in:starter,pro,enterprise',
+        'editFormData.status' => 'required|in:active,suspended,cancelled',
+        'editFormData.metrics_retention_days' => 'required|integer|min:1|max:365',
+    ];
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingTierFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingStatusFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function viewDetails(string $tenantId): void
+    {
+        $this->selectedTenant = Tenant::with(['organization', 'sites', 'vpsAllocations.vps'])
+            ->findOrFail($tenantId);
+        $this->selectedTenantId = $tenantId;
+        $this->showDetailsModal = true;
+    }
+
+    public function closeDetailsModal(): void
+    {
+        $this->showDetailsModal = false;
+        $this->selectedTenant = null;
+        $this->selectedTenantId = null;
+    }
+
+    public function openEditModal(string $tenantId): void
+    {
+        $tenant = Tenant::findOrFail($tenantId);
+        $this->selectedTenantId = $tenantId;
+        $this->editFormData = [
+            'tier' => $tenant->tier,
+            'status' => $tenant->status,
+            'metrics_retention_days' => $tenant->metrics_retention_days,
+        ];
+        $this->showEditModal = true;
+        $this->error = null;
+    }
+
+    public function closeEditModal(): void
+    {
+        $this->showEditModal = false;
+        $this->selectedTenantId = null;
+        $this->editFormData = [];
+        $this->error = null;
+    }
+
+    public function saveTenant(): void
+    {
+        $this->validate();
+        $this->error = null;
+
+        try {
+            $tenant = Tenant::findOrFail($this->selectedTenantId);
+            $tenant->update($this->editFormData);
+            $this->success = "Tenant '{$tenant->name}' updated successfully.";
+            $this->closeEditModal();
+        } catch (\Exception $e) {
+            Log::error('Tenant save error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to update tenant: ' . $e->getMessage();
+        }
+    }
+
+    public function updateStatus(string $tenantId, string $status): void
+    {
+        try {
+            $tenant = Tenant::findOrFail($tenantId);
+            $tenant->update(['status' => $status]);
+            $this->success = "Tenant '{$tenant->name}' status updated to {$status}.";
+        } catch (\Exception $e) {
+            Log::error('Tenant status update error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to update status: ' . $e->getMessage();
+        }
+    }
+
+    public function render()
+    {
+        $query = Tenant::query()
+            ->with(['organization'])
+            ->withCount(['sites', 'vpsAllocations']);
+
+        if ($this->search) {
+            $query->where(function ($q) {
+                $q->where('name', 'like', "%{$this->search}%")
+                    ->orWhere('slug', 'like', "%{$this->search}%")
+                    ->orWhereHas('organization', function ($org) {
+                        $org->where('name', 'like', "%{$this->search}%");
+                    });
+            });
+        }
+
+        if ($this->tierFilter) {
+            $query->where('tier', $this->tierFilter);
+        }
+
+        if ($this->statusFilter) {
+            $query->where('status', $this->statusFilter);
+        }
+
+        $tenants = $query->orderBy('name')->paginate(15);
+
+        // Get stats for summary
+        $stats = [
+            'total' => Tenant::count(),
+            'active' => Tenant::where('status', 'active')->count(),
+            'by_tier' => Tenant::selectRaw('tier, count(*) as count')
+                ->groupBy('tier')
+                ->pluck('count', 'tier')
+                ->toArray(),
+        ];
+
+        return view('livewire.admin.tenant-management', [
+            'tenants' => $tenants,
+            'stats' => $stats,
+        ])->layout('layouts.admin', ['title' => 'Tenant Management']);
+    }
+}

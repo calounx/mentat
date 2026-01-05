@@ -1,6 +1,11 @@
 <?php
 
 use App\Http\Controllers\Webhooks\StripeWebhookController;
+use App\Livewire\Admin\AdminDashboard;
+use App\Livewire\Admin\SiteOverview;
+use App\Livewire\Admin\SystemSettings;
+use App\Livewire\Admin\TenantManagement;
+use App\Livewire\Admin\VpsManagement;
 use App\Livewire\Backups\BackupList;
 use App\Livewire\Dashboard\Overview;
 use App\Livewire\Observability\MetricsDashboard;
@@ -115,4 +120,31 @@ Route::middleware('auth')->group(function () {
 
     // Team Management
     Route::get('/team', TeamManager::class)->name('team.index');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin Routes (Super Admin Only)
+|--------------------------------------------------------------------------
+|
+| These routes are protected by the super-admin middleware and provide
+| system-wide management capabilities for VPS servers, tenants, sites,
+| and system settings.
+|
+*/
+Route::middleware(['auth', 'super-admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Admin Dashboard
+    Route::get('/', AdminDashboard::class)->name('dashboard');
+
+    // VPS Management
+    Route::get('/vps', VpsManagement::class)->name('vps.index');
+
+    // Tenant Management
+    Route::get('/tenants', TenantManagement::class)->name('tenants.index');
+
+    // Site Overview (all sites across all tenants)
+    Route::get('/sites', SiteOverview::class)->name('sites.index');
+
+    // System Settings
+    Route::get('/settings', SystemSettings::class)->name('settings.index');
 });

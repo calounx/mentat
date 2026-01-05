@@ -1,0 +1,521 @@
+#!/usr/bin/env bash
+# VPSManager - Site provisioning and management tool
+# Usage: vpsmanager <command> [options]
+#
+# Commands:
+#   site:create <domain> --type=<type> --php-version=<version>
+#   site:delete <domain> [--force]
+#   site:enable <domain>
+#   site:disable <domain>
+#   site:list
+#   site:info <domain>
+#
+#   ssl:issue <domain>
+#   ssl:renew <domain>
+#   ssl:status <domain>
+#
+#   backup:create --site=<domain> --type=<full|files|database>
+#   backup:list --site=<domain>
+#   backup:restore <backup_id>
+#
+#   database:export --site=<domain>
+#   database:optimize --site=<domain>
+#
+#   cache:clear --site=<domain>
+#
+#   monitor:health
+#   monitor:stats
+#   monitor:dashboard
+#
+#   security:audit
+#
+# All output is JSON formatted for programmatic use.
+
+set -euo pipefail
+
+# Determine installation root
+VPSMANAGER_ROOT="${VPSMANAGER_ROOT:-/opt/vpsmanager}"
+
+# Filter out --format=json (we always output JSON)
+ORIGINAL_ARGS=("$@")
+FILTERED_ARGS=()
+for arg in "$@"; do
+    if [[ "$arg" != "--format=json" && "$arg" != "--format="* ]]; then
+        FILTERED_ARGS+=("$arg")
+    fi
+done
+set -- "${FILTERED_ARGS[@]:-}"
+
+# Verify installation
+if [[ ! -d "${VPSMANAGER_ROOT}/lib" ]]; then
+    echo '{"success":false,"error":"VPSManager not properly installed. Missing lib directory.","code":"INSTALLATION_ERROR"}'
+    exit 1
+fi
+
+# Load configuration
+if [[ -f "${VPSMANAGER_ROOT}/config/vpsmanager.conf" ]]; then
+    # shellcheck source=/dev/null
+    source "${VPSMANAGER_ROOT}/config/vpsmanager.conf"
+fi
+
+# Load core libraries
+source "${VPSMANAGER_ROOT}/lib/core/json.sh"
+source "${VPSMANAGER_ROOT}/lib/core/logging.sh"
+source "${VPSMANAGER_ROOT}/lib/core/validation.sh"
+source "${VPSMANAGER_ROOT}/lib/core/database.sh"
+
+# Load command modules
+source "${VPSMANAGER_ROOT}/lib/commands/site.sh"
+source "${VPSMANAGER_ROOT}/lib/commands/ssl.sh"
+source "${VPSMANAGER_ROOT}/lib/commands/backup.sh"
+source "${VPSMANAGER_ROOT}/lib/commands/monitor.sh"
+
+# Initialize
+rotate_log
+
+# Show version
+show_version() {
+    json_success "VPSManager v2.0.0" "$(json_object "version" "2.0.0" "root" "$VPSMANAGER_ROOT")"
+}
+
+# Show help
+show_help() {
+    json_success "VPSManager Help" "$(json_object \
+        "commands" "$(json_array \
+            "site:create" "site:delete" "site:enable" "site:disable" "site:list" "site:info" \
+            "ssl:issue" "ssl:renew" "ssl:status" \
+            "backup:create" "backup:list" "backup:restore" \
+            "database:export" "database:optimize" \
+            "cache:clear" \
+            "monitor:health" "monitor:stats" "monitor:dashboard" \
+            "security:audit")" \
+        "usage" "vpsmanager <command> [options]")"
+}
+
+# Database export command
+cmd_database_export() {
+    local site=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --site=*)
+                site="${1#*=}"
+                shift
+                ;;
+            --site)
+                site="$2"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$site" ]]; then
+                    site="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$site" ]]; then
+        json_error "Site is required (--site=<domain>)" "MISSING_SITE"
+        return 1
+    fi
+
+    if ! site_exists "$site"; then
+        json_error "Site not found: ${site}" "SITE_NOT_FOUND"
+        return 1
+    fi
+
+    # Get database name from registry
+    local site_info db_name
+    site_info=$(get_site_info "$site")
+    if command -v jq &> /dev/null; then
+        db_name=$(echo "$site_info" | jq -r '.db_name // empty')
+    else
+        db_name="site_$(domain_to_dbname "$site")"
+    fi
+
+    if [[ -z "$db_name" ]]; then
+        json_error "No database found for site" "NO_DATABASE"
+        return 1
+    fi
+
+    # Create export file
+    local export_dir="${BACKUP_ROOT:-/var/backups/sites}/${site}"
+    mkdir -p "$export_dir"
+    local export_file="${export_dir}/export_$(date +%Y%m%d_%H%M%S).sql"
+
+    if dump_database "$db_name" "$export_file"; then
+        local size_bytes
+        size_bytes=$(stat -c%s "$export_file" 2>/dev/null || stat -f%z "$export_file" 2>/dev/null || echo 0)
+        json_success "Database exported" "$(json_object \
+            "site" "$site" \
+            "database" "$db_name" \
+            "export_file" "$export_file" \
+            "size_bytes" "$size_bytes")"
+        return 0
+    else
+        json_error "Database export failed" "EXPORT_FAILED"
+        return 1
+    fi
+}
+
+# Database optimize command
+cmd_database_optimize() {
+    local site=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --site=*)
+                site="${1#*=}"
+                shift
+                ;;
+            --site)
+                site="$2"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$site" ]]; then
+                    site="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$site" ]]; then
+        json_error "Site is required (--site=<domain>)" "MISSING_SITE"
+        return 1
+    fi
+
+    if ! site_exists "$site"; then
+        json_error "Site not found: ${site}" "SITE_NOT_FOUND"
+        return 1
+    fi
+
+    # Get database name from registry
+    local site_info db_name
+    site_info=$(get_site_info "$site")
+    if command -v jq &> /dev/null; then
+        db_name=$(echo "$site_info" | jq -r '.db_name // empty')
+    else
+        db_name="site_$(domain_to_dbname "$site")"
+    fi
+
+    if [[ -z "$db_name" ]]; then
+        json_error "No database found for site" "NO_DATABASE"
+        return 1
+    fi
+
+    log_info "Optimizing database ${db_name}"
+
+    # Run MySQL optimize
+    if mysql_exec "OPTIMIZE TABLE \`${db_name}\`.*;" > /dev/null 2>&1; then
+        json_success "Database optimized" "$(json_object "site" "$site" "database" "$db_name")"
+        return 0
+    else
+        # Try ANALYZE instead if OPTIMIZE fails
+        if mysql_exec "ANALYZE TABLE \`${db_name}\`.*;" > /dev/null 2>&1; then
+            json_success "Database analyzed" "$(json_object "site" "$site" "database" "$db_name")"
+            return 0
+        fi
+        json_error "Database optimization failed" "OPTIMIZE_FAILED"
+        return 1
+    fi
+}
+
+# Cache clear command
+cmd_cache_clear() {
+    local site=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --site=*)
+                site="${1#*=}"
+                shift
+                ;;
+            --site)
+                site="$2"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$site" ]]; then
+                    site="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$site" ]]; then
+        json_error "Site is required (--site=<domain>)" "MISSING_SITE"
+        return 1
+    fi
+
+    if ! site_exists "$site"; then
+        json_error "Site not found: ${site}" "SITE_NOT_FOUND"
+        return 1
+    fi
+
+    # Get site root
+    local site_info site_root
+    site_info=$(get_site_info "$site")
+    if command -v jq &> /dev/null; then
+        site_root=$(echo "$site_info" | jq -r '.site_root // empty')
+    else
+        site_root="${SITES_ROOT:-/var/www/sites}/${site}"
+    fi
+
+    local cleared=()
+
+    # Clear OPcache if available
+    if php -r "opcache_reset();" 2>/dev/null; then
+        cleared+=("opcache")
+    fi
+
+    # Clear Laravel cache if it's a Laravel site
+    if [[ -f "${site_root}/artisan" ]]; then
+        cd "$site_root"
+        php artisan cache:clear 2>/dev/null && cleared+=("laravel_cache")
+        php artisan config:clear 2>/dev/null && cleared+=("config_cache")
+        php artisan view:clear 2>/dev/null && cleared+=("view_cache")
+        php artisan route:clear 2>/dev/null && cleared+=("route_cache")
+    fi
+
+    # Clear any tmp files
+    if [[ -d "${site_root}/tmp" ]]; then
+        find "${site_root}/tmp" -type f -mtime +1 -delete 2>/dev/null
+        cleared+=("tmp_files")
+    fi
+
+    json_success "Cache cleared" "$(json_object \
+        "site" "$site" \
+        "cleared" "$(json_array "${cleared[@]:-none}")")"
+    return 0
+}
+
+# Monitor dashboard command
+cmd_monitor_dashboard() {
+    # Combine health and stats for dashboard view
+    local health_data stats_data
+
+    # Get health info
+    health_data=$(cmd_monitor_health 2>/dev/null | jq -r '.data // {}' 2>/dev/null || echo '{}')
+    stats_data=$(cmd_monitor_stats 2>/dev/null | jq -r '.data // {}' 2>/dev/null || echo '{}')
+
+    # Count sites
+    local sites_count=0
+    if command -v jq &> /dev/null && [[ -f "$SITES_REGISTRY" ]]; then
+        sites_count=$(jq '.sites | length' "$SITES_REGISTRY" 2>/dev/null || echo "0")
+    fi
+
+    json_success "Dashboard data" "$(json_object \
+        "sites_count" "$sites_count" \
+        "health" "$health_data" \
+        "stats" "$stats_data" \
+        "timestamp" "$(date -Iseconds)")"
+    return 0
+}
+
+# Security audit command
+cmd_security_audit() {
+    log_info "Running security audit"
+
+    local issues=()
+    local checks_passed=0
+    local checks_total=0
+
+    # Check SSH root login
+    ((checks_total++))
+    if grep -q "^PermitRootLogin no" /etc/ssh/sshd_config 2>/dev/null; then
+        ((checks_passed++))
+    else
+        issues+=("SSH root login may be enabled")
+    fi
+
+    # Check firewall
+    ((checks_total++))
+    if command -v ufw &> /dev/null && ufw status | grep -q "Status: active"; then
+        ((checks_passed++))
+    else
+        issues+=("Firewall (ufw) may not be active")
+    fi
+
+    # Check fail2ban
+    ((checks_total++))
+    if systemctl is-active --quiet fail2ban 2>/dev/null; then
+        ((checks_passed++))
+    else
+        issues+=("fail2ban is not running")
+    fi
+
+    # Check unattended upgrades
+    ((checks_total++))
+    if dpkg -l | grep -q unattended-upgrades 2>/dev/null; then
+        ((checks_passed++))
+    else
+        issues+=("Automatic security updates not configured")
+    fi
+
+    # Check nginx security headers
+    ((checks_total++))
+    if grep -r "X-Frame-Options" /etc/nginx/sites-enabled/ &>/dev/null; then
+        ((checks_passed++))
+    else
+        issues+=("X-Frame-Options header may not be set in nginx")
+    fi
+
+    # Check SSL certificates expiry
+    ((checks_total++))
+    local expiring_certs=0
+    for cert in /etc/letsencrypt/live/*/cert.pem; do
+        if [[ -f "$cert" ]]; then
+            local expiry_date
+            expiry_date=$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)
+            local expiry_epoch
+            expiry_epoch=$(date -d "$expiry_date" +%s 2>/dev/null || echo 0)
+            local now_epoch
+            now_epoch=$(date +%s)
+            local days_remaining=$(( (expiry_epoch - now_epoch) / 86400 ))
+            if [[ "$days_remaining" -lt 14 ]]; then
+                ((expiring_certs++))
+            fi
+        fi
+    done
+    if [[ "$expiring_certs" -eq 0 ]]; then
+        ((checks_passed++))
+    else
+        issues+=("${expiring_certs} SSL certificate(s) expiring within 14 days")
+    fi
+
+    local score=$((checks_passed * 100 / checks_total))
+    local status="good"
+    if [[ "$score" -lt 70 ]]; then
+        status="warning"
+    fi
+    if [[ "$score" -lt 50 ]]; then
+        status="critical"
+    fi
+
+    json_success "Security audit completed" "$(json_object \
+        "status" "$status" \
+        "score" "$score" \
+        "checks_passed" "$checks_passed" \
+        "checks_total" "$checks_total" \
+        "issues" "$(json_array "${issues[@]:-}")" \
+        "timestamp" "$(date -Iseconds)")"
+    return 0
+}
+
+# Main command router
+main() {
+    local command="${1:-help}"
+    shift || true
+
+    log_info "Command: ${command} $*"
+
+    case "$command" in
+        # Site commands
+        site:create)
+            require_root
+            cmd_site_create "$@"
+            ;;
+        site:delete)
+            require_root
+            cmd_site_delete "$@"
+            ;;
+        site:enable)
+            require_root
+            cmd_site_enable "$@"
+            ;;
+        site:disable)
+            require_root
+            cmd_site_disable "$@"
+            ;;
+        site:list)
+            cmd_site_list "$@"
+            ;;
+        site:info)
+            cmd_site_info "$@"
+            ;;
+
+        # SSL commands
+        ssl:issue)
+            require_root
+            cmd_ssl_issue "$@"
+            ;;
+        ssl:renew)
+            require_root
+            cmd_ssl_renew "$@"
+            ;;
+        ssl:status)
+            cmd_ssl_status "$@"
+            ;;
+
+        # Backup commands
+        backup:create)
+            require_root
+            cmd_backup_create "$@"
+            ;;
+        backup:list)
+            cmd_backup_list "$@"
+            ;;
+        backup:restore)
+            require_root
+            cmd_backup_restore "$@"
+            ;;
+
+        # Database commands
+        database:export)
+            require_root
+            cmd_database_export "$@"
+            ;;
+        database:optimize)
+            require_root
+            cmd_database_optimize "$@"
+            ;;
+
+        # Cache commands
+        cache:clear)
+            require_root
+            cmd_cache_clear "$@"
+            ;;
+
+        # Monitor commands
+        monitor:health)
+            cmd_monitor_health "$@"
+            ;;
+        monitor:stats)
+            cmd_monitor_stats "$@"
+            ;;
+        monitor:dashboard)
+            cmd_monitor_dashboard "$@"
+            ;;
+
+        # Security commands
+        security:audit)
+            cmd_security_audit "$@"
+            ;;
+
+        # Meta commands
+        --version|-v|version)
+            show_version
+            ;;
+        --help|-h|help)
+            show_help
+            ;;
+
+        *)
+            json_error "Unknown command: ${command}" "UNKNOWN_COMMAND"
+            exit 1
+            ;;
+    esac
+}
+
+# Error handler for unexpected failures
+trap 'json_error "Unexpected error at line $LINENO" "INTERNAL_ERROR"; exit 1' ERR
+
+# Run main
+main "$@"

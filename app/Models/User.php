@@ -21,6 +21,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'organization_id',
         'role',
+        'is_super_admin',
         'two_factor_enabled',
         'two_factor_secret',
         'settings',
@@ -37,6 +38,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_super_admin' => 'boolean',
             'two_factor_enabled' => 'boolean',
             'settings' => 'array',
         ];
@@ -88,6 +90,15 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isViewer(): bool
     {
         return $this->role === 'viewer';
+    }
+
+    /**
+     * Check if user is a super admin (system-wide admin access).
+     * Super admins can access the admin panel and manage all tenants, VPS servers, etc.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->is_super_admin === true;
     }
 
     /**
