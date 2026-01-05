@@ -1013,6 +1013,15 @@ main() {
     # Setup SSL if email provided
     setup_ssl_mentat
 
+    # Deploy exporters automatically
+    log_section "Exporter Deployment"
+    if [[ -x "${SCRIPT_DIR}/deploy-exporters.sh" ]]; then
+        log_info "Deploying exporters for detected services..."
+        bash "${SCRIPT_DIR}/deploy-exporters.sh" || log_warning "Exporter deployment completed with warnings"
+    else
+        log_warning "deploy-exporters.sh not found - using basic node_exporter only"
+    fi
+
     # Verify services are running
     log_section "Service Status"
     for service in prometheus grafana-server loki promtail alertmanager node_exporter; do
