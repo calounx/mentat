@@ -103,15 +103,33 @@ BOOTSTRAP_USER="${BOOTSTRAP_USER:-root}"
 MENTAT_HOST="${MENTAT_HOST:-mentat.arewel.com}"
 LANDSRAAD_HOST="${LANDSRAAD_HOST:-landsraad.arewel.com}"
 
-# Detect original user if running under sudo and set SSH options
-ORIGINAL_USER="${SUDO_USER:-$(whoami)}"
-ORIGINAL_HOME=$(eval echo "~${ORIGINAL_USER}")
-SSH_KEY="${ORIGINAL_HOME}/.ssh/id_ed25519"
-if [[ ! -f "$SSH_KEY" ]]; then
-    SSH_KEY="${ORIGINAL_HOME}/.ssh/id_rsa"
+# Detect SSH key to use - prefer DEPLOY_USER's keys, fall back to SUDO_USER
+find_ssh_key() {
+    local user="$1"
+    local home=$(eval echo "~${user}")
+    for key in "${home}/.ssh/id_ed25519" "${home}/.ssh/id_rsa"; do
+        if [[ -f "$key" ]]; then
+            echo "$key"
+            return 0
+        fi
+    done
+    return 1
+}
+
+SSH_KEY=""
+# First try DEPLOY_USER (stilgar)
+if SSH_KEY=$(find_ssh_key "$DEPLOY_USER" 2>/dev/null); then
+    : # Found stilgar's key
+# Then try SUDO_USER (calounx when running with sudo)
+elif [[ -n "${SUDO_USER:-}" ]] && SSH_KEY=$(find_ssh_key "$SUDO_USER" 2>/dev/null); then
+    : # Found sudo user's key
+# Finally try current user
+elif SSH_KEY=$(find_ssh_key "$(whoami)" 2>/dev/null); then
+    : # Found current user's key
 fi
+
 SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5"
-if [[ -f "$SSH_KEY" ]]; then
+if [[ -n "$SSH_KEY" && -f "$SSH_KEY" ]]; then
     SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
 fi
 
