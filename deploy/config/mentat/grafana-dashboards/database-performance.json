@@ -12,8 +12,10 @@
       "title": "Active Connections",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "pg_stat_activity_count",
           "legendFormat": "{{state}}",
           "refId": "A"
@@ -26,8 +28,10 @@
       "title": "Connection Pool Usage",
       "type": "gauge",
       "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "sum(pg_stat_activity_count) / pg_settings_max_connections * 100",
           "legendFormat": "Usage %",
           "refId": "A"
@@ -52,13 +56,16 @@
       "title": "Transactions/sec",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_xact_commit{datname=\"chom\"}[5m])",
           "legendFormat": "Commits",
           "refId": "A"
         },
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_xact_rollback{datname=\"chom\"}[5m])",
           "legendFormat": "Rollbacks",
           "refId": "B"
@@ -71,8 +78,10 @@
       "title": "Cache Hit Ratio",
       "type": "timeseries",
       "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "pg_stat_database_blks_hit{datname=\"chom\"} / (pg_stat_database_blks_hit{datname=\"chom\"} + pg_stat_database_blks_read{datname=\"chom\"}) * 100",
           "legendFormat": "Cache Hit %",
           "refId": "A"
@@ -96,8 +105,10 @@
       "title": "Database Size",
       "type": "stat",
       "gridPos": {"x": 0, "y": 16, "w": 8, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "pg_database_size_bytes{datname=\"chom\"}",
           "legendFormat": "Size",
           "refId": "A"
@@ -111,23 +122,28 @@
       "title": "Rows/sec",
       "type": "timeseries",
       "gridPos": {"x": 8, "y": 16, "w": 16, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_tup_fetched{datname=\"chom\"}[5m])",
           "legendFormat": "Fetched",
           "refId": "A"
         },
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_tup_inserted{datname=\"chom\"}[5m])",
           "legendFormat": "Inserted",
           "refId": "B"
         },
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_tup_updated{datname=\"chom\"}[5m])",
           "legendFormat": "Updated",
           "refId": "C"
         },
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_tup_deleted{datname=\"chom\"}[5m])",
           "legendFormat": "Deleted",
           "refId": "D"
@@ -140,8 +156,10 @@
       "title": "Lock Waits",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 22, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "pg_locks_count",
           "legendFormat": "{{mode}}",
           "refId": "A"
@@ -154,8 +172,10 @@
       "title": "Deadlocks",
       "type": "timeseries",
       "gridPos": {"x": 12, "y": 22, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(pg_stat_database_deadlocks{datname=\"chom\"}[5m])",
           "legendFormat": "Deadlocks",
           "refId": "A"

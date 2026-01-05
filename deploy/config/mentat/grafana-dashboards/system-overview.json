@@ -12,8 +12,10 @@
       "title": "Request Rate",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "sum(rate(http_requests_total[5m])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A"
@@ -30,8 +32,10 @@
       "title": "Error Rate",
       "type": "timeseries",
       "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
           "legendFormat": "Error Rate %",
           "refId": "A"
@@ -56,13 +60,16 @@
       "title": "Request Duration (p95)",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "A"
         },
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "p50",
           "refId": "B"
@@ -79,8 +86,10 @@
       "title": "CPU Usage",
       "type": "timeseries",
       "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
           "legendFormat": "CPU %",
           "refId": "A"
@@ -98,8 +107,10 @@
       "title": "Memory Usage",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
           "legendFormat": "Memory %",
           "refId": "A"
@@ -117,8 +128,10 @@
       "title": "Disk Usage",
       "type": "timeseries",
       "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) * 100",
           "legendFormat": "Disk %",
           "refId": "A"
@@ -136,13 +149,16 @@
       "title": "Network Traffic",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "rate(node_network_receive_bytes_total{device!~\"lo|docker.*|br.*\"}[5m])",
           "legendFormat": "Receive {{device}}",
           "refId": "A"
         },
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "-rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|br.*\"}[5m])",
           "legendFormat": "Transmit {{device}}",
           "refId": "B"
@@ -159,8 +175,10 @@
       "title": "Active Services",
       "type": "stat",
       "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "up",
           "legendFormat": "{{job}}",
           "refId": "A"
