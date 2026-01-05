@@ -304,8 +304,90 @@ deploy_observability() {
 deploy_application() {
     log_section "Deploying Application to landsraad"
 
+    local app_dir="/var/www/chom"
+    local deploy_user="${DEPLOY_USER}"
+
+    # Check if application directory exists on landsraad
+    log_step "Checking if application exists on landsraad"
+
+    if ! ssh "${deploy_user}@${LANDSRAAD_HOST}" "test -d ${app_dir}/.git"; then
+        log_info "Application not found on landsraad - performing initial setup"
+
+        # Initial clone and setup
+        local init_script=$(cat <<'INIT_EOF'
+set -e
+APP_DIR="/var/www/chom"
+REPO_URL="__REPO_URL__"
+BRANCH="__BRANCH__"
+DEPLOY_USER="__DEPLOY_USER__"
+
+echo "Creating application directory..."
+sudo mkdir -p /var/www
+cd /var/www
+
+echo "Cloning repository..."
+sudo git clone --branch "$BRANCH" "$REPO_URL" chom
+
+echo "Setting ownership..."
+sudo chown -R ${DEPLOY_USER}:www-data chom
+cd chom
+
+echo "Installing PHP dependencies..."
+composer install --no-dev --optimize-autoloader --no-interaction
+
+echo "Installing Node dependencies..."
+npm ci
+
+echo "Building assets..."
+npm run build
+
+echo "Setting up environment..."
+if [[ ! -f .env ]]; then
+    cp .env.example .env
+    php artisan key:generate
+fi
+
+echo "Setting permissions..."
+sudo chown -R ${DEPLOY_USER}:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
+
+echo "Running migrations..."
+php artisan migrate --force
+
+echo "Optimizing..."
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+echo "Installing vpsmanager CLI..."
+sudo ./deploy/vpsmanager/install.sh || true
+
+echo "Restarting services..."
+sudo systemctl restart php8.2-fpm
+sudo systemctl reload nginx
+
+echo "Initial setup complete!"
+INIT_EOF
+)
+        # Replace placeholders
+        init_script="${init_script//__REPO_URL__/$REPO_URL}"
+        init_script="${init_script//__BRANCH__/$BRANCH}"
+        init_script="${init_script//__DEPLOY_USER__/$deploy_user}"
+
+        if ssh "${deploy_user}@${LANDSRAAD_HOST}" "$init_script" 2>&1 | tee -a "$LOG_FILE"; then
+            log_success "Initial application setup completed"
+            return 0
+        else
+            log_error "Initial application setup failed"
+            return 1
+        fi
+    fi
+
+    # Application exists - do normal update deployment
+    log_info "Application found - performing update deployment"
+
     # Build deployment command
-    local deploy_cmd="/var/www/chom/deploy/scripts/deploy-application.sh --branch $BRANCH --repo-url '$REPO_URL'"
+    local deploy_cmd="${app_dir}/deploy/scripts/deploy-application.sh --branch $BRANCH --repo-url '$REPO_URL'"
 
     if [[ "$SKIP_BACKUP" == true ]]; then
         deploy_cmd="$deploy_cmd --skip-backup"
@@ -313,6 +395,54 @@ deploy_application() {
 
     if [[ "$SKIP_MIGRATIONS" == true ]]; then
         deploy_cmd="$deploy_cmd --skip-migrations"
+    fi
+
+    # Check if deploy-application.sh exists, otherwise do inline deployment
+    if ! ssh "${deploy_user}@${LANDSRAAD_HOST}" "test -f ${app_dir}/deploy/scripts/deploy-application.sh"; then
+        log_info "deploy-application.sh not found, using inline deployment"
+
+        local update_script=$(cat <<'UPDATE_EOF'
+set -e
+cd /var/www/chom
+BRANCH="__BRANCH__"
+
+echo "Pulling latest changes..."
+git fetch origin
+git checkout "$BRANCH"
+git pull origin "$BRANCH"
+
+echo "Installing dependencies..."
+composer install --no-dev --optimize-autoloader --no-interaction
+npm ci
+npm run build
+
+echo "Running migrations..."
+php artisan migrate --force
+
+echo "Optimizing..."
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+echo "Updating vpsmanager..."
+sudo ./deploy/vpsmanager/install.sh || true
+
+echo "Restarting services..."
+sudo systemctl restart php8.2-fpm
+sudo systemctl reload nginx
+
+echo "Update complete!"
+UPDATE_EOF
+)
+        update_script="${update_script//__BRANCH__/$BRANCH}"
+
+        if ssh "${deploy_user}@${LANDSRAAD_HOST}" "$update_script" 2>&1 | tee -a "$LOG_FILE"; then
+            log_success "Application updated successfully"
+            return 0
+        else
+            log_error "Application update failed"
+            return 1
+        fi
     fi
 
     # Export environment variables for remote execution
@@ -323,9 +453,9 @@ deploy_application() {
     fi
 
     # Execute deployment on landsraad
-    log_info "Executing deployment on landsraad.arewel.com"
+    log_info "Executing deployment script on landsraad.arewel.com"
 
-    if ssh "${DEPLOY_USER}@${LANDSRAAD_HOST}" "$env_vars $deploy_cmd" 2>&1 | tee -a "$LOG_FILE"; then
+    if ssh "${deploy_user}@${LANDSRAAD_HOST}" "$env_vars $deploy_cmd" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Application deployed successfully"
         return 0
     else
