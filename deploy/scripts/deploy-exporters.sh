@@ -817,26 +817,13 @@ EOF
         sudo cp "${targets_dir}"/*.yml "${PROMETHEUS_TARGETS_DIR}/"
         sudo chown -R observability:observability "${PROMETHEUS_TARGETS_DIR}"
         log_success "Targets registered locally"
+        rm -rf "$targets_dir"
     else
-        # Remote deployment via SSH - run as stilgar user (has SSH keys)
-        log_info "Deploying targets to ${PROMETHEUS_HOST} via SSH..."
-
-        # Change ownership of target files to stilgar so they can be copied
-        chown -R stilgar:stilgar "${targets_dir}"
-
-        # SSH as stilgar user (even when script runs as root)
-        if sudo -u stilgar ssh -o BatchMode=yes -o ConnectTimeout=5 "${PROMETHEUS_USER}@${PROMETHEUS_HOST}" "sudo mkdir -p ${PROMETHEUS_TARGETS_DIR}" 2>/dev/null; then
-            sudo -u stilgar scp -q "${targets_dir}"/*.yml "${PROMETHEUS_USER}@${PROMETHEUS_HOST}:/tmp/"
-            sudo -u stilgar ssh "${PROMETHEUS_USER}@${PROMETHEUS_HOST}" "sudo mv /tmp/node_*.yml /tmp/nginx_*.yml /tmp/postgresql_*.yml /tmp/redis_*.yml /tmp/phpfpm_*.yml ${PROMETHEUS_TARGETS_DIR}/ 2>/dev/null; sudo chown -R observability:observability ${PROMETHEUS_TARGETS_DIR}"
-            log_success "Targets registered on ${PROMETHEUS_HOST}"
-        else
-            log_warn "Cannot SSH to ${PROMETHEUS_HOST}. Manual target registration required."
-            log_info "Target files created in ${targets_dir}/"
-            log_info "Copy manually: scp ${targets_dir}/*.yml ${PROMETHEUS_USER}@${PROMETHEUS_HOST}:/tmp/"
-        fi
+        # Remote deployment - leave files for master script to retrieve
+        log_info "Target files created in ${targets_dir}/"
+        log_info "Master deployment script will copy these to ${PROMETHEUS_HOST}"
+        # Don't delete targets_dir - let master script copy them back
     fi
-
-    rm -rf "$targets_dir"
 }
 
 # =============================================================================

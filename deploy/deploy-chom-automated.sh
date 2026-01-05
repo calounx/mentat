@@ -793,6 +793,26 @@ ENVEOF
             sudo ufw status verbose" || {
             log_warning "Firewall configuration failed"
         }
+
+        # Copy Prometheus target files from landsraad to mentat
+        log_step "Retrieving Prometheus targets from $LANDSRAAD_HOST"
+        if sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "ls /tmp/prometheus_targets/*.yml 2>/dev/null" >/dev/null 2>&1; then
+            # Target files exist, copy them back
+            sudo -u "$DEPLOY_USER" scp "$DEPLOY_USER@${LANDSRAAD_HOST}:/tmp/prometheus_targets/*.yml" /tmp/ || {
+                log_warning "Failed to copy target files from $LANDSRAAD_HOST"
+            }
+
+            # Move to Prometheus targets directory
+            if ls /tmp/node_*.yml /tmp/nginx_*.yml /tmp/postgresql_*.yml /tmp/redis_*.yml /tmp/phpfpm_*.yml 2>/dev/null >/dev/null; then
+                sudo mkdir -p /etc/observability/prometheus/targets
+                sudo mv /tmp/node_*.yml /tmp/nginx_*.yml /tmp/postgresql_*.yml /tmp/redis_*.yml /tmp/phpfpm_*.yml \
+                    /etc/observability/prometheus/targets/ 2>/dev/null || true
+                sudo chown -R observability:observability /etc/observability/prometheus/targets
+                log_success "Prometheus targets registered from $LANDSRAAD_HOST"
+            fi
+        else
+            log_info "No target files found on $LANDSRAAD_HOST (may have been registered directly)"
+        fi
     else
         log_info "[DRY RUN] Would deploy application"
     fi
