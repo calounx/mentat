@@ -97,10 +97,23 @@ class SystemSettings extends Component
 
     public function getSystemInfo(): array
     {
+        // Get Livewire version from composer
+        $livewireVersion = 'Unknown';
+        $composerLock = base_path('composer.lock');
+        if (file_exists($composerLock)) {
+            $lock = json_decode(file_get_contents($composerLock), true);
+            foreach ($lock['packages'] ?? [] as $package) {
+                if ($package['name'] === 'livewire/livewire') {
+                    $livewireVersion = $package['version'];
+                    break;
+                }
+            }
+        }
+
         return [
             'php_version' => PHP_VERSION,
             'laravel_version' => app()->version(),
-            'livewire_version' => \Livewire\Livewire::VERSION ?? 'Unknown',
+            'livewire_version' => $livewireVersion,
             'os' => php_uname('s') . ' ' . php_uname('r'),
             'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
             'memory_limit' => ini_get('memory_limit'),
