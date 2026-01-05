@@ -10,12 +10,12 @@ CHOM (Complete Hosting & Operations Manager) is a Laravel-based VPS management p
 
 ## Architecture
 
-### Two-Server Design
+### Two-Server Design (Scalable to N Servers)
 
 1. **mentat.arewel.com** (51.254.139.78)
-   - **Role:** Observability & Monitoring Server
+   - **Role:** Observability & Monitoring Server (Controller)
    - **Services:** Prometheus, Grafana, Loki, Promtail, AlertManager, Node Exporter
-   - **Function:** Central monitoring, metrics collection, log aggregation, alerting
+   - **Function:** Central monitoring, metrics collection, log aggregation, alerting, deployment orchestration
    - **Access:** SSH as `calounx` or `stilgar`, HTTPS for dashboards
 
 2. **landsraad.arewel.com** (51.254.139.79)
@@ -26,11 +26,13 @@ CHOM (Complete Hosting & Operations Manager) is a Laravel-based VPS management p
 
 ### Key Design Principles
 
-- **Single Entry Point:** ALL deployments use `deploy/deploy-chom-automated.sh`
+- **Single Entry Point:** ALL deployments use `deploy/deploy-chom-automated.sh` from mentat
 - **Idempotent:** Safe to run multiple times
 - **Fully Automated:** No manual steps, no placeholders
 - **User:** Deployments run as `stilgar` user (deployment user, not root)
-- **From Mentat:** All operations initiated from mentat server
+- **From Mentat:** All operations initiated from mentat server (controller)
+- **One-Way SSH:** mentat → VPS servers only (no reverse SSH, better security)
+- **Scalable:** Adding new VPS requires only one SSH key setup
 
 ## Technology Stack
 
@@ -469,6 +471,73 @@ php artisan test --filter=VpsServerTest
 3. ⚠️ **NO PLACEHOLDERS** - everything must be automated
 4. ⚠️ **NO MANUAL STEPS** - deployments must be repeatable
 5. ⚠️ All changes via deployment scripts, not manual edits
+
+## Scaling to Multiple VPS Servers
+
+### Current One-Way SSH Architecture (Recommended)
+
+The system uses **centralized orchestration** from mentat with one-way SSH:
+
+```
+mentat (controller)
+  ├─ SSH → landsraad.arewel.com
+  ├─ SSH → vps3.arewel.com (future)
+  ├─ SSH → vps4.arewel.com (future)
+  └─ SSH → vps5.arewel.com (future)
+```
+
+### Adding a New VPS Server
+
+**Steps (5 minutes):**
+
+1. **Setup stilgar user on new VPS:**
+   ```bash
+   # On new VPS as root
+   useradd -m -s /bin/bash stilgar
+   mkdir -p /home/stilgar/.ssh
+   chmod 700 /home/stilgar/.ssh
+   ```
+
+2. **Copy SSH key from mentat:**
+   ```bash
+   # On mentat
+   ssh-copy-id stilgar@newvps.arewel.com
+   # Or manually copy /home/stilgar/.ssh/id_ed25519.pub
+   ```
+
+3. **Add to deployment script:**
+   ```bash
+   # Edit deploy/deploy-chom-automated.sh
+   VPS_HOSTS=("landsraad.arewel.com" "newvps.arewel.com")
+   ```
+
+4. **Run deployment - done!**
+   ```bash
+   sudo ./deploy/deploy-chom-automated.sh
+   ```
+
+### Why One-Way SSH Scales Better
+
+| Factor | One-Way (Current) | Bidirectional |
+|--------|-------------------|---------------|
+| **SSH Relationships** | N (simple) | 2N (complex) |
+| **Security** | VPS isolated from mentat | Every VPS can access mentat |
+| **Attack Surface** | Compromised VPS can't access mentat | Compromised VPS = access to mentat |
+| **Setup Complexity** | One key per VPS | Two keys per VPS |
+| **Orchestration** | Centralized (mentat) | Distributed (complex) |
+| **Audit Trail** | All from mentat | Multiple sources |
+
+**Verdict:** ✅ Stick with one-way SSH for multi-VPS scalability
+
+### Multi-VPS Deployment Example
+
+See `future-multi-vps-example.sh` for implementation example.
+
+The master script would loop through all VPS servers:
+- Deploy exporters to each VPS
+- Retrieve Prometheus targets from each VPS
+- Register all targets on mentat
+- Prometheus monitors all servers from one dashboard
 
 ## Architecture Diagram
 
