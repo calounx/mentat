@@ -7,10 +7,23 @@ set -euo pipefail
 
 DEPLOY_USER="stilgar"
 LANDSRAAD_HOST="landsraad.arewel.com"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Get the real user who invoked sudo
+REAL_USER="${SUDO_USER:-$(whoami)}"
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
+# Use the real user's chom-deployment directory
+SCRIPT_DIR="${REAL_HOME}/chom-deployment"
 
 echo "Deploying exporters to landsraad from mentat..."
+echo "Using deployment directory: $SCRIPT_DIR"
 echo ""
+
+# Verify the script exists
+if [[ ! -f "${SCRIPT_DIR}/deploy/scripts/deploy-exporters.sh" ]]; then
+    echo "ERROR: deploy-exporters.sh not found at ${SCRIPT_DIR}/deploy/scripts/deploy-exporters.sh"
+    exit 1
+fi
 
 # Copy deploy-exporters.sh to landsraad
 echo "Copying deploy-exporters.sh to landsraad..."
