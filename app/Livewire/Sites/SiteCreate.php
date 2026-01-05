@@ -40,12 +40,24 @@ class SiteCreate extends Component
 
     public function create(): void
     {
-        // Authorization check - only users with site management permissions can create
-        $this->authorize('create', Site::class);
+        $this->error = null;
+
+        try {
+            // Authorization check - only users with site management permissions can create
+            $this->authorize('create', Site::class);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->error = 'You do not have permission to create sites.';
+            return;
+        }
 
         $this->validate();
 
         $tenant = auth()->user()->currentTenant();
+
+        if (!$tenant) {
+            $this->error = 'No tenant configured. Please contact support.';
+            return;
+        }
 
         // Check quota
         if (!$tenant->canCreateSite()) {
@@ -53,26 +65,26 @@ class SiteCreate extends Component
             return;
         }
 
-        // Check if domain already exists
-        if ($tenant->sites()->where('domain', $this->domain)->exists()) {
-            $this->error = 'This domain is already configured for your account.';
+        // Check if domain already exists globally (not just in tenant)
+        if (Site::where('domain', $this->domain)->exists()) {
+            $this->error = 'This domain is already configured in the system.';
+            return;
+        }
+
+        // Find available VPS before creating
+        $vps = $this->findAvailableVps($tenant);
+
+        if (!$vps) {
+            $this->error = 'No available server found. Please contact support to add server capacity.';
             return;
         }
 
         $this->isCreating = true;
-        $this->error = null;
 
         try {
-            $site = DB::transaction(function () use ($tenant) {
-                // Find available VPS
-                $vps = $this->findAvailableVps($tenant);
-
-                if (!$vps) {
-                    throw new \RuntimeException('No available server found. Please contact support.');
-                }
-
+            $site = DB::transaction(function () use ($tenant, $vps) {
                 // Create site record
-                $site = Site::create([
+                return Site::create([
                     'tenant_id' => $tenant->id,
                     'vps_id' => $vps->id,
                     'domain' => $this->domain,
@@ -81,18 +93,16 @@ class SiteCreate extends Component
                     'ssl_enabled' => $this->sslEnabled,
                     'status' => 'creating',
                 ]);
-
-                return $site;
             });
 
             // Dispatch async job to provision the site
             ProvisionSiteJob::dispatch($site);
 
-            session()->flash('success', "Site {$this->domain} is being created.");
+            session()->flash('success', "Site {$this->domain} is being created. This may take a few minutes.");
             $this->redirect(route('sites.index'));
 
         } catch (\Exception $e) {
-            $this->error = $e->getMessage();
+            $this->error = 'Failed to create site: ' . $e->getMessage();
             $this->isCreating = false;
         }
     }

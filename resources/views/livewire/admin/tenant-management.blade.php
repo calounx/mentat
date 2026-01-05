@@ -5,6 +5,13 @@
             <h1 class="text-2xl font-bold text-white">Tenant Management</h1>
             <p class="mt-1 text-sm text-gray-400">Manage all tenants and their subscriptions.</p>
         </div>
+        <button wire:click="openCreateModal"
+                class="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Tenant
+        </button>
     </div>
 
     <!-- Flash Messages -->
@@ -380,6 +387,73 @@
                                 Save
                             </button>
                             <button type="button" wire:click="closeEditModal"
+                                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Create Modal -->
+    @if($showCreateModal)
+        <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" wire:click="closeCreateModal"></div>
+
+                <div class="inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <form wire:submit="createTenant">
+                        <div class="bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <h3 class="text-lg font-medium text-white mb-4">Create New Tenant</h3>
+
+                            @if($error)
+                                <div class="mb-4 bg-red-900/50 border-l-4 border-red-500 p-4 rounded">
+                                    <p class="text-sm text-red-200">{{ $error }}</p>
+                                </div>
+                            @endif
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="create_name" class="block text-sm font-medium text-gray-300">Tenant Name</label>
+                                    <input type="text" wire:model="createFormData.name" id="create_name"
+                                           placeholder="e.g., My Company"
+                                           class="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    @error('createFormData.name') <span class="text-red-400 text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <label for="create_organization" class="block text-sm font-medium text-gray-300">Organization</label>
+                                    <select wire:model="createFormData.organization_id" id="create_organization"
+                                            class="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        <option value="">Select an organization...</option>
+                                        @foreach($organizations as $org)
+                                            <option value="{{ $org->id }}">{{ $org->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('createFormData.organization_id') <span class="text-red-400 text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <label for="create_tier" class="block text-sm font-medium text-gray-300">Tier</label>
+                                    <select wire:model="createFormData.tier" id="create_tier"
+                                            class="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        <option value="starter">Starter</option>
+                                        <option value="pro">Pro</option>
+                                        <option value="enterprise">Enterprise</option>
+                                    </select>
+                                    @error('createFormData.tier') <span class="text-red-400 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                            <button type="submit"
+                                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm">
+                                Create Tenant
+                            </button>
+                            <button type="button" wire:click="closeCreateModal"
                                     class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                                 Cancel
                             </button>

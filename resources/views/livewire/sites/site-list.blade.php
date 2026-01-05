@@ -134,9 +134,19 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div class="flex items-center justify-end space-x-2">
+                                @if($site->status === 'failed')
+                                    <button wire:click="retrySite('{{ $site->id }}')"
+                                            class="text-yellow-600 hover:text-yellow-900"
+                                            title="Retry Provisioning">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                    </button>
+                                @endif
                                 @if($site->status === 'active' || $site->status === 'disabled')
                                     <button wire:click="toggleSite('{{ $site->id }}')"
-                                            class="text-gray-600 hover:text-gray-900">
+                                            class="text-gray-600 hover:text-gray-900"
+                                            title="{{ $site->status === 'active' ? 'Disable' : 'Enable' }}">
                                         @if($site->status === 'active')
                                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -150,8 +160,17 @@
                                     </button>
                                 @endif
 
+                                <button wire:click="openEditModal('{{ $site->id }}')"
+                                        class="text-blue-600 hover:text-blue-900"
+                                        title="Edit">
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </button>
+
                                 <button wire:click="confirmDelete('{{ $site->id }}')"
-                                        class="text-red-600 hover:text-red-900">
+                                        class="text-red-600 hover:text-red-900"
+                                        title="Delete">
                                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -208,6 +227,58 @@
                         Delete
                     </button>
                 </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Edit Site Modal -->
+    @if($showEditModal)
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Edit Site</h3>
+
+                @if($editError)
+                    <div class="mb-4 bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                        <p class="text-sm text-red-700">{{ $editError }}</p>
+                    </div>
+                @endif
+
+                <form wire:submit="saveSite">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="edit_php_version" class="block text-sm font-medium text-gray-700">PHP Version</label>
+                            <select wire:model="editForm.php_version" id="edit_php_version"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                <option value="7.4">PHP 7.4</option>
+                                <option value="8.0">PHP 8.0</option>
+                                <option value="8.1">PHP 8.1</option>
+                                <option value="8.2">PHP 8.2</option>
+                                <option value="8.3">PHP 8.3</option>
+                            </select>
+                            @error('editForm.php_version') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
+                            <label for="edit_document_root" class="block text-sm font-medium text-gray-700">Document Root (optional)</label>
+                            <input type="text" wire:model="editForm.document_root" id="edit_document_root"
+                                   placeholder="e.g., public"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                            <p class="mt-1 text-xs text-gray-500">Leave empty for default web root</p>
+                            @error('editForm.document_root') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button type="button" wire:click="closeEditModal"
+                                class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     @endif

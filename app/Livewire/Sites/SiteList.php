@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Sites;
 
+use App\Jobs\ProvisionSiteJob;
 use App\Models\Site;
 use App\Models\Tenant;
 use App\Services\Integration\VPSManagerBridge;
@@ -17,9 +18,24 @@ class SiteList extends Component
     public string $statusFilter = '';
     public ?string $deletingSiteId = null;
 
+    // Edit modal
+    public bool $showEditModal = false;
+    public ?string $editingSiteId = null;
+    public array $editForm = [
+        'php_version' => '8.2',
+        'document_root' => '',
+    ];
+    public ?string $editError = null;
+    public ?string $editSuccess = null;
+
     protected $queryString = [
         'search' => ['except' => ''],
         'statusFilter' => ['except' => ''],
+    ];
+
+    protected $rules = [
+        'editForm.php_version' => 'required|in:7.4,8.0,8.1,8.2,8.3',
+        'editForm.document_root' => 'nullable|string|max:255',
     ];
 
     public function updatingSearch(): void
@@ -74,6 +90,84 @@ class SiteList extends Component
         }
 
         $this->deletingSiteId = null;
+    }
+
+    public function openEditModal(string $siteId): void
+    {
+        $tenant = $this->getTenant();
+        $site = $tenant->sites()->find($siteId);
+
+        if (!$site) {
+            return;
+        }
+
+        $this->editingSiteId = $siteId;
+        $this->editForm = [
+            'php_version' => $site->php_version,
+            'document_root' => $site->document_root ?? '',
+        ];
+        $this->editError = null;
+        $this->showEditModal = true;
+    }
+
+    public function closeEditModal(): void
+    {
+        $this->showEditModal = false;
+        $this->editingSiteId = null;
+        $this->editError = null;
+    }
+
+    public function saveSite(): void
+    {
+        $this->validate();
+
+        $tenant = $this->getTenant();
+        $site = $tenant->sites()->find($this->editingSiteId);
+
+        if (!$site) {
+            $this->editError = 'Site not found.';
+            return;
+        }
+
+        try {
+            $this->authorize('update', $site);
+
+            $site->update([
+                'php_version' => $this->editForm['php_version'],
+                'document_root' => $this->editForm['document_root'] ?: null,
+            ]);
+
+            session()->flash('success', "Site {$site->domain} updated successfully.");
+            $this->closeEditModal();
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->editError = 'You do not have permission to update this site.';
+        } catch (\Exception $e) {
+            $this->editError = 'Failed to update site: ' . $e->getMessage();
+        }
+    }
+
+    public function retrySite(string $siteId): void
+    {
+        $tenant = $this->getTenant();
+        $site = $tenant->sites()->find($siteId);
+
+        if (!$site || $site->status !== 'failed') {
+            return;
+        }
+
+        try {
+            $this->authorize('update', $site);
+
+            // Reset status to creating and dispatch job again
+            $site->update(['status' => 'creating']);
+            ProvisionSiteJob::dispatch($site);
+
+            session()->flash('success', "Retrying provisioning for {$site->domain}. This may take a few minutes.");
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            session()->flash('error', 'You do not have permission to retry this site.');
+        } catch (\Exception $e) {
+            session()->flash('error', 'Failed to retry: ' . $e->getMessage());
+        }
     }
 
     public function toggleSite(string $siteId): void

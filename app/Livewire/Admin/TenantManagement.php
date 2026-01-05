@@ -28,6 +28,14 @@ class TenantManagement extends Component
     public bool $showEditModal = false;
     public array $editFormData = [];
 
+    // Create form
+    public bool $showCreateModal = false;
+    public array $createFormData = [
+        'name' => '',
+        'organization_id' => '',
+        'tier' => 'starter',
+    ];
+
     public ?string $error = null;
     public ?string $success = null;
 
@@ -37,11 +45,17 @@ class TenantManagement extends Component
         'statusFilter' => ['except' => ''],
     ];
 
-    protected $rules = [
-        'editFormData.tier' => 'required|in:starter,pro,enterprise',
-        'editFormData.status' => 'required|in:active,suspended,cancelled',
-        'editFormData.metrics_retention_days' => 'required|integer|min:1|max:365',
-    ];
+    protected function rules(): array
+    {
+        return [
+            'editFormData.tier' => 'required|in:starter,pro,enterprise',
+            'editFormData.status' => 'required|in:active,suspended,cancelled',
+            'editFormData.metrics_retention_days' => 'required|integer|min:1|max:365',
+            'createFormData.name' => 'required|string|max:255',
+            'createFormData.organization_id' => 'required|exists:organizations,id',
+            'createFormData.tier' => 'required|in:starter,pro,enterprise',
+        ];
+    }
 
     public function updatingSearch(): void
     {
@@ -56,6 +70,57 @@ class TenantManagement extends Component
     public function updatingStatusFilter(): void
     {
         $this->resetPage();
+    }
+
+    public function openCreateModal(): void
+    {
+        $this->createFormData = [
+            'name' => '',
+            'organization_id' => '',
+            'tier' => 'starter',
+        ];
+        $this->showCreateModal = true;
+        $this->error = null;
+    }
+
+    public function closeCreateModal(): void
+    {
+        $this->showCreateModal = false;
+        $this->createFormData = [
+            'name' => '',
+            'organization_id' => '',
+            'tier' => 'starter',
+        ];
+        $this->error = null;
+    }
+
+    public function createTenant(): void
+    {
+        $this->validate([
+            'createFormData.name' => 'required|string|max:255',
+            'createFormData.organization_id' => 'required|exists:organizations,id',
+            'createFormData.tier' => 'required|in:starter,pro,enterprise',
+        ]);
+
+        $this->error = null;
+
+        try {
+            $org = Organization::findOrFail($this->createFormData['organization_id']);
+
+            $tenant = Tenant::create([
+                'organization_id' => $org->id,
+                'name' => $this->createFormData['name'],
+                'slug' => \Illuminate\Support\Str::slug($this->createFormData['name']) . '-' . \Illuminate\Support\Str::random(6),
+                'tier' => $this->createFormData['tier'],
+                'status' => 'active',
+            ]);
+
+            $this->success = "Tenant '{$tenant->name}' created successfully.";
+            $this->closeCreateModal();
+        } catch (\Exception $e) {
+            Log::error('Tenant create error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to create tenant: ' . $e->getMessage();
+        }
     }
 
     public function viewDetails(string $tenantId): void
@@ -168,6 +233,9 @@ class TenantManagement extends Component
 
         $tenants = $query->orderBy('name')->paginate(15);
 
+        // Get organizations for create modal
+        $organizations = Organization::orderBy('name')->get(['id', 'name']);
+
         // Get stats for summary
         $stats = [
             'total' => Tenant::count(),
@@ -181,6 +249,7 @@ class TenantManagement extends Component
         return view('livewire.admin.tenant-management', [
             'tenants' => $tenants,
             'stats' => $stats,
+            'organizations' => $organizations,
         ])->layout('layouts.admin', ['title' => 'Tenant Management']);
     }
 }
