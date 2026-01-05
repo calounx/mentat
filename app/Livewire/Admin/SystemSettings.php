@@ -110,7 +110,12 @@ class SystemSettings extends Component
             }
         }
 
+        // Get Git commit hash
+        $gitCommit = $this->getGitCommit();
+
         return [
+            'chom_version' => config('chom.version', '2.0.0'),
+            'git_commit' => $gitCommit,
             'php_version' => PHP_VERSION,
             'laravel_version' => app()->version(),
             'livewire_version' => $livewireVersion,
@@ -121,6 +126,31 @@ class SystemSettings extends Component
             'upload_max_filesize' => ini_get('upload_max_filesize'),
             'timezone' => config('app.timezone'),
         ];
+    }
+
+    private function getGitCommit(): string
+    {
+        // Try to read from a VERSION file (created during deployment)
+        $versionFile = base_path('VERSION');
+        if (file_exists($versionFile)) {
+            return trim(file_get_contents($versionFile));
+        }
+
+        // Try to get from Git directly
+        $gitHead = base_path('.git/HEAD');
+        if (file_exists($gitHead)) {
+            $head = trim(file_get_contents($gitHead));
+            if (str_starts_with($head, 'ref: ')) {
+                $refPath = base_path('.git/' . substr($head, 5));
+                if (file_exists($refPath)) {
+                    return substr(trim(file_get_contents($refPath)), 0, 7);
+                }
+            } else {
+                return substr($head, 0, 7);
+            }
+        }
+
+        return 'Unknown';
     }
 
     public function getStorageStats(): array
@@ -162,7 +192,7 @@ class SystemSettings extends Component
         }
     }
 
-    private function formatBytes(int $bytes, int $precision = 2): string
+    private function formatBytes(int|float $bytes, int $precision = 2): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $bytes = max($bytes, 0);
