@@ -645,6 +645,26 @@ phase_deploy_application() {
     log_section "Phase 6: Deploying CHOM Application"
 
     if [[ "$DRY_RUN" != "true" ]]; then
+        # Ensure deployment scripts exist on landsraad (in case landsraad-prep was skipped)
+        log_step "Ensuring deployment scripts are on $LANDSRAAD_HOST"
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
+
+        # Copy required scripts
+        sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/deploy-application.sh" \
+            "${SCRIPT_DIR}/scripts/deploy-exporters.sh" \
+            "${SCRIPT_DIR}/scripts/backup-before-deploy.sh" \
+            "${SCRIPT_DIR}/scripts/health-check.sh" \
+            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || true
+
+        sudo -u "$DEPLOY_USER" scp -r "${SCRIPT_DIR}/utils/"* \
+            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/utils/" 2>/dev/null || true
+
+        # Ensure scripts are executable
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
+            "chmod +x /tmp/chom-deploy/scripts/*.sh"
+
+        log_success "Deployment scripts ready on $LANDSRAAD_HOST"
+
         # Create .env file on landsraad
         log_info "Creating .env file on $LANDSRAAD_HOST"
 
