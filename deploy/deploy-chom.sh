@@ -103,6 +103,18 @@ BOOTSTRAP_USER="${BOOTSTRAP_USER:-root}"
 MENTAT_HOST="${MENTAT_HOST:-mentat.arewel.com}"
 LANDSRAAD_HOST="${LANDSRAAD_HOST:-landsraad.arewel.com}"
 
+# Detect original user if running under sudo and set SSH options
+ORIGINAL_USER="${SUDO_USER:-$(whoami)}"
+ORIGINAL_HOME=$(eval echo "~${ORIGINAL_USER}")
+SSH_KEY="${ORIGINAL_HOME}/.ssh/id_ed25519"
+if [[ ! -f "$SSH_KEY" ]]; then
+    SSH_KEY="${ORIGINAL_HOME}/.ssh/id_rsa"
+fi
+SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5"
+if [[ -f "$SSH_KEY" ]]; then
+    SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
+fi
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -217,7 +229,7 @@ check_ssh_connectivity() {
     log_section "Checking SSH Connectivity"
 
     log_step "Testing connection to landsraad.arewel.com as ${DEPLOY_USER}"
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 "${DEPLOY_USER}@${LANDSRAAD_HOST}" "echo 'SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
+    if ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "echo 'SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "SSH connection to landsraad established as ${DEPLOY_USER}"
     else
         log_warning "Cannot connect as ${DEPLOY_USER}, attempting bootstrap..."
@@ -239,7 +251,7 @@ bootstrap_deploy_user() {
     log_step "Bootstrapping ${DEPLOY_USER} user on landsraad via ${BOOTSTRAP_USER}"
 
     # Test connection as bootstrap user
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "${BOOTSTRAP_USER}@${LANDSRAAD_HOST}" "echo 'Bootstrap SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! ssh $SSH_OPTS "${BOOTSTRAP_USER}@${LANDSRAAD_HOST}" "echo 'Bootstrap SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
         log_fatal "Cannot connect as ${BOOTSTRAP_USER}@${LANDSRAAD_HOST}. Please check SSH keys."
     fi
 
@@ -282,7 +294,7 @@ BOOTSTRAP_EOF
 )
     bootstrap_script="${bootstrap_script//__DEPLOY_USER__/$DEPLOY_USER}"
 
-    if ssh "${BOOTSTRAP_USER}@${LANDSRAAD_HOST}" "$bootstrap_script" 2>&1 | tee -a "$LOG_FILE"; then
+    if ssh $SSH_OPTS "${BOOTSTRAP_USER}@${LANDSRAAD_HOST}" "$bootstrap_script" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "User ${DEPLOY_USER} bootstrapped successfully"
     else
         log_fatal "Failed to bootstrap ${DEPLOY_USER} user"
@@ -291,7 +303,7 @@ BOOTSTRAP_EOF
     # Verify we can now connect as deploy user
     log_step "Verifying SSH connection as ${DEPLOY_USER}"
     sleep 2  # Give SSH a moment to recognize the new user
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 "${DEPLOY_USER}@${LANDSRAAD_HOST}" "echo 'SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
+    if ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "echo 'SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "SSH connection verified as ${DEPLOY_USER}"
     else
         log_fatal "Cannot connect as ${DEPLOY_USER} after bootstrap. Check SSH key setup."
@@ -323,7 +335,7 @@ pre_deployment_checks() {
 
     # Check disk space on landsraad
     log_step "Checking disk space on landsraad"
-    local disk_usage=$(ssh "${DEPLOY_USER}@${LANDSRAAD_HOST}" "df / | tail -1 | awk '{print \$5}' | sed 's/%//'")
+    local disk_usage=$(ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "df / | tail -1 | awk '{print \$5}' | sed 's/%//'")
 
     if [[ $disk_usage -lt 80 ]]; then
         log_success "Disk usage on landsraad: ${disk_usage}%"
@@ -336,7 +348,7 @@ pre_deployment_checks() {
     local services=("nginx" "php8.2-fpm" "postgresql" "redis-server")
 
     for service in "${services[@]}"; do
-        if ssh "${DEPLOY_USER}@${LANDSRAAD_HOST}" "sudo systemctl is-active --quiet $service"; then
+        if ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "sudo systemctl is-active --quiet $service"; then
             log_success "$service is running"
         else
             log_error "$service is not running on landsraad"
@@ -381,7 +393,7 @@ deploy_application() {
     # Check if application directory exists on landsraad
     log_step "Checking if application exists on landsraad"
 
-    if ! ssh "${deploy_user}@${LANDSRAAD_HOST}" "test -d ${app_dir}/.git"; then
+    if ! ssh $SSH_OPTS "${deploy_user}@${LANDSRAAD_HOST}" "test -d ${app_dir}/.git"; then
         log_info "Application not found on landsraad - performing initial setup"
 
         # Initial clone and setup
@@ -445,7 +457,7 @@ INIT_EOF
         init_script="${init_script//__BRANCH__/$BRANCH}"
         init_script="${init_script//__DEPLOY_USER__/$deploy_user}"
 
-        if ssh "${deploy_user}@${LANDSRAAD_HOST}" "$init_script" 2>&1 | tee -a "$LOG_FILE"; then
+        if ssh $SSH_OPTS "${deploy_user}@${LANDSRAAD_HOST}" "$init_script" 2>&1 | tee -a "$LOG_FILE"; then
             log_success "Initial application setup completed"
             return 0
         else
@@ -469,7 +481,7 @@ INIT_EOF
     fi
 
     # Check if deploy-application.sh exists, otherwise do inline deployment
-    if ! ssh "${deploy_user}@${LANDSRAAD_HOST}" "test -f ${app_dir}/deploy/scripts/deploy-application.sh"; then
+    if ! ssh $SSH_OPTS "${deploy_user}@${LANDSRAAD_HOST}" "test -f ${app_dir}/deploy/scripts/deploy-application.sh"; then
         log_info "deploy-application.sh not found, using inline deployment"
 
         local update_script=$(cat <<'UPDATE_EOF'
@@ -507,7 +519,7 @@ UPDATE_EOF
 )
         update_script="${update_script//__BRANCH__/$BRANCH}"
 
-        if ssh "${deploy_user}@${LANDSRAAD_HOST}" "$update_script" 2>&1 | tee -a "$LOG_FILE"; then
+        if ssh $SSH_OPTS "${deploy_user}@${LANDSRAAD_HOST}" "$update_script" 2>&1 | tee -a "$LOG_FILE"; then
             log_success "Application updated successfully"
             return 0
         else
@@ -526,7 +538,7 @@ UPDATE_EOF
     # Execute deployment on landsraad
     log_info "Executing deployment script on landsraad.arewel.com"
 
-    if ssh "${deploy_user}@${LANDSRAAD_HOST}" "$env_vars $deploy_cmd" 2>&1 | tee -a "$LOG_FILE"; then
+    if ssh $SSH_OPTS "${deploy_user}@${LANDSRAAD_HOST}" "$env_vars $deploy_cmd" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Application deployed successfully"
         return 0
     else
@@ -542,7 +554,7 @@ post_deployment_validation() {
     # Run health checks on landsraad
     log_step "Running health checks on landsraad"
 
-    if ssh "${DEPLOY_USER}@${LANDSRAAD_HOST}" "/var/www/chom/deploy/scripts/health-check.sh" 2>&1 | tee -a "$LOG_FILE"; then
+    if ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "/var/www/chom/deploy/scripts/health-check.sh" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Health checks passed"
     else
         log_error "Health checks failed"
@@ -577,7 +589,7 @@ deployment_summary() {
     log_section "Deployment Summary"
 
     # Get deployment info from landsraad
-    local release_id=$(ssh "${DEPLOY_USER}@${LANDSRAAD_HOST}" "basename \$(readlink -f /var/www/chom/current)" 2>/dev/null || echo "unknown")
+    local release_id=$(ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "basename \$(readlink -f /var/www/chom/current)" 2>/dev/null || echo "unknown")
 
     log_info "Environment: $ENVIRONMENT"
     log_info "Branch: $BRANCH"
@@ -586,7 +598,7 @@ deployment_summary() {
 
     # Get commit information
     if [[ "$release_id" != "unknown" ]]; then
-        local commit_info=$(ssh "${DEPLOY_USER}@${LANDSRAAD_HOST}" "cat /var/www/chom/current/.deployment-info 2>/dev/null" || echo "")
+        local commit_info=$(ssh $SSH_OPTS "${DEPLOY_USER}@${LANDSRAAD_HOST}" "cat /var/www/chom/current/.deployment-info 2>/dev/null" || echo "")
         if [[ -n "$commit_info" ]]; then
             log_info "Deployment info:"
             echo "$commit_info" | tee -a "$LOG_FILE"
