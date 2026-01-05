@@ -13,12 +13,22 @@ export LOG_DIR="${LOG_DIR:-/var/log/chom-deploy}"
 export LOG_FILE="${LOG_FILE:-${LOG_DIR}/deployment.log}"
 export ERROR_LOG_FILE="${ERROR_LOG_FILE:-${LOG_DIR}/deployment-error.log}"
 
-# Create log directory if it doesn't exist
+# Create log directory if it doesn't exist and ensure write access
 ensure_log_directory() {
     if [[ ! -d "$LOG_DIR" ]]; then
         sudo mkdir -p "$LOG_DIR"
+    fi
+    # Ensure current user can write to log directory
+    if [[ ! -w "$LOG_DIR" ]]; then
         sudo chown "$(whoami):$(whoami)" "$LOG_DIR"
         sudo chmod 755 "$LOG_DIR"
+    fi
+    # Ensure log files are writable if they exist
+    if [[ -f "$LOG_FILE" && ! -w "$LOG_FILE" ]]; then
+        sudo chown "$(whoami):$(whoami)" "$LOG_FILE"
+    fi
+    if [[ -f "$ERROR_LOG_FILE" && ! -w "$ERROR_LOG_FILE" ]]; then
+        sudo chown "$(whoami):$(whoami)" "$ERROR_LOG_FILE"
     fi
 }
 
