@@ -551,6 +551,31 @@ main() {
     RELEASE_ID=$(generate_release_id)
     RELEASE_PATH=$(create_release_directory "$RELEASE_ID")
 
+    # Ensure VPSManager SSH key exists
+    log_section "VPSManager SSH Key Setup"
+    local ssh_key_path="${SHARED_DIR}/storage/app/ssh/chom_deploy_key"
+    if [[ ! -f "${ssh_key_path}" ]]; then
+        log_info "Generating SSH key for VPSManager integration..."
+        sudo mkdir -p "${SHARED_DIR}/storage/app/ssh"
+        sudo ssh-keygen -t ed25519 -f "${ssh_key_path}" -N '' -C 'chom@landsraad.arewel.com'
+        sudo chmod 600 "${ssh_key_path}"
+        sudo chmod 644 "${ssh_key_path}.pub"
+
+        # Add to authorized_keys for localhost/remote SSH
+        local pubkey=$(sudo cat "${ssh_key_path}.pub")
+        if ! sudo grep -q "${pubkey}" /home/${DEPLOY_USER}/.ssh/authorized_keys 2>/dev/null; then
+            sudo mkdir -p /home/${DEPLOY_USER}/.ssh
+            echo "${pubkey}" | sudo tee -a /home/${DEPLOY_USER}/.ssh/authorized_keys > /dev/null
+            sudo chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
+            sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
+        fi
+
+        sudo chown ${DEPLOY_USER}:www-data "${ssh_key_path}"*
+        log_success "SSH key generated and configured"
+    else
+        log_success "SSH key exists at ${ssh_key_path}"
+    fi
+
     # Deploy application
     log_section "Deploying Application"
     clone_repository "$RELEASE_PATH"

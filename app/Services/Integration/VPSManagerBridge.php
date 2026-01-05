@@ -25,8 +25,13 @@ class VPSManagerBridge
         $this->ssh = new SSH2($vps->ip_address, 22);
         $this->ssh->setTimeout($this->timeout);
 
-        // Load SSH key
-        $keyPath = config('chom.ssh_key_path', storage_path('app/ssh/chom_deploy_key'));
+        // Load SSH key - use absolute path to shared storage
+        $keyPath = config('chom.ssh_key_path');
+
+        // Fallback: if config returns storage_path(), convert to shared storage path
+        if (!$keyPath || str_contains($keyPath, '/releases/')) {
+            $keyPath = '/var/www/chom/shared/storage/app/ssh/chom_deploy_key';
+        }
 
         if (!file_exists($keyPath)) {
             throw new \RuntimeException("SSH key not found at: {$keyPath}");
@@ -37,11 +42,19 @@ class VPSManagerBridge
 
         $key = PublicKeyLoader::load(file_get_contents($keyPath));
 
-        if (!$this->ssh->login('root', $key)) {
-            throw new \RuntimeException("SSH authentication failed for VPS: {$vps->hostname}");
+        // Use stilgar user (deployment user) instead of root
+        // This works for both localhost and remote SSH
+        $sshUser = config('chom.ssh_user', 'stilgar');
+
+        if (!$this->ssh->login($sshUser, $key)) {
+            throw new \RuntimeException("SSH authentication failed for VPS: {$vps->hostname} (user: {$sshUser})");
         }
 
-        Log::info('SSH connected', ['vps' => $vps->hostname, 'ip' => $vps->ip_address]);
+        Log::info('SSH connected', [
+            'vps' => $vps->hostname,
+            'ip' => $vps->ip_address,
+            'user' => $sshUser,
+        ]);
     }
 
     /**
@@ -62,8 +75,8 @@ class VPSManagerBridge
     {
         $this->connect($vps);
 
-        // Build command with arguments
-        $fullCommand = $this->vpsmanagerPath . ' ' . $command;
+        // Build command with arguments - use sudo since we SSH as stilgar
+        $fullCommand = 'sudo ' . $this->vpsmanagerPath . ' ' . $command;
 
         foreach ($args as $key => $value) {
             if (is_bool($value)) {

@@ -16,7 +16,11 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'ssh_key_path' => env('CHOM_SSH_KEY_PATH', storage_path('app/ssh/chom_deploy_key')),
+    // Use absolute path to shared storage (persists across deployments)
+    'ssh_key_path' => env('CHOM_SSH_KEY_PATH', '/var/www/chom/shared/storage/app/ssh/chom_deploy_key'),
+
+    // SSH user for VPSManager operations (stilgar for all servers)
+    'ssh_user' => env('CHOM_SSH_USER', 'stilgar'),
 
     /*
     |--------------------------------------------------------------------------

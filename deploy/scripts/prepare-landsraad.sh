@@ -557,8 +557,39 @@ setup_app_directory() {
     sudo mkdir -p "${APP_DIR}/shared/storage/framework/views"
     sudo mkdir -p "${APP_DIR}/shared/storage/logs"
 
+    # Create SSH directory for VPSManager integration
+    sudo mkdir -p "${APP_DIR}/shared/storage/app/ssh"
+
+    # Generate SSH key for CHOM VPSManager if it doesn't exist
+    local ssh_key_path="${APP_DIR}/shared/storage/app/ssh/chom_deploy_key"
+    if [[ ! -f "${ssh_key_path}" ]]; then
+        log_info "Generating SSH key for VPSManager integration..."
+        sudo ssh-keygen -t ed25519 -f "${ssh_key_path}" -N '' -C 'chom@landsraad.arewel.com'
+        sudo chmod 600 "${ssh_key_path}"
+        sudo chmod 644 "${ssh_key_path}.pub"
+        log_success "SSH key generated at ${ssh_key_path}"
+    else
+        log_success "SSH key already exists"
+    fi
+
+    # Add public key to stilgar's authorized_keys (for localhost SSH and future multi-VPS)
+    if [[ -f "${ssh_key_path}.pub" ]]; then
+        local pubkey=$(sudo cat "${ssh_key_path}.pub")
+        if ! sudo grep -q "${pubkey}" /home/${DEPLOY_USER}/.ssh/authorized_keys 2>/dev/null; then
+            sudo mkdir -p /home/${DEPLOY_USER}/.ssh
+            echo "${pubkey}" | sudo tee -a /home/${DEPLOY_USER}/.ssh/authorized_keys > /dev/null
+            sudo chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
+            sudo chown -R ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
+            log_success "SSH key added to ${DEPLOY_USER}'s authorized_keys"
+        else
+            log_success "SSH key already in authorized_keys"
+        fi
+    fi
+
     sudo chown -R ${DEPLOY_USER}:www-data "${APP_DIR}/shared"
     sudo chmod -R 775 "${APP_DIR}/shared"
+    # Ensure SSH private key remains 600
+    sudo chmod 600 "${ssh_key_path}" 2>/dev/null || true
 
     log_success "Application directory configured"
 }
