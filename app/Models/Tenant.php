@@ -19,12 +19,17 @@ class Tenant extends Model
         'slug',
         'tier',
         'status',
+        'is_approved',
+        'approved_at',
+        'approved_by',
         'settings',
         'metrics_retention_days',
     ];
 
     protected $casts = [
         'settings' => 'array',
+        'is_approved' => 'boolean',
+        'approved_at' => 'datetime',
     ];
 
     /**
@@ -91,11 +96,93 @@ class Tenant extends Model
     }
 
     /**
+     * Boot the model.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        // When tenant status changes, update all associated sites
+        static::updating(function (Tenant $tenant) {
+            if ($tenant->isDirty('status')) {
+                $oldStatus = $tenant->getOriginal('status');
+                $newStatus = $tenant->status;
+
+                if ($newStatus === 'suspended') {
+                    // Suspend all active sites when tenant is suspended
+                    $tenant->sites()
+                        ->where('status', 'active')
+                        ->update(['status' => 'disabled']);
+                } elseif ($newStatus === 'cancelled') {
+                    // Mark all sites as disabled when tenant is cancelled
+                    $tenant->sites()
+                        ->whereNotIn('status', ['failed', 'deleting'])
+                        ->update(['status' => 'disabled']);
+                } elseif ($newStatus === 'active' && $oldStatus === 'suspended') {
+                    // Reactivate disabled sites when tenant is unsuspended
+                    $tenant->sites()
+                        ->where('status', 'disabled')
+                        ->update(['status' => 'active']);
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the user who approved this tenant.
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Check if tenant is approved.
+     */
+    public function isApproved(): bool
+    {
+        return $this->is_approved === true;
+    }
+
+    /**
+     * Approve this tenant.
+     */
+    public function approve(User $approver): void
+    {
+        $this->update([
+            'is_approved' => true,
+            'approved_at' => now(),
+            'approved_by' => $approver->id,
+        ]);
+    }
+
+    /**
+     * Revoke approval for this tenant.
+     */
+    public function revokeApproval(): void
+    {
+        $this->update([
+            'is_approved' => false,
+            'approved_at' => null,
+            'approved_by' => null,
+        ]);
+    }
+
+    /**
      * Check if tenant is active.
      */
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * Check if tenant can have sites created.
+     * Tenant must be both active and approved.
+     */
+    public function canHaveSites(): bool
+    {
+        return $this->isActive() && $this->isApproved();
     }
 
     /**

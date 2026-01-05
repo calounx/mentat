@@ -207,6 +207,30 @@ class TenantManagement extends Component
         }
     }
 
+    public function approveTenant(string $tenantId): void
+    {
+        try {
+            $tenant = Tenant::findOrFail($tenantId);
+            $tenant->approve(auth()->user());
+            $this->success = "Tenant '{$tenant->name}' has been approved. They can now create sites.";
+        } catch (\Exception $e) {
+            Log::error('Tenant approval error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to approve tenant: ' . $e->getMessage();
+        }
+    }
+
+    public function revokeApproval(string $tenantId): void
+    {
+        try {
+            $tenant = Tenant::findOrFail($tenantId);
+            $tenant->revokeApproval();
+            $this->success = "Approval revoked for tenant '{$tenant->name}'. They can no longer create new sites.";
+        } catch (\Exception $e) {
+            Log::error('Tenant revoke approval error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to revoke approval: ' . $e->getMessage();
+        }
+    }
+
     public function render()
     {
         $query = Tenant::query()
@@ -240,6 +264,7 @@ class TenantManagement extends Component
         $stats = [
             'total' => Tenant::count(),
             'active' => Tenant::where('status', 'active')->count(),
+            'pending_approval' => Tenant::where('is_approved', false)->count(),
             'by_tier' => Tenant::selectRaw('tier, count(*) as count')
                 ->groupBy('tier')
                 ->pluck('count', 'tier')

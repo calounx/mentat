@@ -59,6 +59,18 @@ class SiteCreate extends Component
             return;
         }
 
+        // Check if tenant is approved
+        if (!$tenant->isApproved()) {
+            $this->error = 'Your account is pending approval. Please wait for administrator approval before creating sites.';
+            return;
+        }
+
+        // Check if tenant is active
+        if (!$tenant->isActive()) {
+            $this->error = 'Your account is currently suspended. Please contact support.';
+            return;
+        }
+
         // Check quota
         if (!$tenant->canCreateSite()) {
             $this->error = 'You have reached your plan\'s site limit. Please upgrade to create more sites.';

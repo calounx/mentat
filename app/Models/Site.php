@@ -22,6 +22,10 @@ class Site extends Model
         'ssl_enabled',
         'ssl_expires_at',
         'status',
+        'failure_reason',
+        'healing_attempts',
+        'last_healing_at',
+        'provision_attempts',
         'document_root',
         'db_name',
         'db_user',
@@ -33,6 +37,8 @@ class Site extends Model
         'ssl_enabled' => 'boolean',
         'ssl_expires_at' => 'datetime',
         'settings' => 'array',
+        'healing_attempts' => 'array',
+        'last_healing_at' => 'datetime',
     ];
 
     protected $hidden = [

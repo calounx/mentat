@@ -28,7 +28,7 @@
     @endif
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-8">
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-5 mb-8">
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
             <div class="p-5">
                 <div class="text-sm font-medium text-gray-400">Total Tenants</div>
@@ -39,6 +39,12 @@
             <div class="p-5">
                 <div class="text-sm font-medium text-gray-400">Active</div>
                 <div class="mt-1 text-2xl font-semibold text-green-400">{{ $stats['active'] }}</div>
+            </div>
+        </div>
+        <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700 {{ ($stats['pending_approval'] ?? 0) > 0 ? 'ring-2 ring-yellow-500' : '' }}">
+            <div class="p-5">
+                <div class="text-sm font-medium text-gray-400">Pending Approval</div>
+                <div class="mt-1 text-2xl font-semibold {{ ($stats['pending_approval'] ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-400' }}">{{ $stats['pending_approval'] ?? 0 }}</div>
             </div>
         </div>
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
@@ -114,6 +120,9 @@
                         Status
                     </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        Approval
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                         Sites / VPS
                     </th>
                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -160,6 +169,26 @@
                                 <span class="text-sm {{ $statusColor }}">{{ ucfirst($tenant->status) }}</span>
                             </div>
                         </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if($tenant->is_approved)
+                                <div class="flex items-center">
+                                    <svg class="h-5 w-5 text-green-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="text-sm text-green-400">Approved</span>
+                                </div>
+                                @if($tenant->approved_at)
+                                    <div class="text-xs text-gray-500">{{ $tenant->approved_at->format('M d, Y') }}</div>
+                                @endif
+                            @else
+                                <div class="flex items-center">
+                                    <svg class="h-5 w-5 text-yellow-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="text-sm text-yellow-400">Pending</span>
+                                </div>
+                            @endif
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                             {{ $tenant->sites_count }} sites / {{ $tenant->vps_allocations_count }} VPS
                         </td>
@@ -178,6 +207,22 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                     </svg>
                                 </button>
+                                @if($tenant->is_approved)
+                                    <button wire:click="revokeApproval('{{ $tenant->id }}')"
+                                            wire:confirm="Are you sure you want to revoke approval for this tenant? They will no longer be able to create sites."
+                                            class="text-orange-400 hover:text-orange-300" title="Revoke Approval">
+                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                    </button>
+                                @else
+                                    <button wire:click="approveTenant('{{ $tenant->id }}')"
+                                            class="text-green-400 hover:text-green-300" title="Approve Tenant">
+                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </button>
+                                @endif
                                 @if($tenant->status === 'active')
                                     <button wire:click="updateStatus('{{ $tenant->id }}', 'suspended')"
                                             wire:confirm="Are you sure you want to suspend this tenant?"
@@ -206,7 +251,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center">
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                             </svg>
@@ -265,6 +310,54 @@
                                             <dd class="text-sm text-white">{{ $selectedTenant->created_at->format('M d, Y') }}</dd>
                                         </div>
                                     </dl>
+                                </div>
+                            </div>
+
+                            <!-- Approval Status -->
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-400 mb-2">Approval Status</h4>
+                                <div class="bg-gray-700 rounded-lg p-4">
+                                    @if($selectedTenant->is_approved)
+                                        <div class="flex items-center mb-2">
+                                            <svg class="h-5 w-5 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span class="text-sm text-green-400 font-medium">Approved</span>
+                                        </div>
+                                        <dl class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <dt class="text-xs text-gray-400">Approved At</dt>
+                                                <dd class="text-sm text-white">{{ $selectedTenant->approved_at?->format('M d, Y H:i') ?? 'N/A' }}</dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-xs text-gray-400">Approved By</dt>
+                                                <dd class="text-sm text-white">{{ $selectedTenant->approver?->name ?? 'N/A' }}</dd>
+                                            </div>
+                                        </dl>
+                                        <button wire:click="revokeApproval('{{ $selectedTenant->id }}')"
+                                                wire:confirm="Are you sure you want to revoke approval?"
+                                                class="mt-3 inline-flex items-center px-3 py-1.5 text-xs font-medium text-orange-400 bg-orange-400/10 hover:bg-orange-400/20 rounded-md">
+                                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                            </svg>
+                                            Revoke Approval
+                                        </button>
+                                    @else
+                                        <div class="flex items-center mb-3">
+                                            <svg class="h-5 w-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span class="text-sm text-yellow-400 font-medium">Pending Approval</span>
+                                        </div>
+                                        <p class="text-xs text-gray-400 mb-3">This tenant cannot create sites until approved by an administrator.</p>
+                                        <button wire:click="approveTenant('{{ $selectedTenant->id }}')"
+                                                class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-green-400 bg-green-400/10 hover:bg-green-400/20 rounded-md">
+                                            <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Approve Tenant
+                                        </button>
+                                    @endif
                                 </div>
                             </div>
 
