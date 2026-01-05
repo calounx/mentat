@@ -1,11 +1,6 @@
 # Grafana datasources configuration
 apiVersion: 1
 
-# Remove any previously provisioned datasources that no longer exist
-deleteDatasources:
-  - name: PostgreSQL
-    orgId: 1
-
 datasources:
   # Prometheus
   - name: Prometheus
