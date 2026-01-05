@@ -712,7 +712,7 @@ ENVEOF
 
             # Create super admin user
             log_step "Creating CHOM super admin user"
-            sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "cd /var/www/chom && php artisan tinker --execute=\"
+            sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "cd /var/www/chom/current && php artisan tinker --execute=\"
                 use Illuminate\\Support\\Str;
                 use App\\Models\\User;
 
