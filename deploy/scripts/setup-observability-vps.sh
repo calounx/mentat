@@ -239,6 +239,12 @@ compactor:
   retention_enabled: true
   retention_delete_delay: 2h
   delete_request_store: filesystem
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: ${DATA_DIR}/loki/rules
 EOF
 
 mkdir -p "$DATA_DIR/loki"/{chunks,rules,compactor}

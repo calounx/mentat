@@ -383,6 +383,7 @@ schema_config:
 
 limits_config:
   retention_period: 720h
+  allow_structured_metadata: true
   ingestion_rate_mb: 10
   ingestion_burst_size_mb: 20
 
@@ -392,6 +393,12 @@ compactor:
   retention_enabled: true
   retention_delete_delay: 2h
   delete_request_store: filesystem
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: ${DATA_DIR}/loki/rules
 EOF
 
     sudo mkdir -p "${DATA_DIR}/loki"/{chunks,rules,compactor}
