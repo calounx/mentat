@@ -86,6 +86,49 @@ SRC_CONFIG_DIR="${SRC_CONFIG_DIR:-${SCRIPT_DIR}/../config/mentat}"
 init_deployment_log "deploy-observability-$(date +%Y%m%d_%H%M%S)"
 log_section "Observability Stack Deployment (NATIVE)"
 
+# Deploy Grafana dashboards
+deploy_grafana_dashboards() {
+    log_step "Deploying Grafana dashboards"
+
+    local dashboard_src="${SRC_CONFIG_DIR}/grafana-dashboards"
+    local dashboard_dest="/var/lib/grafana/dashboards"
+    local provisioning_dir="/etc/grafana/provisioning/dashboards"
+
+    # Create dashboard provisioning config
+    sudo mkdir -p "$provisioning_dir"
+    sudo mkdir -p "$dashboard_dest"
+
+    # Create provisioning YAML
+    cat << 'DASHBOARD_YAML' | sudo tee "${provisioning_dir}/chom.yaml" > /dev/null
+apiVersion: 1
+
+providers:
+  - name: 'CHOM'
+    orgId: 1
+    folder: 'CHOM'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/chom
+      foldersFromFilesStructure: false
+DASHBOARD_YAML
+    log_success "Dashboard provisioning config created"
+
+    # Copy dashboards if they exist
+    if [[ -d "$dashboard_src" ]]; then
+        sudo mkdir -p "${dashboard_dest}/chom"
+        sudo cp "${dashboard_src}"/*.json "${dashboard_dest}/chom/" 2>/dev/null || true
+        sudo chown -R grafana:grafana "${dashboard_dest}"
+
+        local count=$(ls -1 "${dashboard_src}"/*.json 2>/dev/null | wc -l)
+        log_success "Deployed ${count} Grafana dashboard(s)"
+    else
+        log_info "No dashboards found in ${dashboard_src}"
+    fi
+}
+
 # Deploy configuration files
 deploy_configuration() {
     log_step "Deploying configuration files"
@@ -116,6 +159,9 @@ deploy_configuration() {
     else
         log_info "Using default Grafana datasources"
     fi
+
+    # Deploy Grafana dashboards
+    deploy_grafana_dashboards
 
     # Copy Loki configuration if exists
     if [[ -f "${SRC_CONFIG_DIR}/loki-config.yml" ]]; then

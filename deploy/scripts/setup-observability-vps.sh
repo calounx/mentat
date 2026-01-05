@@ -143,7 +143,9 @@ ExecStart=/opt/observability/bin/prometheus \\
     --storage.tsdb.path=${DATA_DIR}/prometheus \\
     --storage.tsdb.retention.time=15d \\
     --web.listen-address=:9090 \\
-    --web.enable-lifecycle
+    --web.enable-lifecycle \\
+    --web.external-url=https://mentat.arewel.com/prometheus \\
+    --web.route-prefix=/prometheus
 Restart=always
 RestartSec=5
 
@@ -304,7 +306,9 @@ Group=observability
 Type=simple
 ExecStart=/opt/observability/bin/alertmanager \\
     --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
-    --storage.path=${DATA_DIR}/alertmanager
+    --storage.path=${DATA_DIR}/alertmanager \\
+    --web.external-url=https://mentat.arewel.com/alertmanager \\
+    --web.route-prefix=/
 Restart=always
 RestartSec=5
 
@@ -357,27 +361,56 @@ sed -i "s/;admin_password = admin/admin_password = ${GRAFANA_ADMIN_PASSWORD}/" /
 log_info "Configuring Nginx..."
 
 cat > /etc/nginx/sites-available/observability << 'EOF'
-# Grafana
+# Observability Stack - HTTP (redirect to HTTPS after SSL setup)
 server {
     listen 80;
-    server_name _;
+    server_name mentat.arewel.com _;
 
+    # ACME challenge for Let's Encrypt
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+    # Default: Grafana at root
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
-}
 
-# Prometheus (internal only by default)
-server {
-    listen 9090;
-    server_name localhost;
+    # Prometheus at /prometheus
+    location /prometheus {
+        proxy_pass http://127.0.0.1:9090/prometheus;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
-    location / {
-        proxy_pass http://127.0.0.1:9090;
+    # AlertManager at /alertmanager
+    location /alertmanager {
+        proxy_pass http://127.0.0.1:9093;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Loki at /loki
+    location /loki {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Loki-Org-Id default;
     }
 }
 EOF
