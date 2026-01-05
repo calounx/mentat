@@ -595,6 +595,7 @@ phase_prepare_landsraad() {
         # Copy files maintaining structure (using stilgar's SSH)
         sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
             "${SCRIPT_DIR}/scripts/deploy-application.sh" \
+            "${SCRIPT_DIR}/scripts/deploy-exporters.sh" \
             "${SCRIPT_DIR}/scripts/backup-before-deploy.sh" \
             "${SCRIPT_DIR}/scripts/setup-ssl.sh" \
             "${SCRIPT_DIR}/scripts/health-check.sh" \
@@ -602,6 +603,7 @@ phase_prepare_landsraad() {
             "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || {
             log_warning "Some deployment scripts not found, copying available ones"
             sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
+                "${SCRIPT_DIR}/scripts/deploy-exporters.sh" \
                 "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
                 log_error "Failed to copy prepare-landsraad.sh"
                 return 1
