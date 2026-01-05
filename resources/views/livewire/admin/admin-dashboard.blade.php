@@ -5,7 +5,14 @@
             <h1 class="text-2xl font-bold text-white">Admin Dashboard</h1>
             <p class="mt-1 text-sm text-gray-400">System-wide overview and health status.</p>
         </div>
-        <div class="mt-4 sm:mt-0">
+        <div class="mt-4 sm:mt-0 flex space-x-3">
+            <a href="{{ route('admin.vps.index') }}?action=add"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add VPS
+            </a>
             <button wire:click="refresh"
                     wire:loading.attr="disabled"
                     class="inline-flex items-center px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50">
@@ -45,9 +52,12 @@
                     </div>
                 </div>
             </div>
-            <div class="bg-gray-700/50 px-5 py-3">
+            <div class="bg-gray-700/50 px-5 py-3 flex justify-between items-center">
                 <a href="{{ route('admin.vps.index') }}" class="text-sm font-medium text-blue-400 hover:text-blue-300">
                     View all
+                </a>
+                <a href="{{ route('admin.vps.index') }}?action=add" class="text-sm font-medium text-green-400 hover:text-green-300">
+                    + Add new
                 </a>
             </div>
         </div>
@@ -72,9 +82,12 @@
                     </div>
                 </div>
             </div>
-            <div class="bg-gray-700/50 px-5 py-3">
+            <div class="bg-gray-700/50 px-5 py-3 flex justify-between items-center">
                 <a href="{{ route('admin.tenants.index') }}" class="text-sm font-medium text-green-400 hover:text-green-300">
                     View all
+                </a>
+                <a href="{{ route('admin.tenants.index') }}?action=add" class="text-sm font-medium text-blue-400 hover:text-blue-300">
+                    + Add new
                 </a>
             </div>
         </div>
@@ -99,9 +112,12 @@
                     </div>
                 </div>
             </div>
-            <div class="bg-gray-700/50 px-5 py-3">
+            <div class="bg-gray-700/50 px-5 py-3 flex justify-between items-center">
                 <a href="{{ route('admin.sites.index') }}" class="text-sm font-medium text-purple-400 hover:text-purple-300">
                     View all
+                </a>
+                <a href="{{ route('admin.sites.index') }}?action=add" class="text-sm font-medium text-blue-400 hover:text-blue-300">
+                    + Add new
                 </a>
             </div>
         </div>
