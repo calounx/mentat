@@ -1,4 +1,6 @@
 # Prometheus configuration for CHOM monitoring
+# Uses file-based service discovery for dynamic target management
+
 global:
   scrape_interval: 15s
   scrape_timeout: 10s
@@ -7,138 +9,93 @@ global:
     cluster: 'chom-production'
     environment: 'production'
 
-# AlertManager configuration
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
             - localhost:9093
 
-# Load rules
 rule_files:
   - '/etc/observability/prometheus/rules/*.yml'
 
-# Scrape configurations
 scrape_configs:
-  # Prometheus itself
+  # ============================================
+  # LOCAL SERVICES (mentat observability stack)
+  # ============================================
+
   - job_name: 'prometheus'
     metrics_path: /prometheus/metrics
     static_configs:
-      - targets:
-          - localhost:9090
+      - targets: ['localhost:9090']
         labels:
-          service: 'prometheus'
-          instance: 'mentat.arewel.com'
+          host: 'mentat'
 
-  # Grafana
-  - job_name: 'grafana'
-    static_configs:
-      - targets:
-          - localhost:3000
-        labels:
-          service: 'grafana'
-          instance: 'mentat.arewel.com'
-
-  # Loki
-  - job_name: 'loki'
-    static_configs:
-      - targets:
-          - localhost:3100
-        labels:
-          service: 'loki'
-          instance: 'mentat.arewel.com'
-
-  # AlertManager
   - job_name: 'alertmanager'
     metrics_path: /alertmanager/metrics
     static_configs:
-      - targets:
-          - localhost:9093
+      - targets: ['localhost:9093']
         labels:
-          service: 'alertmanager'
-          instance: 'mentat.arewel.com'
+          host: 'mentat'
 
-  # Node Exporter on mentat (observability server)
-  - job_name: 'node-exporter-mentat'
+  - job_name: 'grafana'
     static_configs:
-      - targets:
-          - localhost:9100
+      - targets: ['localhost:3000']
         labels:
-          instance: 'mentat.arewel.com'
-          service: 'node-exporter'
-          role: 'observability'
+          host: 'mentat'
 
-  # Node Exporter on landsraad (application server)
-  - job_name: 'node-exporter-landsraad'
+  - job_name: 'loki'
     static_configs:
-      - targets:
-          - landsraad.arewel.com:9100
+      - targets: ['localhost:3100']
         labels:
-          instance: 'landsraad.arewel.com'
-          service: 'node-exporter'
-          role: 'application'
+          host: 'mentat'
 
-  # CHOM Laravel application metrics
-  - job_name: 'chom-application'
-    static_configs:
-      - targets:
-          - landsraad.arewel.com:9200
-        labels:
-          instance: 'landsraad.arewel.com'
-          service: 'chom'
-          role: 'application'
-    metrics_path: '/metrics'
-    scrape_interval: 30s
+  # ============================================
+  # FILE-BASED SERVICE DISCOVERY
+  # Targets are auto-registered by deploy-exporters.sh
+  # ============================================
 
-  # PostgreSQL Exporter (if installed)
-  - job_name: 'postgresql'
-    static_configs:
-      - targets:
-          - landsraad.arewel.com:9187
-        labels:
-          instance: 'landsraad.arewel.com'
-          service: 'postgresql'
-          role: 'database'
+  - job_name: 'node'
+    file_sd_configs:
+      - files:
+          - '/etc/observability/prometheus/targets/node_*.yml'
+        refresh_interval: 30s
 
-  # Redis Exporter (if installed)
-  - job_name: 'redis'
-    static_configs:
-      - targets:
-          - landsraad.arewel.com:9121
-        labels:
-          instance: 'landsraad.arewel.com'
-          service: 'redis'
-          role: 'cache'
-
-  # Nginx Exporter (if installed)
   - job_name: 'nginx'
-    static_configs:
-      - targets:
-          - landsraad.arewel.com:9113
-        labels:
-          instance: 'landsraad.arewel.com'
-          service: 'nginx'
-          role: 'web-server'
+    file_sd_configs:
+      - files:
+          - '/etc/observability/prometheus/targets/nginx_*.yml'
+        refresh_interval: 30s
 
-  # PHP-FPM Exporter (if installed)
+  - job_name: 'postgresql'
+    file_sd_configs:
+      - files:
+          - '/etc/observability/prometheus/targets/postgresql_*.yml'
+        refresh_interval: 30s
+
+  - job_name: 'redis'
+    file_sd_configs:
+      - files:
+          - '/etc/observability/prometheus/targets/redis_*.yml'
+        refresh_interval: 30s
+
   - job_name: 'php-fpm'
-    static_configs:
-      - targets:
-          - landsraad.arewel.com:9253
-        labels:
-          instance: 'landsraad.arewel.com'
-          service: 'php-fpm'
-          role: 'application-runtime'
+    file_sd_configs:
+      - files:
+          - '/etc/observability/prometheus/targets/phpfpm_*.yml'
+        refresh_interval: 30s
 
-  # Blackbox Exporter for endpoint monitoring
+  # ============================================
+  # BLACKBOX ENDPOINT MONITORING
+  # ============================================
+
   - job_name: 'blackbox-http'
     metrics_path: /probe
     params:
       module: [http_2xx]
-    static_configs:
-      - targets:
-        - https://chom.arewel.com
-        - https://chom.arewel.com/health
+    file_sd_configs:
+      - files:
+          - '/etc/observability/prometheus/targets/blackbox_*.yml'
+        refresh_interval: 30s
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -146,22 +103,3 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: localhost:9115
-
-  # Docker metrics from mentat
-  - job_name: 'docker'
-    static_configs:
-      - targets:
-          - localhost:9323
-        labels:
-          instance: 'mentat.arewel.com'
-          service: 'docker'
-          role: 'container-runtime'
-
-  # cAdvisor for container metrics
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets:
-          - localhost:8080
-        labels:
-          instance: 'mentat.arewel.com'
-          service: 'cadvisor'
