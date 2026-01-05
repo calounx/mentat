@@ -72,6 +72,7 @@ REPO_URL="${REPO_URL:-}"
 BRANCH="${BRANCH:-main}"
 PHP_VERSION="${PHP_VERSION:-8.2}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
+DEPLOY_USER="${DEPLOY_USER:-stilgar}"
 
 # Deployment flags
 SKIP_BACKUP=false
