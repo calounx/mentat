@@ -265,7 +265,30 @@ deploy_configuration() {
         log_info "Using default Promtail configuration"
     fi
 
+    # Deploy Prometheus alert rules
+    deploy_alert_rules
+
     log_success "Configuration files deployed"
+}
+
+# Deploy Prometheus alert rules
+deploy_alert_rules() {
+    log_step "Deploying Prometheus alert rules"
+
+    local alerts_src="${SRC_CONFIG_DIR}/prometheus-alerts"
+    local alerts_dest="${CONFIG_DIR}/prometheus/rules"
+
+    sudo mkdir -p "$alerts_dest"
+
+    if [[ -d "$alerts_src" ]]; then
+        sudo cp "${alerts_src}"/*.yml "${alerts_dest}/" 2>/dev/null || true
+        sudo chown -R observability:observability "${alerts_dest}"
+
+        local count=$(ls -1 "${alerts_src}"/*.yml 2>/dev/null | wc -l)
+        log_success "Deployed ${count} alert rule file(s)"
+    else
+        log_info "No alert rules found in ${alerts_src}"
+    fi
 }
 
 # Validate configuration files
