@@ -1,141 +1,180 @@
 {
-  "dashboard": {
-    "title": "CHOM - Database Performance",
-    "tags": ["chom", "database", "performance"],
-    "timezone": "browser",
-    "schemaVersion": 38,
-    "version": 1,
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Query Rate",
-        "type": "graph",
-        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "sum(rate(chom_laravel_db_queries_total[5m])) by (type)",
-            "legendFormat": "{{type}}",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "queries/s", "format": "short"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 2,
-        "title": "Query Duration (p95)",
-        "type": "graph",
-        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(chom_laravel_db_query_duration_seconds_bucket[5m])) by (le, type))",
-            "legendFormat": "{{type}}",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "seconds", "format": "s"},
-          {"format": "short"}
-        ],
-        "alert": {
-          "conditions": [
-            {
-              "evaluator": {"params": [0.1], "type": "gt"},
-              "operator": {"type": "and"},
-              "query": {"params": ["A", "5m", "now"]},
-              "reducer": {"params": [], "type": "avg"},
-              "type": "query"
-            }
-          ],
-          "name": "Slow Database Queries"
+  "title": "CHOM - Database Performance",
+  "uid": "chom-database-perf",
+  "tags": ["chom", "database", "postgresql"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Connections",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "pg_stat_activity_count",
+          "legendFormat": "{{state}}",
+          "refId": "A"
         }
-      },
-      {
-        "id": 3,
-        "title": "Slow Query Rate",
-        "type": "graph",
-        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "sum(rate(chom_laravel_db_queries_slow_total[5m]))",
-            "legendFormat": "Slow Queries",
-            "refId": "A"
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 2,
+      "title": "Connection Pool Usage",
+      "type": "gauge",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(pg_stat_activity_count) / pg_settings_max_connections * 100",
+          "legendFormat": "Usage %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
           }
-        ],
-        "yaxes": [
-          {"label": "queries/s", "format": "short"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 4,
-        "title": "Query Duration by Type",
-        "type": "graph",
-        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(chom_laravel_db_query_duration_seconds_bucket[5m])) by (le, type))",
-            "legendFormat": "{{type}} (p50)",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(chom_laravel_db_query_duration_seconds_bucket[5m])) by (le, type))",
-            "legendFormat": "{{type}} (p95)",
-            "refId": "B"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(chom_laravel_db_query_duration_seconds_bucket[5m])) by (le, type))",
-            "legendFormat": "{{type}} (p99)",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"label": "seconds", "format": "s"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 5,
-        "title": "Query Type Distribution",
-        "type": "piechart",
-        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "sum(increase(chom_laravel_db_queries_total[5m])) by (type)",
-            "legendFormat": "{{type}}",
-            "refId": "A"
-          }
-        ]
-      },
-      {
-        "id": 6,
-        "title": "Database Connection Pool",
-        "type": "graph",
-        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "chom_laravel_db_connections_active",
-            "legendFormat": "Active Connections",
-            "refId": "A"
-          },
-          {
-            "expr": "chom_laravel_db_connections_max",
-            "legendFormat": "Max Connections",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"label": "connections", "format": "short"},
-          {"format": "short"}
-        ]
+        }
       }
-    ],
-    "time": {
-      "from": "now-1h",
-      "to": "now"
+    },
+    {
+      "id": 3,
+      "title": "Transactions/sec",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(pg_stat_database_xact_commit{datname=\"chom\"}[5m])",
+          "legendFormat": "Commits",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(pg_stat_database_xact_rollback{datname=\"chom\"}[5m])",
+          "legendFormat": "Rollbacks",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 4,
+      "title": "Cache Hit Ratio",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "pg_stat_database_blks_hit{datname=\"chom\"} / (pg_stat_database_blks_hit{datname=\"chom\"} + pg_stat_database_blks_read{datname=\"chom\"}) * 100",
+          "legendFormat": "Cache Hit %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 90},
+              {"color": "green", "value": 99}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Database Size",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 16, "w": 8, "h": 6},
+      "targets": [
+        {
+          "expr": "pg_database_size_bytes{datname=\"chom\"}",
+          "legendFormat": "Size",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes"}},
+      "options": {"colorMode": "value"}
+    },
+    {
+      "id": 6,
+      "title": "Rows/sec",
+      "type": "timeseries",
+      "gridPos": {"x": 8, "y": 16, "w": 16, "h": 6},
+      "targets": [
+        {
+          "expr": "rate(pg_stat_database_tup_fetched{datname=\"chom\"}[5m])",
+          "legendFormat": "Fetched",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(pg_stat_database_tup_inserted{datname=\"chom\"}[5m])",
+          "legendFormat": "Inserted",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(pg_stat_database_tup_updated{datname=\"chom\"}[5m])",
+          "legendFormat": "Updated",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(pg_stat_database_tup_deleted{datname=\"chom\"}[5m])",
+          "legendFormat": "Deleted",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "rowsps"}}
+    },
+    {
+      "id": 7,
+      "title": "Lock Waits",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 22, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "pg_locks_count",
+          "legendFormat": "{{mode}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 8,
+      "title": "Deadlocks",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 22, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(pg_stat_database_deadlocks{datname=\"chom\"}[5m])",
+          "legendFormat": "Deadlocks",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 0.1}
+            ]
+          }
+        }
+      }
     }
-  }
+  ],
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "time": {"from": "now-1h", "to": "now"}
 }

@@ -1,171 +1,194 @@
 {
-  "dashboard": {
-    "title": "CHOM - System Overview",
-    "tags": ["chom", "overview", "production"],
-    "timezone": "browser",
-    "schemaVersion": 38,
-    "version": 1,
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Request Rate",
-        "type": "graph",
-        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "sum(rate(chom_laravel_http_requests_total[5m])) by (status)",
-            "legendFormat": "{{status}}",
-            "refId": "A"
+  "title": "CHOM - System Overview",
+  "uid": "chom-system-overview",
+  "tags": ["chom", "overview", "production"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (status)",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+          "legendFormat": "Error Rate %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
           }
-        ],
-        "yaxes": [
-          {"label": "req/s", "format": "short"},
-          {"format": "short"}
-        ],
-        "legend": {"show": true}
-      },
-      {
-        "id": 2,
-        "title": "Error Rate",
-        "type": "graph",
-        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "sum(rate(chom_laravel_http_requests_errors_total[5m])) / sum(rate(chom_laravel_http_requests_total[5m])) * 100",
-            "legendFormat": "Error Rate %",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "%", "format": "percent"},
-          {"format": "short"}
-        ],
-        "alert": {
-          "conditions": [
-            {
-              "evaluator": {"params": [1], "type": "gt"},
-              "operator": {"type": "and"},
-              "query": {"params": ["A", "5m", "now"]},
-              "reducer": {"params": [], "type": "avg"},
-              "type": "query"
-            }
-          ],
-          "executionErrorState": "alerting",
-          "frequency": "1m",
-          "handler": 1,
-          "name": "High Error Rate",
-          "noDataState": "no_data"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Request Duration (p95)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "CPU %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+          "legendFormat": "Memory %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Disk Usage",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) * 100",
+          "legendFormat": "Disk %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Network Traffic",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|docker.*|br.*\"}[5m])",
+          "legendFormat": "Receive {{device}}",
+          "refId": "A"
+        },
+        {
+          "expr": "-rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|br.*\"}[5m])",
+          "legendFormat": "Transmit {{device}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Active Services",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "up",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "green"}}}
+          ]
         }
       },
-      {
-        "id": 3,
-        "title": "Request Duration (p95)",
-        "type": "graph",
-        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(chom_laravel_http_request_duration_seconds_bucket[5m])) by (le, route))",
-            "legendFormat": "{{route}}",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "seconds", "format": "s"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 4,
-        "title": "Active Requests",
-        "type": "graph",
-        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "chom_laravel_http_requests_active",
-            "legendFormat": "Active Requests",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "requests", "format": "short"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 5,
-        "title": "Memory Usage",
-        "type": "graph",
-        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "chom_laravel_memory_usage_mb",
-            "legendFormat": "Memory MB",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "MB", "format": "decmbytes"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 6,
-        "title": "Cache Hit Rate",
-        "type": "graph",
-        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
-        "targets": [
-          {
-            "expr": "sum(rate(chom_laravel_cache_operations_total{operation=\"hit\"}[5m])) / (sum(rate(chom_laravel_cache_operations_total{operation=\"hit\"}[5m])) + sum(rate(chom_laravel_cache_operations_total{operation=\"miss\"}[5m]))) * 100",
-            "legendFormat": "Hit Rate %",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "%", "format": "percent"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 7,
-        "title": "Top Slow Endpoints (p95)",
-        "type": "table",
-        "gridPos": {"x": 0, "y": 24, "w": 24, "h": 8},
-        "targets": [
-          {
-            "expr": "topk(10, histogram_quantile(0.95, sum(rate(chom_laravel_http_request_duration_seconds_bucket[5m])) by (le, route)))",
-            "format": "table",
-            "instant": true,
-            "refId": "A"
-          }
-        ],
-        "transformations": [
-          {
-            "id": "organize",
-            "options": {
-              "excludeByName": {},
-              "indexByName": {},
-              "renameByName": {
-                "route": "Route",
-                "Value": "Duration (s)"
-              }
-            }
-          }
-        ]
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
       }
-    ],
-    "templating": {
-      "list": []
-    },
-    "annotations": {
-      "list": []
-    },
-    "time": {
-      "from": "now-1h",
-      "to": "now"
-    },
-    "timepicker": {
-      "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h"]
     }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
   }
 }

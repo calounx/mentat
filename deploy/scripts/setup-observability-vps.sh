@@ -308,7 +308,7 @@ ExecStart=/opt/observability/bin/alertmanager \\
     --config.file=${CONFIG_DIR}/alertmanager/alertmanager.yml \\
     --storage.path=${DATA_DIR}/alertmanager \\
     --web.external-url=https://mentat.arewel.com/alertmanager \\
-    --web.route-prefix=/
+    --web.route-prefix=/alertmanager
 Restart=always
 RestartSec=5
 
