@@ -122,51 +122,82 @@
                 <!-- Pricing Tiers -->
                 <div class="mt-24">
                     <h2 class="text-3xl font-bold text-center mb-12">Simple, Transparent Pricing</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        @foreach(config('chom.tiers', []) as $tierKey => $tier)
-                            <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border {{ $tierKey === 'pro' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700' }}">
-                                @if($tierKey === 'pro')
-                                    <span class="inline-block px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">Most Popular</span>
-                                @endif
-                                <h3 class="text-xl font-semibold">{{ $tier['name'] ?? ucfirst($tierKey) }}</h3>
-                                <div class="mt-4">
-                                    <span class="text-4xl font-bold">${{ number_format($tier['price_monthly'] ?? 0, 0) }}</span>
-                                    <span class="text-gray-500 dark:text-gray-400">/month</span>
-                                </div>
-                                <ul class="mt-6 space-y-3">
-                                    <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        {{ ($tier['limits']['sites'] ?? 0) === -1 ? 'Unlimited' : ($tier['limits']['sites'] ?? 0) }} sites
-                                    </li>
-                                    <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        {{ ($tier['limits']['storage_gb'] ?? 0) === -1 ? 'Unlimited' : ($tier['limits']['storage_gb'] ?? 0) }}GB storage
-                                    </li>
-                                    <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        SSL certificates
-                                    </li>
-                                    @if($tier['features']['priority_support'] ?? false)
+                    @if($plans->isNotEmpty())
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            @foreach($plans as $plan)
+                                <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border {{ $plan->tier === 'pro' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-200 dark:border-gray-700' }}">
+                                    @if($plan->tier === 'pro')
+                                        <span class="inline-block px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">Most Popular</span>
+                                    @endif
+                                    <h3 class="text-xl font-semibold">{{ $plan->name }}</h3>
+                                    @if($plan->description)
+                                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ $plan->description }}</p>
+                                    @endif
+                                    <div class="mt-4">
+                                        <span class="text-4xl font-bold">{{ $plan->getFormattedMonthlyPrice() }}</span>
+                                        <span class="text-gray-500 dark:text-gray-400">/month</span>
+                                    </div>
+                                    <ul class="mt-6 space-y-3">
                                         <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                                             <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            Priority support
+                                            {{ $plan->getDisplayValue('max_sites') }} sites
                                         </li>
-                                    @endif
-                                </ul>
-                                <a href="{{ route('register') }}" class="mt-8 block w-full text-center px-4 py-2 text-sm font-medium {{ $tierKey === 'pro' ? 'text-white bg-blue-600 hover:bg-blue-700' : 'text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600' }} rounded-lg transition-colors">
-                                    Get Started
-                                </a>
-                            </div>
-                        @endforeach
-                    </div>
+                                        <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            {{ $plan->max_storage_gb === -1 ? 'Unlimited' : $plan->max_storage_gb }} GB storage
+                                        </li>
+                                        <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            {{ $plan->max_bandwidth_gb === -1 ? 'Unlimited' : $plan->max_bandwidth_gb }} GB bandwidth
+                                        </li>
+                                        <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            SSL certificates
+                                        </li>
+                                        @if($plan->support_level === 'priority' || $plan->support_level === 'dedicated')
+                                            <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                {{ ucfirst($plan->support_level) }} support
+                                            </li>
+                                        @endif
+                                        @if($plan->staging_environments)
+                                            <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                Staging environments
+                                            </li>
+                                        @endif
+                                        @if($plan->white_label)
+                                            <li class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                White label
+                                            </li>
+                                        @endif
+                                    </ul>
+                                    <a href="{{ route('register') }}" class="mt-8 block w-full text-center px-4 py-2 text-sm font-medium {{ $plan->tier === 'pro' ? 'text-white bg-blue-600 hover:bg-blue-700' : 'text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600' }} rounded-lg transition-colors">
+                                        Get Started
+                                    </a>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-center py-12">
+                            <p class="text-gray-500 dark:text-gray-400">No pricing plans available at this time.</p>
+                        </div>
+                    @endif
                 </div>
             </div>
         </main>

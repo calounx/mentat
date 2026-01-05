@@ -31,7 +31,14 @@ Route::get('/', function () {
     if (auth()->check()) {
         return redirect()->route('dashboard');
     }
-    return view('welcome');
+
+    // Get active plans from database (not static config)
+    $plans = \App\Models\TierLimit::active()
+        ->currentlyValid()
+        ->orderByRaw("CASE tier WHEN 'starter' THEN 1 WHEN 'pro' THEN 2 WHEN 'enterprise' THEN 3 ELSE 4 END")
+        ->get();
+
+    return view('welcome', ['plans' => $plans]);
 })->name('home');
 
 // Authentication routes
