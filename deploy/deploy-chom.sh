@@ -103,7 +103,7 @@ BOOTSTRAP_USER="${BOOTSTRAP_USER:-root}"
 MENTAT_HOST="${MENTAT_HOST:-mentat.arewel.com}"
 LANDSRAAD_HOST="${LANDSRAAD_HOST:-landsraad.arewel.com}"
 
-# Detect SSH key to use - prefer DEPLOY_USER's keys, fall back to SUDO_USER
+# Detect SSH key to use - prefer SUDO_USER (calounx), then DEPLOY_USER if it exists locally
 find_ssh_key() {
     local user="$1"
     local home=$(eval echo "~${user}")
@@ -117,12 +117,12 @@ find_ssh_key() {
 }
 
 SSH_KEY=""
-# First try DEPLOY_USER (stilgar)
-if SSH_KEY=$(find_ssh_key "$DEPLOY_USER" 2>/dev/null); then
-    : # Found stilgar's key
-# Then try SUDO_USER (calounx when running with sudo)
-elif [[ -n "${SUDO_USER:-}" ]] && SSH_KEY=$(find_ssh_key "$SUDO_USER" 2>/dev/null); then
-    : # Found sudo user's key
+# First try SUDO_USER (calounx when running with sudo) - this user initiated deployment
+if [[ -n "${SUDO_USER:-}" ]] && SSH_KEY=$(find_ssh_key "$SUDO_USER" 2>/dev/null); then
+    : # Found sudo user's key (calounx)
+# Then try DEPLOY_USER (stilgar) only if user exists locally on this machine
+elif id "$DEPLOY_USER" &>/dev/null && SSH_KEY=$(find_ssh_key "$DEPLOY_USER" 2>/dev/null); then
+    : # Found stilgar's key (stilgar exists locally)
 # Finally try current user
 elif SSH_KEY=$(find_ssh_key "$(whoami)" 2>/dev/null); then
     : # Found current user's key
