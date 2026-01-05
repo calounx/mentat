@@ -401,7 +401,7 @@ ruler:
       directory: ${DATA_DIR}/loki/rules
 EOF
 
-    sudo mkdir -p "${DATA_DIR}/loki"/{chunks,rules,compactor}
+    sudo mkdir -p "${DATA_DIR}/loki"/{chunks,rules,compactor,rules-temp}
 
     # Create systemd service
     sudo tee /etc/systemd/system/loki.service > /dev/null <<EOF

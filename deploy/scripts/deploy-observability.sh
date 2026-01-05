@@ -247,6 +247,14 @@ deploy_configuration() {
     # Deploy Grafana dashboards
     deploy_grafana_dashboards
 
+    # Ensure Loki directories exist with correct permissions
+    log_step "Ensuring Loki directories and permissions"
+    sudo mkdir -p "${DATA_DIR}/loki"/{chunks,rules,compactor,rules-temp}
+    sudo mkdir -p "${CONFIG_DIR}/loki"
+    sudo chown -R observability:observability "${DATA_DIR}/loki"
+    sudo chown -R observability:observability "${CONFIG_DIR}/loki"
+    log_success "Loki directories verified"
+
     # Copy Loki configuration if exists
     if [[ -f "${SRC_CONFIG_DIR}/loki-config.yml" ]]; then
         sudo cp "${SRC_CONFIG_DIR}/loki-config.yml" "${CONFIG_DIR}/loki/"

@@ -247,7 +247,7 @@ ruler:
       directory: ${DATA_DIR}/loki/rules
 EOF
 
-mkdir -p "$DATA_DIR/loki"/{chunks,rules,compactor}
+mkdir -p "$DATA_DIR/loki"/{chunks,rules,compactor,rules-temp}
 
 cat > /etc/systemd/system/loki.service << EOF
 [Unit]
