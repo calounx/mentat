@@ -709,6 +709,31 @@ ENVEOF
                 return 1
             }
             log_success "Application deployed successfully"
+
+            # Create super admin user
+            log_step "Creating CHOM super admin user"
+            sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@${LANDSRAAD_HOST}" "cd /var/www/chom && php artisan tinker --execute=\"
+                use Illuminate\\Support\\Str;
+                use App\\Models\\User;
+
+                // Check if super admin already exists
+                if (!User::where('email', 'admin@arewel.com')->exists()) {
+                    User::create([
+                        'id' => Str::uuid(),
+                        'name' => 'DuncanIdaho',
+                        'email' => 'admin@arewel.com',
+                        'password' => bcrypt('Arrakis'),
+                        'is_super_admin' => true,
+                        'must_reset_password' => true,
+                    ]);
+                    echo 'Super admin user created successfully';
+                } else {
+                    echo 'Super admin user already exists';
+                }
+            \"" 2>/dev/null && log_success "Super admin user created (DuncanIdaho / admin@arewel.com)" || {
+                log_warning "Could not create super admin user automatically"
+                log_info "Create manually with: php artisan tinker"
+            }
         else
             log_warning "REPO_URL not set - skipping application deployment"
             log_info "This should not happen - REPO_URL should be set in Phase 3"
@@ -950,21 +975,12 @@ display_post_deployment_info() {
     log_info "  Credentials"
     log_info "═══════════════════════════════════════════════════════════════"
     log_info "  Grafana:        admin / ${grafana_pass}"
-    log_info "  CHOM App:       Create first user via command below"
     log_info ""
-    log_info "═══════════════════════════════════════════════════════════════"
-    log_info "  Create CHOM Super Admin User"
-    log_info "═══════════════════════════════════════════════════════════════"
-    log_info "  Run on landsraad:"
-    log_info "    ssh ${DEPLOY_USER}@${LANDSRAAD_HOST}"
-    log_info "    cd /var/www/chom"
-    log_info "    php artisan tinker --execute=\"\\App\\Models\\User::create(["
-    log_info "      'id'=>\\Illuminate\\Support\\Str::uuid(),"
-    log_info "      'name'=>'Admin',"
-    log_info "      'email'=>'admin@arewel.com',"
-    log_info "      'password'=>bcrypt('YourSecurePassword'),"
-    log_info "      'is_super_admin'=>true"
-    log_info "    ]);\""
+    log_info "  CHOM Super Admin:"
+    log_info "    Email:        admin@arewel.com"
+    log_info "    Password:     Arrakis"
+    log_info "    Name:         DuncanIdaho"
+    log_warning "    ⚠ CHANGE PASSWORD ON FIRST LOGIN!"
     log_info ""
     log_info "═══════════════════════════════════════════════════════════════"
     log_info "  Important Files"

@@ -25,6 +25,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'two_factor_enabled',
         'two_factor_secret',
         'settings',
+        'must_reset_password',
     ];
 
     protected $hidden = [
@@ -41,7 +42,16 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_super_admin' => 'boolean',
             'two_factor_enabled' => 'boolean',
             'settings' => 'array',
+            'must_reset_password' => 'boolean',
         ];
+    }
+
+    /**
+     * Check if user must reset their password on next login.
+     */
+    public function mustResetPassword(): bool
+    {
+        return $this->must_reset_password === true;
     }
 
     /**
