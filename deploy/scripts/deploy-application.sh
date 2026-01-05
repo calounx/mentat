@@ -577,6 +577,11 @@ main() {
         log_success "SSH key exists at ${ssh_key_path}"
     fi
 
+    # Always ensure correct permissions (in case shared dir permissions were changed)
+    sudo chmod 600 "${ssh_key_path}" 2>/dev/null || true
+    sudo chmod 644 "${ssh_key_path}.pub" 2>/dev/null || true
+    sudo chown ${DEPLOY_USER}:www-data "${ssh_key_path}" "${ssh_key_path}.pub" 2>/dev/null || true
+
     # Deploy application
     log_section "Deploying Application"
     clone_repository "$RELEASE_PATH"
