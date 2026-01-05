@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\SiteController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\VpsController;
@@ -28,12 +29,11 @@ Route::prefix('v1')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
     });
 
-    // Health check (no rate limiting for monitoring)
-    Route::get('/health', function () {
-        return response()->json([
-            'status' => 'ok',
-            'timestamp' => now()->toIso8601String(),
-        ]);
+    // Health check endpoints (no rate limiting for monitoring)
+    Route::prefix('health')->group(function () {
+        Route::get('/', [HealthController::class, 'index']);
+        Route::get('/liveness', [HealthController::class, 'liveness']);
+        Route::get('/readiness', [HealthController::class, 'readiness']);
     });
 
     // =========================================================================
