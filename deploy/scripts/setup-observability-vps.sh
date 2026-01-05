@@ -337,7 +337,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://localhost:9090
+    url: http://localhost:9090/prometheus
     isDefault: true
 
   - name: Loki
