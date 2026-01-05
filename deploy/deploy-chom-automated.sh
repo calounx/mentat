@@ -616,6 +616,11 @@ phase_prepare_landsraad() {
             return 1
         }
 
+        # Ensure scripts are executable
+        log_info "Setting script permissions on $LANDSRAAD_HOST"
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
+            "chmod +x /tmp/chom-deploy/scripts/*.sh"
+
         log_info "Running prepare-landsraad.sh on $LANDSRAAD_HOST as $DEPLOY_USER"
         # Pass all required environment variables
         sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
