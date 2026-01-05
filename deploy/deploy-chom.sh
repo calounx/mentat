@@ -99,6 +99,7 @@ SKIP_BACKUP=false
 SKIP_MIGRATIONS=false
 SKIP_OBSERVABILITY=false
 DEPLOY_USER="${DEPLOY_USER:-stilgar}"
+BOOTSTRAP_USER="${BOOTSTRAP_USER:-root}"
 MENTAT_HOST="${MENTAT_HOST:-mentat.arewel.com}"
 LANDSRAAD_HOST="${LANDSRAAD_HOST:-landsraad.arewel.com}"
 
@@ -129,6 +130,10 @@ while [[ $# -gt 0 ]]; do
             SKIP_OBSERVABILITY=true
             shift
             ;;
+        --bootstrap-user=*)
+            BOOTSTRAP_USER="${1#*=}"
+            shift
+            ;;
         --help)
             cat <<EOF
 CHOM Deployment Script
@@ -140,6 +145,7 @@ Options:
   --environment=ENV         Deployment environment (default: production)
   --branch=BRANCH          Git branch to deploy (default: main)
   --repo-url=URL           Repository URL (required)
+  --bootstrap-user=USER    User for initial setup if stilgar doesn't exist (default: root)
   --skip-backup            Skip pre-deployment backup
   --skip-migrations        Skip database migrations
   --skip-observability     Skip observability stack deployment
@@ -206,15 +212,16 @@ deployment_error_handler() {
 
 trap deployment_error_handler ERR
 
-# Check SSH connectivity
+# Check SSH connectivity and bootstrap if needed
 check_ssh_connectivity() {
     log_section "Checking SSH Connectivity"
 
-    log_step "Testing connection to landsraad.arewel.com"
+    log_step "Testing connection to landsraad.arewel.com as ${DEPLOY_USER}"
     if ssh -o BatchMode=yes -o ConnectTimeout=5 "${DEPLOY_USER}@${LANDSRAAD_HOST}" "echo 'SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
-        log_success "SSH connection to landsraad established"
+        log_success "SSH connection to landsraad established as ${DEPLOY_USER}"
     else
-        log_fatal "Cannot connect to landsraad via SSH. Please check SSH keys and connectivity."
+        log_warning "Cannot connect as ${DEPLOY_USER}, attempting bootstrap..."
+        bootstrap_deploy_user
     fi
 
     # Check if we're running on mentat
@@ -224,6 +231,70 @@ check_ssh_connectivity() {
     else
         log_warning "Not running on mentat.arewel.com (current: $current_host)"
         log_warning "This script should be run from mentat for full deployment orchestration"
+    fi
+}
+
+# Bootstrap deploy user on landsraad if it doesn't exist
+bootstrap_deploy_user() {
+    log_step "Bootstrapping ${DEPLOY_USER} user on landsraad via ${BOOTSTRAP_USER}"
+
+    # Test connection as bootstrap user
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "${BOOTSTRAP_USER}@${LANDSRAAD_HOST}" "echo 'Bootstrap SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
+        log_fatal "Cannot connect as ${BOOTSTRAP_USER}@${LANDSRAAD_HOST}. Please check SSH keys."
+    fi
+
+    log_info "Connected as ${BOOTSTRAP_USER}, creating ${DEPLOY_USER} user..."
+
+    # Create deploy user and setup SSH
+    local bootstrap_script=$(cat <<'BOOTSTRAP_EOF'
+set -e
+DEPLOY_USER="__DEPLOY_USER__"
+
+echo "Checking if user exists..."
+if id "$DEPLOY_USER" &>/dev/null; then
+    echo "User $DEPLOY_USER already exists"
+else
+    echo "Creating user $DEPLOY_USER..."
+    useradd -m -s /bin/bash "$DEPLOY_USER"
+    usermod -aG sudo "$DEPLOY_USER"
+    usermod -aG www-data "$DEPLOY_USER"
+    echo "$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$DEPLOY_USER
+    chmod 440 /etc/sudoers.d/$DEPLOY_USER
+    echo "User $DEPLOY_USER created with sudo access"
+fi
+
+# Setup SSH directory
+echo "Setting up SSH for $DEPLOY_USER..."
+mkdir -p /home/$DEPLOY_USER/.ssh
+chmod 700 /home/$DEPLOY_USER/.ssh
+
+# Copy authorized_keys from root or bootstrap user if exists
+if [[ -f /root/.ssh/authorized_keys ]]; then
+    cp /root/.ssh/authorized_keys /home/$DEPLOY_USER/.ssh/
+    echo "Copied SSH keys from root"
+fi
+
+chown -R $DEPLOY_USER:$DEPLOY_USER /home/$DEPLOY_USER/.ssh
+chmod 600 /home/$DEPLOY_USER/.ssh/authorized_keys 2>/dev/null || true
+
+echo "Bootstrap complete for $DEPLOY_USER"
+BOOTSTRAP_EOF
+)
+    bootstrap_script="${bootstrap_script//__DEPLOY_USER__/$DEPLOY_USER}"
+
+    if ssh "${BOOTSTRAP_USER}@${LANDSRAAD_HOST}" "$bootstrap_script" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "User ${DEPLOY_USER} bootstrapped successfully"
+    else
+        log_fatal "Failed to bootstrap ${DEPLOY_USER} user"
+    fi
+
+    # Verify we can now connect as deploy user
+    log_step "Verifying SSH connection as ${DEPLOY_USER}"
+    sleep 2  # Give SSH a moment to recognize the new user
+    if ssh -o BatchMode=yes -o ConnectTimeout=5 "${DEPLOY_USER}@${LANDSRAAD_HOST}" "echo 'SSH OK'" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "SSH connection verified as ${DEPLOY_USER}"
+    else
+        log_fatal "Cannot connect as ${DEPLOY_USER} after bootstrap. Check SSH key setup."
     fi
 }
 
