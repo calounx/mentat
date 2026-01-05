@@ -528,7 +528,7 @@ main() {
     log_section "Exporter Deployment"
     if [[ -x "${SCRIPT_DIR}/deploy-exporters.sh" ]]; then
         log_info "Deploying exporters for detected services..."
-        "${SCRIPT_DIR}/deploy-exporters.sh"
+        sudo bash "${SCRIPT_DIR}/deploy-exporters.sh" || log_warning "Exporter deployment completed with warnings"
     else
         log_warn "deploy-exporters.sh not found or not executable"
     fi
