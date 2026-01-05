@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Webhooks\StripeWebhookController;
 use App\Livewire\Admin\AdminDashboard;
+use App\Livewire\Admin\PlanManagement;
 use App\Livewire\Admin\SiteOverview;
 use App\Livewire\Admin\SystemSettings;
 use App\Livewire\Admin\TenantManagement;
@@ -9,6 +10,7 @@ use App\Livewire\Admin\VpsManagement;
 use App\Livewire\Backups\BackupList;
 use App\Livewire\Dashboard\Overview;
 use App\Livewire\Observability\MetricsDashboard;
+use App\Livewire\Profile\ProfileSettings;
 use App\Livewire\Sites\SiteCreate;
 use App\Livewire\Sites\SiteList;
 use App\Livewire\Team\TeamManager;
@@ -139,6 +141,9 @@ Route::middleware('auth')->group(function () {
         // Team Management
         Route::get('/team', TeamManager::class)->name('team.index');
     });
+
+    // Profile Settings (no tenant required)
+    Route::get('/profile', ProfileSettings::class)->name('profile.index');
 });
 
 /*
@@ -163,6 +168,9 @@ Route::middleware(['auth', 'super-admin'])->prefix('admin')->name('admin.')->gro
 
     // Site Overview (all sites across all tenants)
     Route::get('/sites', SiteOverview::class)->name('sites.index');
+
+    // Plan Management
+    Route::get('/plans', PlanManagement::class)->name('plans.index');
 
     // System Settings
     Route::get('/settings', SystemSettings::class)->name('settings.index');

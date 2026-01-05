@@ -77,7 +77,9 @@
                                     </a>
                                 @endif
                                 <span class="text-sm text-gray-600">{{ auth()->user()->organization?->name }}</span>
-                                <span class="text-sm font-medium text-gray-900">{{ auth()->user()->name }}</span>
+                                <a href="{{ route('profile.index') }}" class="text-sm font-medium text-gray-900 hover:text-blue-600">
+                                    {{ auth()->user()->name }}
+                                </a>
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf
                                     <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">

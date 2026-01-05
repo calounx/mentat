@@ -28,6 +28,7 @@ class TierLimit extends Model
     protected $fillable = [
         'tier',
         'name',
+        'description',
         'max_sites',
         'max_storage_gb',
         'max_bandwidth_gb',
@@ -38,6 +39,9 @@ class TierLimit extends Model
         'white_label',
         'api_rate_limit_per_hour',
         'price_monthly_cents',
+        'start_date',
+        'end_date',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -52,7 +56,58 @@ class TierLimit extends Model
             'white_label' => 'boolean',
             'api_rate_limit_per_hour' => 'integer',
             'price_monthly_cents' => 'integer',
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * Scope for active plans.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope for currently valid plans (within date range).
+     */
+    public function scopeCurrentlyValid($query)
+    {
+        $today = now()->toDateString();
+
+        return $query->where('is_active', true)
+            ->where(function ($q) use ($today) {
+                $q->whereNull('start_date')
+                    ->orWhere('start_date', '<=', $today);
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $today);
+            });
+    }
+
+    /**
+     * Check if plan is currently valid.
+     */
+    public function isCurrentlyValid(): bool
+    {
+        if (!$this->is_active) {
+            return false;
+        }
+
+        $today = now()->toDateString();
+
+        if ($this->start_date && $this->start_date->toDateString() > $today) {
+            return false;
+        }
+
+        if ($this->end_date && $this->end_date->toDateString() < $today) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
