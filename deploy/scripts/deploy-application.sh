@@ -603,7 +603,8 @@ main() {
 
     # Post-deployment health check
     log_section "Post-Deployment Validation"
-    sleep 2  # Give services time to reload
+    log_info "Waiting 5 seconds for services to stabilize..."
+    sleep 5  # Give services time to reload and stabilize
     run_health_checks "$CURRENT_LINK"
 
     # Cleanup

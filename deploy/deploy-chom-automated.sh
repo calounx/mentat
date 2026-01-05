@@ -877,8 +877,9 @@ phase_deploy_observability() {
             fi
         done
 
-        # Wait for services to start
-        sleep 5
+        # Wait for services to start (increased to avoid false-negatives)
+        log_info "Waiting 15 seconds for services to initialize..."
+        sleep 15
 
         # Verify services are running
         log_step "Verifying observability services"
@@ -914,9 +915,10 @@ phase_deploy_observability() {
             log_warning "Firewall configuration had issues"
         }
 
-        # Verify HTTP endpoints
+        # Verify HTTP endpoints (wait longer for services to be fully ready)
         log_step "Verifying observability endpoints"
-        sleep 2
+        log_info "Waiting 10 seconds for HTTP endpoints to be ready..."
+        sleep 10
         for endpoint in "localhost:9090/-/healthy:Prometheus" "localhost:3000/api/health:Grafana" "localhost:3100/ready:Loki" "localhost:9093/-/healthy:AlertManager"; do
             IFS=':' read -r host port path name <<< "$endpoint"
             if curl -sf "http://${host}:${port}/${path}" &>/dev/null; then

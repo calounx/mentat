@@ -513,8 +513,9 @@ main() {
     stop_services
     start_services
 
-    # Wait for services
-    sleep 5
+    # Wait for services (increased to avoid false-negatives)
+    log_info "Waiting 10 seconds for services to initialize..."
+    sleep 10
     wait_for_services
 
     # Check health
