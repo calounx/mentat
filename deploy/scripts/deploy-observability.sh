@@ -217,6 +217,10 @@ DASHBOARD_YAML
 deploy_configuration() {
     log_step "Deploying configuration files"
 
+    # Ensure Prometheus targets directory exists
+    sudo mkdir -p "${CONFIG_DIR}/prometheus/targets"
+    sudo chown observability:observability "${CONFIG_DIR}/prometheus/targets"
+
     # Copy Prometheus configuration if exists
     if [[ -f "${SRC_CONFIG_DIR}/prometheus.yml" ]]; then
         sudo cp "${SRC_CONFIG_DIR}/prometheus.yml" "${CONFIG_DIR}/prometheus/"
