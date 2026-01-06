@@ -6,6 +6,8 @@ namespace App\Livewire\Admin;
 
 use App\Models\Tenant;
 use App\Models\Organization;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -38,6 +40,11 @@ class TenantManagement extends Component
 
     public ?string $error = null;
     public ?string $success = null;
+
+    // User assignment modal
+    public bool $showUserModal = false;
+    public ?string $userModalTenantId = null;
+    public ?Tenant $userModalTenant = null;
 
     protected $queryString = [
         'search' => ['except' => ''],
@@ -231,6 +238,81 @@ class TenantManagement extends Component
         }
     }
 
+    public function openUserModal(string $tenantId): void
+    {
+        $this->userModalTenant = Tenant::with(['users', 'organization'])
+            ->findOrFail($tenantId);
+        $this->userModalTenantId = $tenantId;
+        $this->showUserModal = true;
+        $this->error = null;
+    }
+
+    public function closeUserModal(): void
+    {
+        $this->showUserModal = false;
+        $this->userModalTenant = null;
+        $this->userModalTenantId = null;
+        $this->error = null;
+    }
+
+    public function assignUser(string $userId): void
+    {
+        try {
+            $tenant = Tenant::findOrFail($this->userModalTenantId);
+            $user = User::findOrFail($userId);
+
+            // Check if user belongs to same organization
+            if ($user->organization_id !== $tenant->organization_id) {
+                $this->error = 'User must belong to the same organization as the tenant.';
+                return;
+            }
+
+            // Assign user to tenant
+            $tenant->assignUser($user);
+
+            $this->success = "User '{$user->name}' assigned to tenant '{$tenant->name}'.";
+
+            // Refresh modal data
+            $this->userModalTenant = Tenant::with(['users', 'organization'])
+                ->findOrFail($this->userModalTenantId);
+
+            Log::info('User assigned to tenant', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'assigned_by' => auth()->id(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('User assignment error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to assign user: ' . $e->getMessage();
+        }
+    }
+
+    public function removeUser(string $userId): void
+    {
+        try {
+            $tenant = Tenant::findOrFail($this->userModalTenantId);
+            $user = User::findOrFail($userId);
+
+            // Remove user from tenant
+            $tenant->removeUser($user);
+
+            $this->success = "User '{$user->name}' removed from tenant '{$tenant->name}'.";
+
+            // Refresh modal data
+            $this->userModalTenant = Tenant::with(['users', 'organization'])
+                ->findOrFail($this->userModalTenantId);
+
+            Log::info('User removed from tenant', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'removed_by' => auth()->id(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('User removal error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to remove user: ' . $e->getMessage();
+        }
+    }
+
     public function render()
     {
         $query = Tenant::query()
@@ -260,6 +342,14 @@ class TenantManagement extends Component
         // Get organizations for create modal
         $organizations = Organization::orderBy('name')->get(['id', 'name']);
 
+        // Get organization users for user assignment modal
+        $organizationUsers = collect();
+        if ($this->showUserModal && $this->userModalTenant) {
+            $organizationUsers = User::where('organization_id', $this->userModalTenant->organization_id)
+                ->orderBy('name')
+                ->get();
+        }
+
         // Get stats for summary
         $stats = [
             'total' => Tenant::count(),
@@ -275,6 +365,7 @@ class TenantManagement extends Component
             'tenants' => $tenants,
             'stats' => $stats,
             'organizations' => $organizations,
+            'organizationUsers' => $organizationUsers,
         ])->layout('layouts.admin', ['title' => 'Tenant Management']);
     }
 }

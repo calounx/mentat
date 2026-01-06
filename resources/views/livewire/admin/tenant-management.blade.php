@@ -201,6 +201,12 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
                                 </button>
+                                <button wire:click="openUserModal('{{ $tenant->id }}')"
+                                        class="text-purple-400 hover:text-purple-300" title="Manage Users">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                                    </svg>
+                                </button>
                                 <button wire:click="openEditModal('{{ $tenant->id }}')"
                                         class="text-yellow-400 hover:text-yellow-300" title="Edit">
                                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -552,6 +558,136 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- User Management Modal -->
+    @if($showUserModal && $userModalTenant)
+        <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" wire:click="closeUserModal"></div>
+
+                <div class="inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+                    <div class="bg-gray-800 px-4 pt-5 pb-4 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-medium text-white">Manage Users - {{ $userModalTenant->name }}</h3>
+                                <p class="text-sm text-gray-400 mt-1">{{ $userModalTenant->organization->name }}</p>
+                            </div>
+                            <button wire:click="closeUserModal" class="text-gray-400 hover:text-gray-300">
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        @if($error)
+                            <div class="mb-4 rounded-md bg-red-800/50 border border-red-700 p-4">
+                                <div class="flex">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                    </svg>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-red-300">{{ $error }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div class="grid grid-cols-2 gap-6">
+                            <!-- Assigned Users -->
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-300 mb-3">Assigned Users ({{ $userModalTenant->users->count() }})</h4>
+                                <div class="bg-gray-700 rounded-lg p-4 max-h-96 overflow-y-auto">
+                                    @if($userModalTenant->users->count() > 0)
+                                        <div class="space-y-2">
+                                            @foreach($userModalTenant->users as $user)
+                                                <div class="flex items-center justify-between bg-gray-800 rounded-lg p-3">
+                                                    <div class="flex items-center">
+                                                        <div class="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-3">
+                                                            <span class="text-white text-sm font-semibold">{{ strtoupper(substr($user->name, 0, 1)) }}</span>
+                                                        </div>
+                                                        <div>
+                                                            <p class="text-sm font-medium text-white">{{ $user->name }}</p>
+                                                            <p class="text-xs text-gray-400">{{ $user->email }}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <x-user-badge :role="$user->role" />
+                                                        <button wire:click="removeUser('{{ $user->id }}')"
+                                                                class="text-red-400 hover:text-red-300" title="Remove">
+                                                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="text-center py-8">
+                                            <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                            </svg>
+                                            <p class="mt-2 text-sm text-gray-500">No users assigned</p>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <!-- Available Users -->
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-300 mb-3">Available Users ({{ $organizationUsers->whereNotIn('id', $userModalTenant->users->pluck('id'))->count() }})</h4>
+                                <div class="bg-gray-700 rounded-lg p-4 max-h-96 overflow-y-auto">
+                                    @php
+                                        $availableUsers = $organizationUsers->whereNotIn('id', $userModalTenant->users->pluck('id'));
+                                    @endphp
+
+                                    @if($availableUsers->count() > 0)
+                                        <div class="space-y-2">
+                                            @foreach($availableUsers as $user)
+                                                <div class="flex items-center justify-between bg-gray-800 rounded-lg p-3">
+                                                    <div class="flex items-center">
+                                                        <div class="h-8 w-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center mr-3">
+                                                            <span class="text-white text-sm font-semibold">{{ strtoupper(substr($user->name, 0, 1)) }}</span>
+                                                        </div>
+                                                        <div>
+                                                            <p class="text-sm font-medium text-white">{{ $user->name }}</p>
+                                                            <p class="text-xs text-gray-400">{{ $user->email }}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <x-user-badge :role="$user->role" />
+                                                        <button wire:click="assignUser('{{ $user->id }}')"
+                                                                class="text-green-400 hover:text-green-300" title="Assign">
+                                                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="text-center py-8">
+                                            <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <p class="mt-2 text-sm text-gray-500">All organization users are assigned</p>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button wire:click="closeUserModal" type="button" class="w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:w-auto sm:text-sm">
+                            Done
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Webhooks\StripeWebhookController;
 use App\Livewire\Admin\AdminDashboard;
+use App\Livewire\Admin\OrganizationManagement;
 use App\Livewire\Admin\PlanManagement;
 use App\Livewire\Admin\SiteOverview;
 use App\Livewire\Admin\SystemSettings;
 use App\Livewire\Admin\TenantManagement;
+use App\Livewire\Admin\UserManagement;
 use App\Livewire\Admin\VpsManagement;
 use App\Livewire\Backups\BackupList;
 use App\Livewire\Dashboard\Overview;
@@ -165,6 +167,12 @@ Route::middleware(['auth', 'super-admin'])->prefix('admin')->name('admin.')->gro
 
     // VPS Management
     Route::get('/vps', VpsManagement::class)->name('vps.index');
+
+    // Organization Management
+    Route::get('/organizations', OrganizationManagement::class)->name('organizations.index');
+
+    // User Management
+    Route::get('/users', UserManagement::class)->name('users.index');
 
     // Tenant Management
     Route::get('/tenants', TenantManagement::class)->name('tenants.index');
