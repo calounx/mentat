@@ -3,7 +3,9 @@
 namespace App\Livewire\Team;
 
 use App\Models\Organization;
+use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
@@ -34,6 +36,11 @@ class TeamManager extends Component
 
     // Delete confirmation
     public ?string $deletingUserId = null;
+
+    // Tenant assignment modal
+    public bool $showTenantModal = false;
+    public ?string $tenantModalUserId = null;
+    public ?User $tenantModalUser = null;
 
     protected function rules(): array
     {
@@ -96,6 +103,15 @@ class TeamManager extends Component
                 'organization_id' => $organization->id,
                 'role' => $this->inviteRole,
             ]);
+
+            // Assign to default tenant
+            $defaultTenant = $organization->tenants()
+                ->where('slug', 'default')
+                ->first();
+
+            if ($defaultTenant) {
+                $user->tenants()->attach($defaultTenant->id);
+            }
 
             // TODO: Send invitation email with temp password or magic link
 
@@ -308,6 +324,117 @@ class TeamManager extends Component
         $this->cancelDelete();
     }
 
+    public function openTenantModal(string $userId): void
+    {
+        $organization = $this->getOrganization();
+
+        if (!$organization) {
+            session()->flash('error', 'Organization not found.');
+            return;
+        }
+
+        try {
+            $user = $organization->users()->find($userId);
+
+            if (!$user) {
+                session()->flash('error', 'User not found.');
+                return;
+            }
+
+            // Load user with tenants
+            $this->tenantModalUser = User::with(['tenants'])->find($userId);
+            $this->tenantModalUserId = $userId;
+            $this->showTenantModal = true;
+        } catch (\Exception $e) {
+            Log::error('Failed to open tenant modal', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+            session()->flash('error', 'Failed to load tenant information.');
+        }
+    }
+
+    public function closeTenantModal(): void
+    {
+        $this->showTenantModal = false;
+        $this->tenantModalUser = null;
+        $this->tenantModalUserId = null;
+    }
+
+    public function assignTenant(string $tenantId): void
+    {
+        $organization = $this->getOrganization();
+
+        if (!$organization) {
+            session()->flash('error', 'Organization not found.');
+            return;
+        }
+
+        try {
+            $user = $organization->users()->find($this->tenantModalUserId);
+            $tenant = $organization->tenants()->find($tenantId);
+
+            if (!$user || !$tenant) {
+                session()->flash('error', 'User or tenant not found.');
+                return;
+            }
+
+            // Assign user to tenant
+            $tenant->assignUser($user);
+
+            session()->flash('success', "User assigned to tenant '{$tenant->name}'.");
+
+            // Refresh modal data
+            $this->tenantModalUser = User::with(['tenants'])->find($this->tenantModalUserId);
+
+            Log::info('Tenant assigned to user', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'assigned_by' => auth()->id(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to assign tenant', ['error' => $e->getMessage()]);
+            session()->flash('error', 'Failed to assign tenant. Please try again.');
+        }
+    }
+
+    public function removeTenant(string $tenantId): void
+    {
+        $organization = $this->getOrganization();
+
+        if (!$organization) {
+            session()->flash('error', 'Organization not found.');
+            return;
+        }
+
+        try {
+            $user = $organization->users()->find($this->tenantModalUserId);
+            $tenant = $organization->tenants()->find($tenantId);
+
+            if (!$user || !$tenant) {
+                session()->flash('error', 'User or tenant not found.');
+                return;
+            }
+
+            // Remove user from tenant
+            $tenant->removeUser($user);
+
+            session()->flash('success', "User removed from tenant '{$tenant->name}'.");
+
+            // Refresh modal data
+            $this->tenantModalUser = User::with(['tenants'])->find($this->tenantModalUserId);
+
+            Log::info('Tenant removed from user', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'removed_by' => auth()->id(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to remove tenant', ['error' => $e->getMessage()]);
+            session()->flash('error', 'Failed to remove tenant. Please try again.');
+        }
+    }
+
     private function getOrganization(): ?Organization
     {
         $user = auth()->user();
@@ -364,10 +491,19 @@ class TeamManager extends Component
                 ->pluck('count', 'role')
                 ->toArray();
 
+            // Get organization tenants for tenant modal
+            $organizationTenants = collect();
+            if ($this->showTenantModal) {
+                $organizationTenants = $organization->tenants()
+                    ->orderBy('name')
+                    ->get();
+            }
+
             return view('livewire.team.team-manager', [
                 'members' => $members,
                 'roleStats' => $roleStats,
                 'organization' => $organization,
+                'organizationTenants' => $organizationTenants,
             ])->layout('layouts.app', ['title' => 'Team Management']);
         } catch (\Exception $e) {
             Log::error('Failed to load team manager', [

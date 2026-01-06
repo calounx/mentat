@@ -149,6 +149,13 @@
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             @if(auth()->user()->isAdmin() && $member->id !== auth()->id())
                                 <div class="flex items-center justify-end space-x-2">
+                                    <button wire:click="openTenantModal('{{ $member->id }}')"
+                                            class="text-purple-600 hover:text-purple-900"
+                                            title="Manage Tenants">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                                        </svg>
+                                    </button>
                                     <button wire:click="editMember('{{ $member->id }}')"
                                             class="text-blue-600 hover:text-blue-900"
                                             title="Edit">
@@ -387,6 +394,111 @@
                             class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">
                         Remove Member
                     </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Tenant Assignment Modal -->
+    @if($showTenantModal && $tenantModalUser)
+        <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" wire:click="closeTenantModal"></div>
+
+                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Manage Tenant Access - {{ $tenantModalUser->name }}</h3>
+                                <p class="text-sm text-gray-500 mt-1">{{ $tenantModalUser->email }} ({{ ucfirst($tenantModalUser->role) }})</p>
+                            </div>
+                            <button wire:click="closeTenantModal" class="text-gray-400 hover:text-gray-500">
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6">
+                            <!-- Assigned Tenants -->
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-700 mb-3">Assigned Tenants ({{ $tenantModalUser->tenants->count() }})</h4>
+                                <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border border-gray-200">
+                                    @if($tenantModalUser->tenants->count() > 0)
+                                        <div class="space-y-2">
+                                            @foreach($tenantModalUser->tenants as $tenant)
+                                                <div class="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-900">{{ $tenant->name }}</p>
+                                                        <div class="flex items-center gap-2 mt-1">
+                                                            <x-tenant-badge :status="$tenant->status" :tier="$tenant->tier" />
+                                                        </div>
+                                                    </div>
+                                                    <button wire:click="removeTenant('{{ $tenant->id }}')"
+                                                            class="text-red-600 hover:text-red-700" title="Remove">
+                                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="text-center py-8">
+                                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                                            </svg>
+                                            <p class="mt-2 text-sm text-gray-500">No tenants assigned</p>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <!-- Available Tenants -->
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-700 mb-3">Available Tenants ({{ $organizationTenants->whereNotIn('id', $tenantModalUser->tenants->pluck('id'))->count() }})</h4>
+                                <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border border-gray-200">
+                                    @php
+                                        $availableTenants = $organizationTenants->whereNotIn('id', $tenantModalUser->tenants->pluck('id'));
+                                    @endphp
+
+                                    @if($availableTenants->count() > 0)
+                                        <div class="space-y-2">
+                                            @foreach($availableTenants as $tenant)
+                                                <div class="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-900">{{ $tenant->name }}</p>
+                                                        <div class="flex items-center gap-2 mt-1">
+                                                            <x-tenant-badge :status="$tenant->status" :tier="$tenant->tier" />
+                                                        </div>
+                                                    </div>
+                                                    <button wire:click="assignTenant('{{ $tenant->id }}')"
+                                                            class="text-green-600 hover:text-green-700" title="Assign">
+                                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="text-center py-8">
+                                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <p class="mt-2 text-sm text-gray-500">All tenants are assigned</p>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button wire:click="closeTenantModal" type="button" class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:w-auto sm:text-sm">
+                            Done
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
