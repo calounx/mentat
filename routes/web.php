@@ -119,17 +119,8 @@ Route::post('/logout', function () {
 
 // Protected routes (require authentication)
 Route::middleware('auth')->group(function () {
-    // Dashboard - redirect super admins without tenant to admin dashboard
-    Route::get('/dashboard', function () {
-        $user = auth()->user();
-
-        // Super admins without a tenant should go to admin dashboard
-        if ($user->isSuperAdmin() && !$user->currentTenant()) {
-            return redirect()->route('admin.dashboard');
-        }
-
-        return app(Overview::class);
-    })->name('dashboard');
+    // Dashboard (super admin redirect handled in Overview component)
+    Route::get('/dashboard', Overview::class)->name('dashboard');
 
     // Routes that require a tenant
     Route::middleware('has-tenant')->group(function () {

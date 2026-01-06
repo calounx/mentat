@@ -22,6 +22,12 @@ class Overview extends Component
             return;
         }
 
+        // Redirect super admins without a tenant to admin dashboard
+        if ($user->isSuperAdmin() && !$user->currentTenant()) {
+            $this->redirect(route('admin.dashboard'), navigate: true);
+            return;
+        }
+
         $this->tenant = $user->currentTenant();
 
         if ($this->tenant) {
