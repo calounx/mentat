@@ -713,6 +713,12 @@ MAIL_PASSWORD=${MAIL_PASSWORD:-null}
 MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-null}
 MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-noreply@chom.arewel.com}
 MAIL_FROM_NAME="${APP_NAME:-CHOM}"
+
+# Observability Stack Configuration
+CHOM_PROMETHEUS_URL=https://${MENTAT_HOST}/prometheus
+CHOM_LOKI_URL=https://${MENTAT_HOST}/loki
+CHOM_GRAFANA_URL=https://${MENTAT_HOST}
+CHOM_ALERTMANAGER_URL=https://${MENTAT_HOST}/alertmanager
 INNEREOF
 sudo mv /tmp/.env.tmp /var/www/chom/shared/.env
 sudo chmod 600 /var/www/chom/shared/.env
