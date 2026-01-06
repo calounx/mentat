@@ -28,6 +28,7 @@ class VpsServer extends Model
         'ssh_key_id',
         'last_health_check_at',
         'health_status',
+        'health_error',
     ];
 
     protected $casts = [

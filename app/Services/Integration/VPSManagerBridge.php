@@ -471,18 +471,65 @@ class VPSManagerBridge
     /**
      * Test SSH connection to VPS.
      */
-    public function testConnection(VpsServer $vps): bool
+    /**
+     * Test connection to VPS with detailed error reporting.
+     *
+     * @return array{success: bool, error: string|null, error_type: string|null}
+     */
+    public function testConnection(VpsServer $vps): array
     {
         try {
             $this->connect($vps);
             $this->disconnect();
-            return true;
+            return [
+                'success' => true,
+                'error' => null,
+                'error_type' => null,
+            ];
         } catch (\Exception $e) {
+            $errorType = $this->categorizeError($e);
+
             Log::warning('SSH connection test failed', [
                 'vps' => $vps->hostname,
                 'error' => $e->getMessage(),
+                'error_type' => $errorType,
             ]);
-            return false;
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_type' => $errorType,
+            ];
         }
+    }
+
+    /**
+     * Categorize connection error by type for better user feedback.
+     */
+    private function categorizeError(\Exception $e): string
+    {
+        $message = $e->getMessage();
+
+        if (str_contains($message, 'SSH key not found')) {
+            return 'ssh_key_missing';
+        }
+
+        if (str_contains($message, 'insecure permissions')) {
+            return 'ssh_key_permissions';
+        }
+
+        if (str_contains($message, 'SSH authentication failed')) {
+            return 'ssh_auth_failed';
+        }
+
+        if (str_contains($message, 'Connection timed out') || str_contains($message, 'Network is unreachable')) {
+            return 'network_timeout';
+        }
+
+        if (str_contains($message, 'Connection refused')) {
+            return 'connection_refused';
+        }
+
+        return 'unknown';
     }
 }

@@ -153,10 +153,17 @@
                             @endphp
                             <div class="flex items-center">
                                 <span class="h-2.5 w-2.5 rounded-full {{ str_replace('text-', 'bg-', $healthColor) }} mr-2"></span>
-                                <span class="text-sm {{ $healthColor }}">{{ ucfirst($vps->health_status) }}</span>
+                                <div>
+                                    <span class="text-sm {{ $healthColor }}">{{ ucfirst($vps->health_status) }}</span>
+                                    @if($vps->health_status === 'unhealthy' && $vps->health_error)
+                                        <div class="text-xs text-red-300 mt-1 max-w-xs truncate" title="{{ $vps->health_error }}">
+                                            {{ Str::limit($vps->health_error, 50) }}
+                                        </div>
+                                    @endif
+                                </div>
                             </div>
                             @if($vps->last_health_check_at)
-                                <div class="text-xs text-gray-500">{{ $vps->last_health_check_at->diffForHumans() }}</div>
+                                <div class="text-xs text-gray-500 mt-1">{{ $vps->last_health_check_at->diffForHumans() }}</div>
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -343,13 +350,35 @@
                             </div>
                         @elseif(!empty($vpsHealthData['error']))
                             <div class="bg-red-900/50 border-l-4 border-red-500 p-4 rounded">
-                                <p class="text-sm text-red-200">{{ $vpsHealthData['error'] }}</p>
+                                <div class="flex items-start">
+                                    <svg class="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                    </svg>
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-medium text-red-200 mb-1">Connection Error</h4>
+                                        <p class="text-sm text-red-200 whitespace-pre-wrap">{{ $vpsHealthData['error'] }}</p>
+                                    </div>
+                                </div>
                             </div>
                         @else
                             @if(isset($vpsHealthData['vps']))
                                 <div class="mb-6">
                                     <p class="text-lg font-medium text-white">{{ $vpsHealthData['vps']->hostname }}</p>
                                     <p class="text-sm text-gray-400">{{ $vpsHealthData['vps']->ip_address }}</p>
+
+                                    @if($vpsHealthData['vps']->health_error)
+                                        <div class="mt-4 bg-red-900/30 border border-red-500/50 rounded-lg p-3">
+                                            <div class="flex items-start">
+                                                <svg class="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                                </svg>
+                                                <div>
+                                                    <p class="text-xs font-medium text-red-300">Last Error</p>
+                                                    <p class="text-xs text-red-200 mt-1">{{ $vpsHealthData['vps']->health_error }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endif
                                 </div>
                             @endif
 

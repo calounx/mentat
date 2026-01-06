@@ -179,13 +179,32 @@ class VpsManagement extends Component
             $healthResult = $bridge->healthCheck($vps);
             $dashboardResult = $bridge->getDashboard($vps);
 
+            // Determine error message
+            $errorMessage = null;
+            if (!$healthResult['success'] && !$dashboardResult['success']) {
+                // If both failed, show the output from the health check
+                $errorMessage = $healthResult['output'] ?? 'Failed to connect to VPS';
+
+                // Update VPS health status
+                $vps->update([
+                    'health_status' => 'unhealthy',
+                    'health_error' => $errorMessage,
+                    'last_health_check_at' => now(),
+                ]);
+            } elseif ($healthResult['success']) {
+                // Health check succeeded, update status
+                $vps->update([
+                    'health_status' => 'healthy',
+                    'health_error' => null,
+                    'last_health_check_at' => now(),
+                ]);
+            }
+
             $this->vpsHealthData = [
-                'vps' => $vps,
+                'vps' => $vps->fresh(), // Reload to get updated health_error
                 'health' => $healthResult['success'] ? $healthResult['data'] : null,
                 'dashboard' => $dashboardResult['success'] ? $dashboardResult['data'] : null,
-                'error' => (!$healthResult['success'] && !$dashboardResult['success'])
-                    ? 'Failed to connect to VPS'
-                    : null,
+                'error' => $errorMessage,
             ];
         } catch (\Exception $e) {
             Log::error('VPS health fetch error', [
@@ -225,12 +244,22 @@ class VpsManagement extends Component
             $vps = VpsServer::findOrFail($vpsId);
             $bridge = app(VPSManagerBridge::class);
 
-            if ($bridge->testConnection($vps)) {
+            $result = $bridge->testConnection($vps);
+
+            if ($result['success']) {
                 $this->success = "Connection to '{$vps->hostname}' successful!";
-                $vps->update(['health_status' => 'healthy', 'last_health_check_at' => now()]);
+                $vps->update([
+                    'health_status' => 'healthy',
+                    'health_error' => null,
+                    'last_health_check_at' => now(),
+                ]);
             } else {
-                $this->error = "Connection to '{$vps->hostname}' failed.";
-                $vps->update(['health_status' => 'unhealthy', 'last_health_check_at' => now()]);
+                $this->error = "Connection to '{$vps->hostname}' failed: " . $result['error'];
+                $vps->update([
+                    'health_status' => 'unhealthy',
+                    'health_error' => $result['error'],
+                    'last_health_check_at' => now(),
+                ]);
             }
         } catch (\Exception $e) {
             Log::error('VPS connection test error', ['error' => $e->getMessage()]);
