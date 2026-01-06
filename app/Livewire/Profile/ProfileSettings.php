@@ -180,8 +180,21 @@ class ProfileSettings extends Component
     {
         $availableRoles = ['owner', 'admin', 'member', 'viewer'];
 
+        // Load user's tenants and sites
+        $userTenants = $this->viewingUser->tenants()
+            ->with(['sites'])
+            ->orderBy('name')
+            ->get();
+
+        // Count total accessible sites across all tenants
+        $totalSites = $userTenants->sum(function ($tenant) {
+            return $tenant->sites->count();
+        });
+
         return view('livewire.profile.profile-settings', [
             'availableRoles' => $availableRoles,
+            'userTenants' => $userTenants,
+            'totalSites' => $totalSites,
         ])->layout('layouts.app', ['title' => $this->isViewingSelf ? 'Profile Settings' : 'User Profile']);
     }
 }
