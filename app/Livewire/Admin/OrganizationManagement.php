@@ -255,7 +255,7 @@ class OrganizationManagement extends Component
     {
         $query = Organization::query()
             ->withCount(['users', 'tenants'])
-            ->with('subscription:id,organization_id,stripe_status');
+            ->with('subscription:id,organization_id,status');
 
         if ($this->search) {
             $query->where(function($q) {
