@@ -17,10 +17,18 @@ class ObservabilityAdapter
 
     public function __construct()
     {
-        $this->prometheusUrl = config('chom.observability.prometheus_url', 'http://localhost:9090');
-        $this->lokiUrl = config('chom.observability.loki_url', 'http://localhost:3100');
-        $this->grafanaUrl = config('chom.observability.grafana_url', 'http://localhost:3000');
+        $this->prometheusUrl = config('chom.observability.prometheus_url');
+        $this->lokiUrl = config('chom.observability.loki_url');
+        $this->grafanaUrl = config('chom.observability.grafana_url');
         $this->grafanaApiKey = config('chom.observability.grafana_api_key');
+
+        // Validate required URLs are configured
+        if (!$this->prometheusUrl || !$this->lokiUrl || !$this->grafanaUrl) {
+            throw new \RuntimeException(
+                'Observability URLs must be configured in .env file. ' .
+                'Set CHOM_PROMETHEUS_URL, CHOM_LOKI_URL, and CHOM_GRAFANA_URL.'
+            );
+        }
     }
 
     // =========================================================================
