@@ -6,8 +6,10 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Facades\Cache;
 
 class Tenant extends Model
 {
@@ -85,6 +87,15 @@ class Tenant extends Model
     public function operations(): HasMany
     {
         return $this->hasMany(Operation::class);
+    }
+
+    /**
+     * Get all users who have access to this tenant.
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tenant_user')
+                    ->withTimestamps();
     }
 
     /**
@@ -219,5 +230,25 @@ class Tenant extends Model
     public function getStorageUsedMb(): int
     {
         return $this->sites()->sum('storage_used_mb');
+    }
+
+    /**
+     * Assign a user to this tenant.
+     */
+    public function assignUser(User $user): void
+    {
+        if (!$this->users()->where('users.id', $user->id)->exists()) {
+            $this->users()->attach($user->id);
+            Cache::forget("user:{$user->id}:tenant_ids");
+        }
+    }
+
+    /**
+     * Remove a user from this tenant.
+     */
+    public function removeUser(User $user): void
+    {
+        $this->users()->detach($user->id);
+        Cache::forget("user:{$user->id}:tenant_ids");
     }
 }

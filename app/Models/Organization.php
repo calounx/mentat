@@ -7,17 +7,19 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Cashier\Billable;
 
 class Organization extends Model
 {
-    use HasFactory, HasUuids, Billable;
+    use HasFactory, HasUuids, Billable, SoftDeletes;
 
     protected $fillable = [
         'name',
         'slug',
         'billing_email',
         'stripe_customer_id',
+        'status',
     ];
 
     protected $hidden = [
@@ -104,5 +106,72 @@ class Organization extends Model
     public function getCurrentTier(): string
     {
         return $this->subscription?->tier ?? 'starter';
+    }
+
+    /**
+     * Check if organization can be deleted.
+     * Organizations with active resources cannot be deleted.
+     */
+    public function canBeDeleted(): bool
+    {
+        // Cannot delete if has active tenants
+        if ($this->tenants()->where('status', 'active')->exists()) {
+            return false;
+        }
+
+        // Cannot delete if has active sites
+        if (Site::whereHas('tenant', fn($q) => $q->where('organization_id', $this->id))->exists()) {
+            return false;
+        }
+
+        // Cannot delete if has active subscription
+        if ($this->subscribed()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get list of blockers preventing deletion.
+     */
+    public function getDeletionBlockers(): array
+    {
+        $blockers = [];
+
+        $activeTenants = $this->tenants()->where('status', 'active')->count();
+        if ($activeTenants > 0) {
+            $blockers[] = "{$activeTenants} active tenant(s)";
+        }
+
+        $activeSites = Site::whereHas('tenant', fn($q) => $q->where('organization_id', $this->id))->count();
+        if ($activeSites > 0) {
+            $blockers[] = "{$activeSites} active site(s)";
+        }
+
+        if ($this->subscribed()) {
+            $blockers[] = "Active subscription";
+        }
+
+        return $blockers;
+    }
+
+    /**
+     * Suspend the organization and all its tenants.
+     */
+    public function suspend(): void
+    {
+        $this->update(['status' => 'suspended']);
+
+        // Suspend all tenants
+        $this->tenants()->update(['status' => 'suspended']);
+    }
+
+    /**
+     * Activate the organization.
+     */
+    public function activate(): void
+    {
+        $this->update(['status' => 'active']);
     }
 }

@@ -6,9 +6,11 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements MustVerifyEmail
@@ -117,5 +119,50 @@ class User extends Authenticatable implements MustVerifyEmail
     public function operations(): HasMany
     {
         return $this->hasMany(Operation::class);
+    }
+
+    /**
+     * Get all tenants this user has access to.
+     */
+    public function tenants(): BelongsToMany
+    {
+        return $this->belongsToMany(Tenant::class, 'tenant_user')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Check if user has access to a specific tenant.
+     */
+    public function hasAccessToTenant(Tenant $tenant): bool
+    {
+        if ($this->is_super_admin) {
+            return true;
+        }
+
+        if ($this->organization_id !== $tenant->organization_id) {
+            return false;
+        }
+
+        return $this->tenants()->where('tenants.id', $tenant->id)->exists();
+    }
+
+    /**
+     * Get cached tenant IDs for performance.
+     */
+    public function getCachedTenantIds(): array
+    {
+        return Cache::remember(
+            "user:{$this->id}:tenant_ids",
+            now()->addHour(),
+            fn() => $this->tenants()->pluck('tenants.id')->toArray()
+        );
+    }
+
+    /**
+     * Record user login timestamp.
+     */
+    public function recordLogin(): void
+    {
+        $this->update(['last_login_at' => now()]);
     }
 }
