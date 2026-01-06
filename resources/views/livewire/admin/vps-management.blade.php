@@ -154,11 +154,16 @@
                             <div class="flex items-center">
                                 <span class="h-2.5 w-2.5 rounded-full {{ str_replace('text-', 'bg-', $healthColor) }} mr-2"></span>
                                 <div>
-                                    <span class="text-sm {{ $healthColor }}">{{ ucfirst($vps->health_status) }}</span>
                                     @if($vps->health_status === 'unhealthy' && $vps->health_error)
+                                        <button wire:click="viewHealth('{{ $vps->id }}')"
+                                                class="text-sm {{ $healthColor }} hover:underline cursor-pointer text-left">
+                                            {{ ucfirst($vps->health_status) }}
+                                        </button>
                                         <div class="text-xs text-red-300 mt-1 max-w-xs truncate" title="{{ $vps->health_error }}">
                                             {{ Str::limit($vps->health_error, 50) }}
                                         </div>
+                                    @else
+                                        <span class="text-sm {{ $healthColor }}">{{ ucfirst($vps->health_status) }}</span>
                                     @endif
                                 </div>
                             </div>
