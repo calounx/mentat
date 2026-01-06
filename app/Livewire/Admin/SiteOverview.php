@@ -29,6 +29,11 @@ class SiteOverview extends Component
     public ?string $selectedSiteId = null;
     public array $editFormData = [];
 
+    // Site status modal
+    public bool $showSiteStatusModal = false;
+    public ?string $viewingSiteStatusId = null;
+    public $viewingSiteData = null;
+
     public ?string $error = null;
     public ?string $success = null;
 
@@ -202,6 +207,20 @@ class SiteOverview extends Component
             Log::error('Site delete error', ['error' => $e->getMessage()]);
             $this->error = 'Failed to delete site: ' . $e->getMessage();
         }
+    }
+
+    public function viewSiteStatus(string $siteId): void
+    {
+        $this->viewingSiteStatusId = $siteId;
+        $this->viewingSiteData = Site::with(['tenant', 'vpsServer'])->find($siteId);
+        $this->showSiteStatusModal = true;
+    }
+
+    public function closeSiteStatusModal(): void
+    {
+        $this->showSiteStatusModal = false;
+        $this->viewingSiteStatusId = null;
+        $this->viewingSiteData = null;
     }
 
     public function clearFilters(): void

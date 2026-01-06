@@ -28,6 +28,11 @@ class BackupList extends Component
     public ?string $restoringBackupId = null;
     public ?string $deletingBackupId = null;
 
+    // Backup status modal
+    public bool $showBackupStatusModal = false;
+    public ?string $viewingBackupStatusId = null;
+    public $viewingBackupData = null;
+
     // Cache key for total backup size
     private const TOTAL_SIZE_CACHE_TTL = 300; // 5 minutes
 
@@ -148,6 +153,23 @@ class BackupList extends Component
     public function cancelDelete(): void
     {
         $this->deletingBackupId = null;
+    }
+
+    public function viewBackupStatus(string $backupId): void
+    {
+        $tenant = $this->getTenant();
+        $this->viewingBackupStatusId = $backupId;
+        $this->viewingBackupData = SiteBackup::whereHas('site', fn($q) => $q->where('tenant_id', $tenant->id))
+            ->with(['site', 'user'])
+            ->find($backupId);
+        $this->showBackupStatusModal = true;
+    }
+
+    public function closeBackupStatusModal(): void
+    {
+        $this->showBackupStatusModal = false;
+        $this->viewingBackupStatusId = null;
+        $this->viewingBackupData = null;
     }
 
     public function deleteBackup(): void

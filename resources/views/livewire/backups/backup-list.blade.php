@@ -141,9 +141,10 @@
                                     'database' => 'bg-purple-100 text-purple-800',
                                 ];
                             @endphp
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $typeColors[$backup->backup_type] ?? 'bg-gray-100 text-gray-800' }}">
+                            <button wire:click="viewBackupStatus('{{ $backup->id }}')"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $typeColors[$backup->backup_type] ?? 'bg-gray-100 text-gray-800' }} hover:opacity-80 cursor-pointer transition-opacity">
                                 {{ ucfirst($backup->backup_type) }}
-                            </span>
+                            </button>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {{ $backup->getSizeFormatted() }}
@@ -283,6 +284,196 @@
                     <button wire:click="deleteBackup"
                             class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">
                         Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Backup Status Modal -->
+    @if($showBackupStatusModal && $viewingBackupData)
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Backup Details</h3>
+                    <button wire:click="closeBackupStatusModal" class="text-gray-400 hover:text-gray-500">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Backup Overview -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-700">Site</h4>
+                                <p class="text-base font-semibold text-gray-900 mt-1">
+                                    {{ $viewingBackupData->site?->domain ?? 'Deleted Site' }}
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                <h4 class="text-sm font-medium text-gray-700">Backup Type</h4>
+                                @php
+                                    $typeColors = [
+                                        'full' => 'bg-blue-100 text-blue-800',
+                                        'files' => 'bg-green-100 text-green-800',
+                                        'database' => 'bg-purple-100 text-purple-800',
+                                    ];
+                                @endphp
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $typeColors[$viewingBackupData->backup_type] ?? 'bg-gray-100 text-gray-800' }} mt-1">
+                                    {{ ucfirst($viewingBackupData->backup_type) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Expiration Status -->
+                    @if($viewingBackupData->isExpired())
+                        <div class="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-red-800 mb-1">Backup Expired</h4>
+                                    <p class="text-sm text-red-700">
+                                        This backup expired on {{ $viewingBackupData->expires_at->format('F j, Y') }}.
+                                        Expired backups may be automatically deleted according to retention policies.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($viewingBackupData->expires_at && $viewingBackupData->expires_at->diffInDays(now()) <= 7)
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-yellow-800 mb-1">Backup Expiring Soon</h4>
+                                    <p class="text-sm text-yellow-700">
+                                        This backup will expire {{ $viewingBackupData->expires_at->diffForHumans() }}.
+                                        Consider creating a new backup if this data is still needed.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <div class="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-green-800 mb-1">Backup Available</h4>
+                                    <p class="text-sm text-green-700">
+                                        This backup is available and can be restored at any time.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- Backup Details -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Size</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ $viewingBackupData->getSizeFormatted() }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Status</h4>
+                            <p class="text-sm text-gray-900 mt-1">
+                                @php
+                                    $statusColors = [
+                                        'completed' => 'text-green-600',
+                                        'pending' => 'text-yellow-600',
+                                        'failed' => 'text-red-600',
+                                    ];
+                                @endphp
+                                <span class="{{ $statusColors[$viewingBackupData->status] ?? 'text-gray-600' }}">
+                                    {{ ucfirst($viewingBackupData->status) }}
+                                </span>
+                            </p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Created</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ $viewingBackupData->created_at->format('M d, Y H:i') }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Created By</h4>
+                            <p class="text-sm text-gray-900 mt-1">
+                                @if($viewingBackupData->trigger_type === 'manual')
+                                    Manual ({{ $viewingBackupData->user?->name ?? 'User' }})
+                                @else
+                                    {{ ucfirst($viewingBackupData->trigger_type ?? 'System') }}
+                                @endif
+                            </p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Expires</h4>
+                            <p class="text-sm text-gray-900 mt-1">
+                                @if($viewingBackupData->expires_at)
+                                    {{ $viewingBackupData->expires_at->format('M d, Y') }}
+                                    @if(!$viewingBackupData->isExpired())
+                                        <span class="text-xs text-gray-500">({{ $viewingBackupData->expires_at->diffForHumans() }})</span>
+                                    @endif
+                                @else
+                                    Never
+                                @endif
+                            </p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Storage Path</h4>
+                            <p class="text-xs text-gray-600 mt-1 font-mono break-all">
+                                {{ $viewingBackupData->storage_path ?? 'N/A' }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Backup Contents -->
+                    @if($viewingBackupData->backup_type === 'full')
+                        <div class="bg-blue-50 rounded-lg p-3">
+                            <h4 class="text-sm font-medium text-blue-900 mb-2">Full Backup Contents</h4>
+                            <ul class="text-sm text-blue-800 list-disc list-inside space-y-1">
+                                <li>All website files</li>
+                                <li>Complete database dump</li>
+                                <li>Configuration files</li>
+                                <li>WordPress content (if applicable)</li>
+                            </ul>
+                        </div>
+                    @elseif($viewingBackupData->backup_type === 'files')
+                        <div class="bg-green-50 rounded-lg p-3">
+                            <h4 class="text-sm font-medium text-green-900 mb-2">Files Backup Contents</h4>
+                            <ul class="text-sm text-green-800 list-disc list-inside space-y-1">
+                                <li>Website files and directories</li>
+                                <li>Uploaded media</li>
+                                <li>Themes and plugins</li>
+                            </ul>
+                        </div>
+                    @elseif($viewingBackupData->backup_type === 'database')
+                        <div class="bg-purple-50 rounded-lg p-3">
+                            <h4 class="text-sm font-medium text-purple-900 mb-2">Database Backup Contents</h4>
+                            <ul class="text-sm text-purple-800 list-disc list-inside space-y-1">
+                                <li>Complete database dump</li>
+                                <li>All tables and data</li>
+                                <li>Database structure</li>
+                            </ul>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    @if($viewingBackupData->status === 'completed' && !$viewingBackupData->isExpired())
+                        <button wire:click="confirmRestore('{{ $viewingBackupData->id }}')"
+                                class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                            Restore Backup
+                        </button>
+                    @endif
+                    <button wire:click="closeBackupStatusModal"
+                            class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Close
                     </button>
                 </div>
             </div>

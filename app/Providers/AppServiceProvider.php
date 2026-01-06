@@ -4,9 +4,11 @@ namespace App\Providers;
 
 use App\Models\Site;
 use App\Models\SiteBackup;
+use App\Models\User;
 use App\Policies\BackupPolicy;
 use App\Policies\SitePolicy;
 use App\Policies\TeamPolicy;
+use App\Policies\UserPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -40,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
         // Register model policies
         Gate::policy(Site::class, SitePolicy::class);
         Gate::policy(SiteBackup::class, BackupPolicy::class);
+        Gate::policy(User::class, UserPolicy::class);
 
         // Team policy uses User model for member operations
         Gate::define('team.viewAny', [TeamPolicy::class, 'viewAny']);

@@ -28,6 +28,14 @@ class SiteList extends Component
     public ?string $editError = null;
     public ?string $editSuccess = null;
 
+    // Status details modal
+    public bool $showStatusModal = false;
+    public ?string $viewingStatusSiteId = null;
+
+    // SSL status modal
+    public bool $showSSLModal = false;
+    public ?string $viewingSSLSiteId = null;
+
     protected $queryString = [
         'search' => ['except' => ''],
         'statusFilter' => ['except' => ''],
@@ -204,6 +212,30 @@ class SiteList extends Component
         }
     }
 
+    public function viewStatus(string $siteId): void
+    {
+        $this->viewingStatusSiteId = $siteId;
+        $this->showStatusModal = true;
+    }
+
+    public function closeStatusModal(): void
+    {
+        $this->showStatusModal = false;
+        $this->viewingStatusSiteId = null;
+    }
+
+    public function viewSSLStatus(string $siteId): void
+    {
+        $this->viewingSSLSiteId = $siteId;
+        $this->showSSLModal = true;
+    }
+
+    public function closeSSLModal(): void
+    {
+        $this->showSSLModal = false;
+        $this->viewingSSLSiteId = null;
+    }
+
     private function getTenant(): Tenant
     {
         return auth()->user()->currentTenant();
@@ -227,8 +259,22 @@ class SiteList extends Component
 
         $sites = $query->paginate(10);
 
+        // Get viewing site for status modal
+        $viewingSite = null;
+        if ($this->viewingStatusSiteId) {
+            $viewingSite = $tenant->sites()->find($this->viewingStatusSiteId);
+        }
+
+        // Get viewing site for SSL modal
+        $viewingSSLSite = null;
+        if ($this->viewingSSLSiteId) {
+            $viewingSSLSite = $tenant->sites()->find($this->viewingSSLSiteId);
+        }
+
         return view('livewire.sites.site-list', [
             'sites' => $sites,
+            'viewingSite' => $viewingSite,
+            'viewingSSLSite' => $viewingSSLSite,
         ])->layout('layouts.app', ['title' => 'Sites']);
     }
 }

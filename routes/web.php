@@ -151,6 +151,11 @@ Route::middleware('auth')->group(function () {
 
     // Profile Settings (no tenant required)
     Route::get('/profile', ProfileSettings::class)->name('profile.index');
+
+    // Admin can view/edit other users' profiles (with authorization check)
+    Route::get('/profile/{userId}', ProfileSettings::class)
+        ->middleware('can:view,userId')
+        ->name('profile.view');
 });
 
 /*

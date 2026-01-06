@@ -113,18 +113,43 @@
                                     'failed' => 'bg-red-100 text-red-800',
                                 ];
                             @endphp
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$site->status] ?? 'bg-gray-100 text-gray-800' }}">
-                                {{ ucfirst($site->status) }}
-                            </span>
+                            @if(in_array($site->status, ['creating', 'failed']))
+                                <button wire:click="viewStatus('{{ $site->id }}')"
+                                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$site->status] ?? 'bg-gray-100 text-gray-800' }} hover:opacity-80 cursor-pointer transition-opacity">
+                                    {{ ucfirst($site->status) }}
+                                </button>
+                            @else
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$site->status] ?? 'bg-gray-100 text-gray-800' }}">
+                                    {{ ucfirst($site->status) }}
+                                </span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if($site->ssl_enabled)
-                                <span class="inline-flex items-center text-green-600">
-                                    <svg class="h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
-                                    </svg>
-                                    <span class="text-sm">Secure</span>
-                                </span>
+                                @if($site->isSslExpired())
+                                    <button wire:click="viewSSLStatus('{{ $site->id }}')"
+                                            class="inline-flex items-center text-red-600 hover:text-red-800 cursor-pointer transition-colors">
+                                        <svg class="h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM11 14a1 1 0 11-2 0 1 1 0 012 0zm0-7a1 1 0 10-2 0v3a1 1 0 102 0V7z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <span class="text-sm font-medium">Expired</span>
+                                    </button>
+                                @elseif($site->isSslExpiringSoon())
+                                    <button wire:click="viewSSLStatus('{{ $site->id }}')"
+                                            class="inline-flex items-center text-yellow-600 hover:text-yellow-800 cursor-pointer transition-colors">
+                                        <svg class="h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <span class="text-sm font-medium">Expiring Soon</span>
+                                    </button>
+                                @else
+                                    <span class="inline-flex items-center text-green-600">
+                                        <svg class="h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <span class="text-sm">Secure</span>
+                                    </span>
+                                @endif
                             @else
                                 <span class="text-sm text-gray-500">Not enabled</span>
                             @endif
@@ -279,6 +304,278 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    @endif
+
+    <!-- Site Status Modal -->
+    @if($showStatusModal && $viewingSite)
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Site Status Details</h3>
+                    <button wire:click="closeStatusModal" class="text-gray-400 hover:text-gray-500">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Domain & Status -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-700">Domain</h4>
+                                <p class="text-base font-semibold text-gray-900 mt-1">{{ $viewingSite->domain }}</p>
+                            </div>
+                            <div class="text-right">
+                                <h4 class="text-sm font-medium text-gray-700">Status</h4>
+                                @php
+                                    $statusColors = [
+                                        'active' => 'bg-green-100 text-green-800',
+                                        'disabled' => 'bg-gray-100 text-gray-800',
+                                        'creating' => 'bg-yellow-100 text-yellow-800',
+                                        'failed' => 'bg-red-100 text-red-800',
+                                    ];
+                                @endphp
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$viewingSite->status] ?? 'bg-gray-100 text-gray-800' }} mt-1">
+                                    {{ ucfirst($viewingSite->status) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Information -->
+                    @if($viewingSite->status === 'creating')
+                        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-blue-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-blue-800 mb-1">Site Provisioning in Progress</h4>
+                                    <p class="text-sm text-blue-700">
+                                        Your site is currently being provisioned. This process typically takes 2-5 minutes and includes:
+                                    </p>
+                                    <ul class="mt-2 text-sm text-blue-700 list-disc list-inside space-y-1">
+                                        <li>Creating directory structure</li>
+                                        <li>Configuring web server</li>
+                                        <li>Setting up PHP-FPM</li>
+                                        @if($viewingSite->site_type === 'wordpress')
+                                            <li>Installing WordPress</li>
+                                            <li>Configuring database</li>
+                                        @endif
+                                        <li>Applying security settings</li>
+                                    </ul>
+                                    <p class="mt-2 text-sm text-blue-700">The page will update automatically when provisioning is complete.</p>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($viewingSite->status === 'failed')
+                        <div class="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-red-800 mb-1">Provisioning Failed</h4>
+                                    @if($viewingSite->failure_reason)
+                                        <p class="text-sm text-red-700 whitespace-pre-wrap">{{ $viewingSite->failure_reason }}</p>
+                                    @else
+                                        <p class="text-sm text-red-700">
+                                            Site provisioning failed. Please try again or contact support if the issue persists.
+                                        </p>
+                                    @endif
+                                    <div class="mt-3">
+                                        <button wire:click="retrySite('{{ $viewingSite->id }}')"
+                                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                            </svg>
+                                            Retry Provisioning
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- Additional Site Info -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Site Type</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ ucfirst($viewingSite->site_type) }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">PHP Version</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ $viewingSite->php_version }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Server</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ $viewingSite->vpsServer?->hostname ?? 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Created</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ $viewingSite->created_at->format('M d, Y H:i') }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button wire:click="closeStatusModal"
+                            class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- SSL Status Modal -->
+    @if($showSSLModal && $viewingSSLSite)
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">SSL Certificate Status</h3>
+                    <button wire:click="closeSSLModal" class="text-gray-400 hover:text-gray-500">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Domain & SSL Status -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-700">Domain</h4>
+                                <p class="text-base font-semibold text-gray-900 mt-1">{{ $viewingSSLSite->domain }}</p>
+                            </div>
+                            <div class="text-right">
+                                <h4 class="text-sm font-medium text-gray-700">SSL Status</h4>
+                                @if($viewingSSLSite->isSslExpired())
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 mt-1">
+                                        Expired
+                                    </span>
+                                @elseif($viewingSSLSite->isSslExpiringSoon())
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
+                                        Expiring Soon
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                        Valid
+                                    </span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SSL Warning/Error Message -->
+                    @if($viewingSSLSite->isSslExpired())
+                        <div class="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-red-800 mb-1">SSL Certificate Expired</h4>
+                                    <p class="text-sm text-red-700">
+                                        The SSL certificate for this domain expired on {{ $viewingSSLSite->ssl_expires_at->format('F j, Y') }}.
+                                        Your site is now showing as "Not Secure" to visitors, which may impact trust and SEO rankings.
+                                    </p>
+                                    <p class="text-sm text-red-700 mt-2">
+                                        <strong>Action Required:</strong> Renew the SSL certificate immediately to restore HTTPS protection.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($viewingSSLSite->isSslExpiringSoon())
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-yellow-800 mb-1">SSL Certificate Expiring Soon</h4>
+                                    <p class="text-sm text-yellow-700">
+                                        The SSL certificate for this domain will expire on {{ $viewingSSLSite->ssl_expires_at->format('F j, Y') }}
+                                        (in {{ $viewingSSLSite->ssl_expires_at->diffForHumans() }}).
+                                    </p>
+                                    <p class="text-sm text-yellow-700 mt-2">
+                                        <strong>Recommended Action:</strong> SSL certificates typically auto-renew, but you should verify renewal is configured.
+                                        Contact support if you need assistance.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <div class="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-green-800 mb-1">SSL Certificate Valid</h4>
+                                    <p class="text-sm text-green-700">
+                                        Your SSL certificate is valid and properly configured. Your site is secure.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- SSL Details -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">SSL Enabled</h4>
+                            <p class="text-sm text-gray-900 mt-1">{{ $viewingSSLSite->ssl_enabled ? 'Yes' : 'No' }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Expiration Date</h4>
+                            <p class="text-sm text-gray-900 mt-1">
+                                @if($viewingSSLSite->ssl_expires_at)
+                                    {{ $viewingSSLSite->ssl_expires_at->format('M d, Y') }}
+                                @else
+                                    N/A
+                                @endif
+                            </p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Days Until Expiration</h4>
+                            <p class="text-sm text-gray-900 mt-1">
+                                @if($viewingSSLSite->ssl_expires_at)
+                                    @if($viewingSSLSite->isSslExpired())
+                                        <span class="text-red-600 font-medium">Expired {{ $viewingSSLSite->ssl_expires_at->diffForHumans() }}</span>
+                                    @else
+                                        {{ $viewingSSLSite->ssl_expires_at->diffInDays(now()) }} days
+                                    @endif
+                                @else
+                                    N/A
+                                @endif
+                            </p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700">Auto-Renewal</h4>
+                            <p class="text-sm text-gray-900 mt-1">
+                                <span class="inline-flex items-center text-green-600">
+                                    <svg class="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Enabled
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button wire:click="closeSSLModal"
+                            class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     @endif

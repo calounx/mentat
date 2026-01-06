@@ -191,9 +191,16 @@
                                     default => ['color' => 'bg-gray-100 text-gray-800', 'label' => ucfirst($site->status)],
                                 };
                             @endphp
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusConfig['color'] }}">
-                                {{ $statusConfig['label'] }}
-                            </span>
+                            @if(in_array($site->status, ['creating', 'failed']))
+                                <button wire:click="viewSiteStatus('{{ $site->id }}')"
+                                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusConfig['color'] }} hover:opacity-80 cursor-pointer transition-opacity">
+                                    {{ $statusConfig['label'] }}
+                                </button>
+                            @else
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusConfig['color'] }}">
+                                    {{ $statusConfig['label'] }}
+                                </span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if($site->ssl_enabled)
@@ -332,6 +339,128 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Site Status Modal (Admin) -->
+    @if($showSiteStatusModal && $viewingSiteData)
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto border border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-white">Site Status Details</h3>
+                    <button wire:click="closeSiteStatusModal" class="text-gray-400 hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Domain & Status -->
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-300">Domain</h4>
+                                <p class="text-base font-semibold text-white mt-1">{{ $viewingSiteData->domain }}</p>
+                            </div>
+                            <div class="text-right">
+                                <h4 class="text-sm font-medium text-gray-300">Status</h4>
+                                @php
+                                    $statusColors = [
+                                        'active' => 'bg-green-100 text-green-800',
+                                        'disabled' => 'bg-gray-100 text-gray-800',
+                                        'creating' => 'bg-blue-100 text-blue-800',
+                                        'failed' => 'bg-red-100 text-red-800',
+                                    ];
+                                @endphp
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$viewingSiteData->status] ?? 'bg-gray-100 text-gray-800' }} mt-1">
+                                    {{ ucfirst($viewingSiteData->status) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Information -->
+                    @if($viewingSiteData->status === 'creating')
+                        <div class="bg-blue-900/30 border-l-4 border-blue-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-blue-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-blue-200 mb-1">Site Provisioning in Progress</h4>
+                                    <p class="text-sm text-blue-300">
+                                        This site is currently being provisioned. Typical provisioning time: 2-5 minutes.
+                                    </p>
+                                    <ul class="mt-2 text-sm text-blue-300 list-disc list-inside space-y-1">
+                                        <li>Creating directory structure</li>
+                                        <li>Configuring web server</li>
+                                        <li>Setting up PHP-FPM</li>
+                                        @if($viewingSiteData->site_type === 'wordpress')
+                                            <li>Installing WordPress</li>
+                                            <li>Configuring database</li>
+                                        @endif
+                                        <li>Applying security settings</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($viewingSiteData->status === 'failed')
+                        <div class="bg-red-900/30 border-l-4 border-red-400 p-4 rounded">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-red-200 mb-1">Provisioning Failed</h4>
+                                    @if($viewingSiteData->failure_reason)
+                                        <p class="text-sm text-red-300 whitespace-pre-wrap font-mono bg-gray-900/50 p-2 rounded mt-2">{{ $viewingSiteData->failure_reason }}</p>
+                                    @else
+                                        <p class="text-sm text-red-300">
+                                            Site provisioning failed. Check VPS connectivity and logs.
+                                        </p>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- Additional Site Info -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-300">Tenant</h4>
+                            <p class="text-sm text-white mt-1">{{ $viewingSiteData->tenant->name ?? 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-300">Site Type</h4>
+                            <p class="text-sm text-white mt-1">{{ ucfirst($viewingSiteData->site_type) }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-300">PHP Version</h4>
+                            <p class="text-sm text-white mt-1">{{ $viewingSiteData->php_version }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-300">Server</h4>
+                            <p class="text-sm text-white mt-1">{{ $viewingSiteData->vpsServer?->hostname ?? 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-300">Provision Attempts</h4>
+                            <p class="text-sm text-white mt-1">{{ $viewingSiteData->provision_attempts ?? 0 }}</p>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-300">Created</h4>
+                            <p class="text-sm text-white mt-1">{{ $viewingSiteData->created_at->format('M d, Y H:i') }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button wire:click="closeSiteStatusModal"
+                            class="px-4 py-2 border border-gray-600 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700">
+                        Close
+                    </button>
                 </div>
             </div>
         </div>
