@@ -29,9 +29,10 @@ return [
     */
 
     'observability' => [
-        'prometheus_url' => env('CHOM_PROMETHEUS_URL', 'http://localhost:9090'),
-        'loki_url' => env('CHOM_LOKI_URL', 'http://localhost:3100'),
-        'grafana_url' => env('CHOM_GRAFANA_URL', 'http://localhost:3000'),
+        'prometheus_url' => env('CHOM_PROMETHEUS_URL', 'http://mentat:9090'),
+        'loki_url' => env('CHOM_LOKI_URL', 'http://mentat:3100'),
+        'grafana_url' => env('CHOM_GRAFANA_URL', 'http://mentat:3000'),
+        'alertmanager_url' => env('CHOM_ALERTMANAGER_URL', 'http://mentat:9093'),
         'grafana_api_key' => env('CHOM_GRAFANA_API_KEY'),
     ],
 
