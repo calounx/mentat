@@ -118,7 +118,7 @@ create_config() {
 # Loki Configuration - Native Installation
 # NO DOCKER
 
-auth_enabled: false
+auth_enabled: true
 
 server:
   http_listen_address: 0.0.0.0
@@ -165,8 +165,10 @@ storage_config:
     directory: $LOKI_DATA_DIR/chunks
 
 limits_config:
+  enforce_metric_name: false
   reject_old_samples: true
   reject_old_samples_max_age: 168h
+  split_queries_by_interval: 15m
   ingestion_rate_mb: 16
   ingestion_burst_size_mb: 32
   max_query_length: 721h
@@ -175,6 +177,7 @@ limits_config:
   max_global_streams_per_user: 10000
   max_chunks_per_query: 2000000
   max_entries_limit_per_query: 10000
+  per_tenant_override_config: $LOKI_CONFIG_DIR/tenant-limits.yaml
 
 chunk_store_config:
   max_look_back_period: 0s
@@ -212,6 +215,43 @@ EOF
     chmod 644 "$LOKI_CONFIG_DIR/loki.yml"
 
     log_success "Configuration file created"
+}
+
+create_tenant_limits() {
+    log_info "Creating Loki tenant limits configuration..."
+
+    cat > "$LOKI_CONFIG_DIR/tenant-limits.yaml" <<'EOF'
+# Loki Tenant Limits Configuration
+# This file defines per-tenant overrides for resource limits
+
+overrides:
+  # Default limits for all tenants
+  "*":
+    max_streams_per_user: 10000
+    max_query_length: 721h
+    max_entries_limit_per_query: 10000
+    max_chunks_per_query: 2000000
+    ingestion_rate_mb: 16
+    ingestion_burst_size_mb: 32
+
+  # Example: Custom limits for specific tenants
+  # Uncomment and modify as needed
+  #
+  # org-a:
+  #   max_streams_per_user: 5000
+  #   max_query_length: 168h
+  #   ingestion_rate_mb: 8
+  #
+  # org-b:
+  #   max_streams_per_user: 15000
+  #   max_query_length: 720h
+  #   ingestion_rate_mb: 32
+EOF
+
+    chown "$LOKI_USER:$LOKI_GROUP" "$LOKI_CONFIG_DIR/tenant-limits.yaml"
+    chmod 644 "$LOKI_CONFIG_DIR/tenant-limits.yaml"
+
+    log_success "Tenant limits configuration created"
 }
 
 create_systemd_service() {
@@ -394,8 +434,14 @@ show_status() {
     echo ""
     echo -e "${BOLD}Configuration Files:${NC}"
     echo "  Main config:    $LOKI_CONFIG_DIR/loki.yml"
+    echo "  Tenant limits:  $LOKI_CONFIG_DIR/tenant-limits.yaml"
     echo "  Alert rules:    $LOKI_CONFIG_DIR/rules/"
     echo "  Service file:   /etc/systemd/system/loki.service"
+    echo ""
+    echo -e "${BOLD}${YELLOW}Multi-Tenancy Enabled:${NC}"
+    echo "  All requests must include X-Scope-OrgID header"
+    echo "  Example: curl -H 'X-Scope-OrgID: org-a' http://localhost:$LOKI_PORT/loki/api/v1/labels"
+    echo "  Configure Promtail with: tenant_id: 'your-org-id'"
     echo ""
 }
 
@@ -413,6 +459,7 @@ main() {
     create_directories
     download_loki
     create_config
+    create_tenant_limits
     create_alert_rules
     create_systemd_service
     configure_firewall

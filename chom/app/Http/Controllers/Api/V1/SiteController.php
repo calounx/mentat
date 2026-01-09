@@ -255,4 +255,41 @@ class SiteController extends ApiController
             return $this->handleException($e);
         }
     }
+
+    /**
+     * Get site-to-tenant mappings for observability exporters.
+     *
+     * Returns all sites with their tenant_id and organization_id.
+     * This endpoint is used by Prometheus exporters to add proper labels.
+     * Owner role only.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function tenantMappings(Request $request): JsonResponse
+    {
+        try {
+            // Verify user is owner
+            $this->requireOwner($request);
+
+            // Get all sites with tenant and organization relationships
+            $sites = \App\Models\Site::with(['tenant.organization'])
+                ->select(['id', 'domain', 'tenant_id', 'vps_id'])
+                ->get()
+                ->map(function ($site) {
+                    return [
+                        'domain' => $site->domain,
+                        'tenant_id' => $site->tenant_id,
+                        'organization_id' => $site->tenant?->organization_id,
+                        'vps_id' => $site->vps_id,
+                    ];
+                });
+
+            return $this->successResponse([
+                'sites' => $sites,
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e);
+        }
+    }
 }

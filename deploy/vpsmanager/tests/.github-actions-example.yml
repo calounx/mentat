@@ -1,0 +1,128 @@
+# Example GitHub Actions workflow for VPSManager tests
+# Copy this to .github/workflows/vpsmanager-tests.yml in your repository
+
+name: VPSManager Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'deploy/vpsmanager/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'deploy/vpsmanager/**'
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install VPSManager
+        run: |
+          sudo ./deploy/vpsmanager/install.sh
+
+      - name: Run unit tests
+        run: |
+          ./deploy/vpsmanager/tests/run-all-tests.sh unit
+
+  integration-tests:
+    name: Integration Tests (Site Isolation)
+    runs-on: ubuntu-22.04
+    needs: unit-tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update package lists
+        run: sudo apt-get update
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y \
+            nginx \
+            php8.2-fpm \
+            php8.2-cli \
+            php8.2-mysql \
+            mariadb-server \
+            jq
+
+      - name: Start services
+        run: |
+          sudo systemctl start nginx
+          sudo systemctl start php8.2-fpm
+          sudo systemctl start mariadb
+
+      - name: Configure MariaDB
+        run: |
+          sudo mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('');"
+          sudo mysql -e "FLUSH PRIVILEGES;"
+
+      - name: Install VPSManager
+        run: |
+          sudo ./deploy/vpsmanager/install.sh
+
+      - name: Run integration tests
+        run: |
+          sudo ./deploy/vpsmanager/tests/run-all-tests.sh integration
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs
+          path: /opt/vpsmanager/var/log/
+          retention-days: 7
+
+  all-tests:
+    name: All Tests
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update package lists
+        run: sudo apt-get update
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y \
+            nginx \
+            php8.2-fpm \
+            php8.2-cli \
+            php8.2-mysql \
+            mariadb-server \
+            jq
+
+      - name: Start services
+        run: |
+          sudo systemctl start nginx
+          sudo systemctl start php8.2-fpm
+          sudo systemctl start mariadb
+
+      - name: Configure MariaDB
+        run: |
+          sudo mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('');"
+          sudo mysql -e "FLUSH PRIVILEGES;"
+
+      - name: Install VPSManager
+        run: |
+          sudo ./deploy/vpsmanager/install.sh
+
+      - name: Run all tests
+        run: |
+          sudo ./deploy/vpsmanager/tests/run-all-tests.sh
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs
+          path: /opt/vpsmanager/var/log/
+          retention-days: 7

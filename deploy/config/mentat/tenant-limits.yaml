@@ -1,0 +1,28 @@
+# Loki Tenant Limits Configuration
+# This file defines per-tenant overrides for resource limits
+#
+# The "*" wildcard applies default limits to all tenants
+# Individual tenant IDs can have custom limits defined
+
+overrides:
+  # Default limits for all tenants
+  "*":
+    max_streams_per_user: 10000
+    max_query_length: 721h
+    max_entries_limit_per_query: 10000
+    max_chunks_per_query: 2000000
+    ingestion_rate_mb: 10
+    ingestion_burst_size_mb: 20
+
+  # Example: Custom limits for specific tenants
+  # Uncomment and modify as needed
+  #
+  # org-a:
+  #   max_streams_per_user: 5000
+  #   max_query_length: 168h
+  #   ingestion_rate_mb: 8
+  #
+  # org-b:
+  #   max_streams_per_user: 15000
+  #   max_query_length: 720h
+  #   ingestion_rate_mb: 32

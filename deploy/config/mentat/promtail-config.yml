@@ -9,6 +9,12 @@ positions:
 
 clients:
   - url: http://localhost:3100/loki/api/v1/push
+    # Multi-tenancy: Set the tenant ID for all logs from this Promtail instance
+    # Change this to match your organization/tenant identifier
+    tenant_id: "mentat-system"
+    # Alternatively, use external_labels to set tenant dynamically:
+    # external_labels:
+    #   tenant_id: "org-a"
 
 scrape_configs:
   # System logs

@@ -327,6 +327,15 @@ deploy_configuration() {
         log_info "Using default Loki configuration"
     fi
 
+    # Copy Loki tenant limits if exists (required for multi-tenancy)
+    if [[ -f "${SRC_CONFIG_DIR}/tenant-limits.yaml" ]]; then
+        sudo cp "${SRC_CONFIG_DIR}/tenant-limits.yaml" "${CONFIG_DIR}/loki/"
+        sudo chown observability:observability "${CONFIG_DIR}/loki/tenant-limits.yaml"
+        log_success "Loki tenant limits configuration deployed"
+    else
+        log_warning "Loki tenant limits file not found - multi-tenancy may not work correctly"
+    fi
+
     # Copy Promtail configuration if exists
     if [[ -f "${SRC_CONFIG_DIR}/promtail-config.yml" ]]; then
         sudo cp "${SRC_CONFIG_DIR}/promtail-config.yml" "${CONFIG_DIR}/promtail/"

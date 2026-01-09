@@ -382,4 +382,128 @@ class BackupRepositoryTest extends TestCase
 
         $this->assertEquals(4, $result->total());
     }
+
+    // ============================================================================
+    // Multi-Tenancy Security Tests (Phase 1)
+    // ============================================================================
+
+    public function test_find_by_id_and_tenant_returns_backup_for_same_tenant()
+    {
+        $backup = SiteBackup::factory()->create([
+            'site_id' => $this->site->id,
+            'backup_type' => 'full',
+            'status' => 'completed',
+        ]);
+
+        $result = $this->repository->findByIdAndTenant($backup->id, $this->tenant->id);
+
+        $this->assertNotNull($result);
+        $this->assertEquals($backup->id, $result->id);
+        $this->assertEquals($backup->backup_type, $result->backup_type);
+    }
+
+    public function test_find_by_id_and_tenant_returns_null_for_cross_tenant_access()
+    {
+        // Create another tenant with site and backup
+        $otherTenant = Tenant::factory()->create([
+            'tier' => 'professional',
+            'status' => 'active',
+        ]);
+
+        $otherSite = Site::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+        ]);
+
+        $otherBackup = SiteBackup::factory()->create([
+            'site_id' => $otherSite->id,
+            'backup_type' => 'full',
+            'status' => 'completed',
+        ]);
+
+        // Attempt to access other tenant's backup
+        $result = $this->repository->findByIdAndTenant($otherBackup->id, $this->tenant->id);
+
+        $this->assertNull($result, 'Should return null when attempting cross-tenant access');
+    }
+
+    public function test_find_by_id_and_tenant_returns_null_for_nonexistent_backup()
+    {
+        $result = $this->repository->findByIdAndTenant('non-existent-id', $this->tenant->id);
+
+        $this->assertNull($result);
+    }
+
+    public function test_find_by_id_and_tenant_properly_loads_site_relationship()
+    {
+        $backup = SiteBackup::factory()->create([
+            'site_id' => $this->site->id,
+            'backup_type' => 'full',
+            'status' => 'completed',
+        ]);
+
+        $result = $this->repository->findByIdAndTenant($backup->id, $this->tenant->id);
+
+        $this->assertNotNull($result);
+        $this->assertTrue($result->relationLoaded('site'));
+        $this->assertNotNull($result->site);
+        $this->assertEquals($this->site->id, $result->site->id);
+        $this->assertEquals($this->tenant->id, $result->site->tenant_id);
+    }
+
+    public function test_find_by_id_and_tenant_prevents_information_leakage()
+    {
+        // Create backup for another tenant
+        $otherTenant = Tenant::factory()->create(['status' => 'active']);
+        $otherSite = Site::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+        ]);
+        $otherBackup = SiteBackup::factory()->create([
+            'site_id' => $otherSite->id,
+        ]);
+
+        // Attempt to access with wrong tenant ID
+        $result = $this->repository->findByIdAndTenant($otherBackup->id, $this->tenant->id);
+
+        // Should return null - same behavior as if backup doesn't exist
+        // This prevents information leakage about backup existence
+        $this->assertNull($result);
+
+        // Verify the backup actually exists in DB
+        $this->assertDatabaseHas('site_backups', ['id' => $otherBackup->id]);
+    }
+
+    public function test_find_by_id_and_tenant_enforces_tenant_filter_at_database_level()
+    {
+        // Create backups for multiple tenants
+        $backup1 = SiteBackup::factory()->create(['site_id' => $this->site->id]);
+
+        $tenant2 = Tenant::factory()->create(['status' => 'active']);
+        $site2 = Site::factory()->create([
+            'tenant_id' => $tenant2->id,
+            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+        ]);
+        $backup2 = SiteBackup::factory()->create(['site_id' => $site2->id]);
+
+        $tenant3 = Tenant::factory()->create(['status' => 'active']);
+        $site3 = Site::factory()->create([
+            'tenant_id' => $tenant3->id,
+            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+        ]);
+        $backup3 = SiteBackup::factory()->create(['site_id' => $site3->id]);
+
+        // Verify each tenant can only access their own backups
+        $this->assertNotNull($this->repository->findByIdAndTenant($backup1->id, $this->tenant->id));
+        $this->assertNull($this->repository->findByIdAndTenant($backup2->id, $this->tenant->id));
+        $this->assertNull($this->repository->findByIdAndTenant($backup3->id, $this->tenant->id));
+
+        $this->assertNull($this->repository->findByIdAndTenant($backup1->id, $tenant2->id));
+        $this->assertNotNull($this->repository->findByIdAndTenant($backup2->id, $tenant2->id));
+        $this->assertNull($this->repository->findByIdAndTenant($backup3->id, $tenant2->id));
+
+        $this->assertNull($this->repository->findByIdAndTenant($backup1->id, $tenant3->id));
+        $this->assertNull($this->repository->findByIdAndTenant($backup2->id, $tenant3->id));
+        $this->assertNotNull($this->repository->findByIdAndTenant($backup3->id, $tenant3->id));
+    }
 }

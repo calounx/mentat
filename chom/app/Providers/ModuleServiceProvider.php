@@ -27,6 +27,9 @@ class ModuleServiceProvider extends ServiceProvider
      * @var array
      */
     protected array $moduleProviders = [
+        // Route Service Provider (loads API and health routes)
+        \App\Providers\RouteServiceProvider::class,
+
         // Identity & Access Module
         AuthServiceProvider::class,
 

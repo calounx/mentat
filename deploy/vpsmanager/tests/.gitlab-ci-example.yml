@@ -1,0 +1,76 @@
+# Example GitLab CI configuration for VPSManager tests
+# Copy this to .gitlab-ci.yml in your repository
+
+stages:
+  - test
+
+variables:
+  DEBIAN_FRONTEND: noninteractive
+
+# Unit tests (fast, no services needed)
+test:unit:
+  stage: test
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update
+    - apt-get install -y sudo bash jq
+    - ./deploy/vpsmanager/install.sh
+  script:
+    - ./deploy/vpsmanager/tests/run-all-tests.sh unit
+  artifacts:
+    when: on_failure
+    paths:
+      - /opt/vpsmanager/var/log/
+    expire_in: 7 days
+
+# Integration tests (requires full environment)
+test:integration:
+  stage: test
+  image: ubuntu:22.04
+  services:
+    - name: mariadb:10.11
+      alias: mariadb
+  variables:
+    MYSQL_ROOT_PASSWORD: ""
+    MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+  before_script:
+    - apt-get update
+    - apt-get install -y sudo bash nginx php8.2-fpm php8.2-cli php8.2-mysql mariadb-client jq
+    - service nginx start
+    - service php8.2-fpm start
+    - ./deploy/vpsmanager/install.sh
+  script:
+    - ./deploy/vpsmanager/tests/run-all-tests.sh integration
+  artifacts:
+    when: on_failure
+    paths:
+      - /opt/vpsmanager/var/log/
+    expire_in: 7 days
+
+# All tests (comprehensive)
+test:all:
+  stage: test
+  image: ubuntu:22.04
+  services:
+    - name: mariadb:10.11
+      alias: mariadb
+  variables:
+    MYSQL_ROOT_PASSWORD: ""
+    MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+  before_script:
+    - apt-get update
+    - apt-get install -y sudo bash nginx php8.2-fpm php8.2-cli php8.2-mysql mariadb-client jq
+    - service nginx start
+    - service php8.2-fpm start
+    - ./deploy/vpsmanager/install.sh
+  script:
+    - ./deploy/vpsmanager/tests/run-all-tests.sh
+  artifacts:
+    when: on_failure
+    paths:
+      - /opt/vpsmanager/var/log/
+    expire_in: 7 days
+  only:
+    - main
+    - develop
+    - merge_requests
