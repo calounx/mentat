@@ -58,24 +58,25 @@ class TeamController extends Controller
 
     /**
      * Update team member role.
+     * Enforces hierarchy: Org owners can set admin/member/viewer, admins can only set member/viewer.
      */
     public function update(Request $request, string $id): JsonResponse
     {
         $organization = $this->getOrganization($request);
         $currentUser = $request->user();
 
-        // Only owners and admins can update roles
-        if (!$currentUser->isAdmin()) {
+        $member = $organization->users()->findOrFail($id);
+
+        // Use User model's canManageUser method which respects full hierarchy
+        if (!$currentUser->canManageUser($member)) {
             return response()->json([
                 'success' => false,
                 'error' => [
                     'code' => 'FORBIDDEN',
-                    'message' => 'You do not have permission to update team members.',
+                    'message' => 'You do not have permission to update this team member.',
                 ],
             ], 403);
         }
-
-        $member = $organization->users()->findOrFail($id);
 
         // Cannot modify the owner's role
         if ($member->isOwner()) {
@@ -88,7 +89,7 @@ class TeamController extends Controller
             ], 400);
         }
 
-        // Admins cannot promote to owner or admin
+        // Admins cannot promote to owner or admin - only owners can
         if (!$currentUser->isOwner()) {
             $validated = $request->validate([
                 'role' => ['required', 'in:member,viewer'],
@@ -110,24 +111,25 @@ class TeamController extends Controller
 
     /**
      * Remove team member from organization.
+     * Uses hierarchy: Only org owners can delete users (not just remove).
      */
     public function destroy(Request $request, string $id): JsonResponse
     {
         $organization = $this->getOrganization($request);
         $currentUser = $request->user();
 
-        // Only owners and admins can remove members
-        if (!$currentUser->isAdmin()) {
+        $member = $organization->users()->findOrFail($id);
+
+        // Use User model's canManageUser method which respects full hierarchy
+        if (!$currentUser->canManageUser($member)) {
             return response()->json([
                 'success' => false,
                 'error' => [
                     'code' => 'FORBIDDEN',
-                    'message' => 'You do not have permission to remove team members.',
+                    'message' => 'You do not have permission to remove this team member.',
                 ],
             ], 403);
         }
-
-        $member = $organization->users()->findOrFail($id);
 
         // Cannot remove yourself
         if ($member->id === $currentUser->id) {
@@ -151,7 +153,7 @@ class TeamController extends Controller
             ], 400);
         }
 
-        // Admins cannot remove other admins (only owner can)
+        // Admins cannot remove other admins (only owner can) - handled by canManageUser
         if (!$currentUser->isOwner() && $member->isAdmin()) {
             return response()->json([
                 'success' => false,

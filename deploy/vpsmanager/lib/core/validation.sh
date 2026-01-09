@@ -102,7 +102,7 @@ domain_to_dbname() {
     echo "${dbname:0:60}"
 }
 
-# Check if site exists in registry
+# Check if site exists in registry - FIXED
 site_exists() {
     local domain="$1"
     local sites_file="${VPSMANAGER_ROOT}/data/sites.json"
@@ -111,7 +111,9 @@ site_exists() {
         return 1
     fi
 
-    if grep -q "\"domain\":\"${domain}\"" "$sites_file" 2>/dev/null; then
+    # Fixed: Handle spaces in JSON formatting
+    # Match both "domain":"value" and "domain": "value"
+    if grep -q "\"domain\"[[:space:]]*:[[:space:]]*\"${domain}\"" "$sites_file" 2>/dev/null; then
         return 0
     fi
 

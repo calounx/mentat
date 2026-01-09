@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -164,5 +165,121 @@ class User extends Authenticatable implements MustVerifyEmail
     public function recordLogin(): void
     {
         $this->update(['last_login_at' => now()]);
+    }
+
+    /**
+     * Check if current user can manage the target user based on hierarchy.
+     * Hierarchy: Self → Tenant owner/manager → Org owner/manager → Super admin
+     */
+    public function canManageUser(User $target): bool
+    {
+        // Cannot manage yourself through admin functions
+        if ($this->id === $target->id) {
+            return false;
+        }
+
+        // Super admins can manage all users
+        if ($this->is_super_admin) {
+            return true;
+        }
+
+        // Must be in same organization
+        if ($this->organization_id !== $target->organization_id) {
+            return false;
+        }
+
+        // Organization owners can manage everyone in their org except other owners
+        if ($this->isOwner()) {
+            return !$target->isOwner() || $target->id === $this->id;
+        }
+
+        // Organization admins can manage members and viewers, but not owners or other admins
+        if ($this->isAdmin()) {
+            return !$target->isOwner() && !$target->isAdmin();
+        }
+
+        // Regular users cannot manage other users
+        return false;
+    }
+
+    /**
+     * Check if current user is a tenant owner/manager of the target user.
+     * This checks if they share tenants and current user has management role in that tenant.
+     *
+     * Note: Currently uses organization-level roles. Future enhancement will use
+     * per-tenant roles from the tenant_user.role column.
+     */
+    public function isTenantOwnerOf(User $target): bool
+    {
+        // Super admins own everything
+        if ($this->is_super_admin) {
+            return true;
+        }
+
+        // Must be in same organization
+        if ($this->organization_id !== $target->organization_id) {
+            return false;
+        }
+
+        // Organization owners and admins are considered tenant owners
+        if ($this->isOwner() || $this->isAdmin()) {
+            return true;
+        }
+
+        // Future: Check tenant_user.role column for per-tenant ownership
+        // Example: $this->tenants()->wherePivot('role', 'owner')->exists()
+
+        return false;
+    }
+
+    /**
+     * Check if current user is an organization owner of the target user.
+     */
+    public function isOrgOwnerOf(User $target): bool
+    {
+        // Super admins can manage all organizations
+        if ($this->is_super_admin) {
+            return true;
+        }
+
+        // Must be in same organization and be an owner
+        return $this->organization_id === $target->organization_id && $this->isOwner();
+    }
+
+    /**
+     * Get the role of this user within a specific tenant.
+     *
+     * Note: Currently returns organization-level role. Future enhancement will
+     * return per-tenant role from tenant_user.role column if set.
+     */
+    public function getTenantRole(Tenant $tenant): ?string
+    {
+        // Check if user has access to this tenant
+        if (!$this->hasAccessToTenant($tenant)) {
+            return null;
+        }
+
+        // Future: Return per-tenant role if set in tenant_user pivot table
+        // $pivotRole = $this->tenants()
+        //     ->where('tenants.id', $tenant->id)
+        //     ->first()?->pivot->role;
+        //
+        // if ($pivotRole) {
+        //     return $pivotRole;
+        // }
+
+        // For now, return organization-level role
+        return $this->role;
+    }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 }

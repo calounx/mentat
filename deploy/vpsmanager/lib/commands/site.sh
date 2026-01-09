@@ -51,22 +51,30 @@ add_to_registry() {
     fi
 }
 
-# Remove site from registry
+# Remove site from registry - FIXED
 remove_from_registry() {
     local domain="$1"
 
     if command -v jq &> /dev/null && [[ -f "$SITES_REGISTRY" ]]; then
         local temp_file="${SITES_REGISTRY}.tmp"
-        jq "del(.sites[] | select(.domain == \"${domain}\"))" "$SITES_REGISTRY" > "$temp_file" && mv "$temp_file" "$SITES_REGISTRY"
+        # Fixed: Use map(select()) to properly filter out the site
+        jq ".sites |= map(select(.domain != \"${domain}\"))" "$SITES_REGISTRY" > "$temp_file" && mv "$temp_file" "$SITES_REGISTRY"
     fi
 }
 
-# Get site from registry
+# Get site from registry - FIXED
 get_site_info() {
     local domain="$1"
 
     if command -v jq &> /dev/null && [[ -f "$SITES_REGISTRY" ]]; then
-        jq -r ".sites[] | select(.domain == \"${domain}\")" "$SITES_REGISTRY"
+        # Fixed: Use -c for compact output and handle empty results
+        local result
+        result=$(jq -c ".sites[] | select(.domain == \"${domain}\")" "$SITES_REGISTRY" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+        else
+            echo "{}"
+        fi
     else
         echo "{}"
     fi
@@ -101,7 +109,7 @@ create_site_directories() {
     esac
 
     # Create default index.html
-    cat > "${site_root}/public/index.html" <<EOF
+    cat > "${site_root}/public/index.html" <<EOFHTML
 <!DOCTYPE html>
 <html>
 <head>
@@ -116,7 +124,7 @@ create_site_directories() {
     <p>Your site is ready to be configured.</p>
 </body>
 </html>
-EOF
+EOFHTML
 
     # Set ownership (www-data for nginx/php-fpm)
     chown -R www-data:www-data "$site_root"
@@ -152,7 +160,7 @@ create_nginx_config() {
             "$template" > "$nginx_config"
     else
         # Fallback: generate inline
-        cat > "$nginx_config" <<EOF
+        cat > "$nginx_config" <<EOFNGINX
 server {
     listen 80;
     listen [::]:80;
@@ -190,7 +198,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 }
-EOF
+EOFNGINX
     fi
 
     log_info "Nginx config created: ${nginx_config}"
@@ -221,7 +229,7 @@ create_phpfpm_pool() {
             "$template" > "$pool_config"
     else
         # Fallback: generate inline
-        cat > "$pool_config" <<EOF
+        cat > "$pool_config" <<EOFPHP
 [${pool_name}]
 user = www-data
 group = www-data
@@ -253,7 +261,7 @@ php_admin_value[memory_limit] = 256M
 php_admin_value[upload_max_filesize] = 64M
 php_admin_value[post_max_size] = 64M
 php_admin_value[max_execution_time] = 300
-EOF
+EOFPHP
     fi
 
     log_info "PHP-FPM pool created: ${pool_config}"
@@ -435,7 +443,7 @@ cmd_site_create() {
     return 0
 }
 
-# site:delete command
+# site:delete command - FIXED
 cmd_site_delete() {
     local domain=""
     local force=false
@@ -481,41 +489,56 @@ cmd_site_delete() {
 
     # Get values from registry
     local site_root db_name db_user
-    if command -v jq &> /dev/null; then
+    if command -v jq &> /dev/null && [[ "$site_info" != "{}" ]]; then
         site_root=$(echo "$site_info" | jq -r '.site_root // empty')
         db_name=$(echo "$site_info" | jq -r '.db_name // empty')
         db_user=$(echo "$site_info" | jq -r '.db_user // empty')
-    else
+    fi
+    
+    # Fallback to defaults if not in registry
+    if [[ -z "$site_root" ]]; then
         site_root="${SITES_ROOT}/${domain}"
+    fi
+    if [[ -z "$db_name" ]]; then
         db_name="site_$(domain_to_dbname "$domain")"
         db_user="$db_name"
     fi
 
+    log_info "Cleanup targets - site_root: ${site_root}, db: ${db_name}"
+
     # Disable and remove nginx config
     disable_site_config "$domain"
-    rm -f "${NGINX_SITES_AVAILABLE}/${domain}.conf"
-
-    # Remove PHP-FPM pool
-    rm -f "${PHP_FPM_POOL_DIR}/${domain}.conf"
-
-    # Drop database
-    if [[ -n "$db_name" ]]; then
-        drop_site_database "$db_name" "$db_user"
+    if [[ -f "${NGINX_SITES_AVAILABLE}/${domain}.conf" ]]; then
+        rm -f "${NGINX_SITES_AVAILABLE}/${domain}.conf"
+        log_info "Removed nginx config: ${NGINX_SITES_AVAILABLE}/${domain}.conf"
     fi
 
-    # Remove site files (if force or confirmed)
-    if [[ "$force" == "true" ]] && [[ -n "$site_root" ]] && [[ -d "$site_root" ]]; then
+    # Remove PHP-FPM pool
+    if [[ -f "${PHP_FPM_POOL_DIR}/${domain}.conf" ]]; then
+        rm -f "${PHP_FPM_POOL_DIR}/${domain}.conf"
+        log_info "Removed PHP-FPM pool: ${PHP_FPM_POOL_DIR}/${domain}.conf"
+    fi
+
+    # Drop database and user
+    if [[ -n "$db_name" ]]; then
+        drop_site_database "$db_name" "$db_user"
+        log_info "Dropped database: ${db_name}"
+    fi
+
+    # Remove site files
+    if [[ -n "$site_root" ]] && [[ -d "$site_root" ]]; then
         rm -rf "$site_root"
         log_info "Removed site files: ${site_root}"
     fi
 
     # Remove from registry
     remove_from_registry "$domain"
+    log_info "Removed from registry: ${domain}"
 
     # Reload services
     reload_services
 
-    log_info "Site deleted: ${domain}"
+    log_info "Site deleted successfully: ${domain}"
     json_success "Site deleted successfully" "$(json_object "domain" "$domain")"
     return 0
 }
@@ -576,7 +599,7 @@ cmd_site_list() {
     return 0
 }
 
-# site:info command
+# site:info command - FIXED
 cmd_site_info() {
     local domain="$1"
 
@@ -592,6 +615,12 @@ cmd_site_info() {
 
     local site_info
     site_info=$(get_site_info "$domain")
+
+    # Check if we got valid site info
+    if [[ "$site_info" == "{}" ]] || [[ -z "$site_info" ]]; then
+        json_error "Site exists but info not found in registry: ${domain}" "SITE_INFO_ERROR"
+        return 1
+    fi
 
     # Add runtime info
     local site_root

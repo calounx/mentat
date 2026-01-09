@@ -229,8 +229,21 @@ class UserManagement extends Component
 
     public function render()
     {
+        $currentUser = auth()->user();
         $query = User::query()
             ->with(['organization:id,name', 'tenants:id,name,tier,status']);
+
+        // Apply hierarchy-based filtering
+        if ($currentUser->is_super_admin) {
+            // Super admins see all users - no filtering needed
+        } elseif ($currentUser->isOwner() || $currentUser->isAdmin()) {
+            // Organization owners/admins only see users in their organization
+            $query->where('organization_id', $currentUser->organization_id);
+        } else {
+            // Regular users should not access this panel (policy will prevent this)
+            // But as a safeguard, show only themselves
+            $query->where('id', $currentUser->id);
+        }
 
         if ($this->search) {
             $query->where(function($q) {
@@ -240,7 +253,15 @@ class UserManagement extends Component
         }
 
         if ($this->organizationFilter) {
-            $query->where('organization_id', $this->organizationFilter);
+            // For non-super-admins, ensure they can only filter within their org
+            if (!$currentUser->is_super_admin) {
+                if ($this->organizationFilter == $currentUser->organization_id) {
+                    $query->where('organization_id', $this->organizationFilter);
+                }
+                // Ignore invalid organization filter for non-super-admins
+            } else {
+                $query->where('organization_id', $this->organizationFilter);
+            }
         }
 
         if ($this->roleFilter) {
@@ -258,16 +279,37 @@ class UserManagement extends Component
             ])->find($this->selectedUserId);
         }
 
-        // Get all organizations for filters and forms
-        $organizations = Organization::orderBy('name')->get();
+        // Get organizations based on user's access level
+        if ($currentUser->is_super_admin) {
+            // Super admins see all organizations
+            $organizations = Organization::orderBy('name')->get();
+        } else {
+            // Org owners/admins only see their own organization
+            $organizations = Organization::where('id', $currentUser->organization_id)
+                ->orderBy('name')
+                ->get();
+        }
 
-        // Stats
-        $stats = [
-            'total' => User::count(),
-            'owners' => User::where('role', 'owner')->count(),
-            'admins' => User::where('role', 'admin')->count(),
-            'members' => User::where('role', 'member')->count(),
-        ];
+        // Stats - scoped to user's access level
+        if ($currentUser->is_super_admin) {
+            $stats = [
+                'total' => User::count(),
+                'owners' => User::where('role', 'owner')->count(),
+                'admins' => User::where('role', 'admin')->count(),
+                'members' => User::where('role', 'member')->count(),
+            ];
+        } else {
+            // Org owners/admins see stats for their organization only
+            $stats = [
+                'total' => User::where('organization_id', $currentUser->organization_id)->count(),
+                'owners' => User::where('organization_id', $currentUser->organization_id)
+                    ->where('role', 'owner')->count(),
+                'admins' => User::where('organization_id', $currentUser->organization_id)
+                    ->where('role', 'admin')->count(),
+                'members' => User::where('organization_id', $currentUser->organization_id)
+                    ->where('role', 'member')->count(),
+            ];
+        }
 
         return view('livewire.admin.user-management', [
             'users' => $users,

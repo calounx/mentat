@@ -59,15 +59,16 @@ class ProfileSettings extends Component
         $this->role = $this->viewingUser->role;
 
         // Determine if current user can edit the target user's role
-        $this->canEditRole = !$this->isViewingSelf &&
-            ($currentUser->isAdmin() || $currentUser->isOwner() || $currentUser->is_super_admin) &&
-            $currentUser->organization_id === $this->viewingUser->organization_id;
+        // Use the canManageUser helper which respects full hierarchy
+        $this->canEditRole = !$this->isViewingSelf && $currentUser->canManageUser($this->viewingUser);
     }
 
     public function updateProfile(): void
     {
-        // Only allow updating if viewing own profile or is admin
-        if (!$this->isViewingSelf && !auth()->user()->isAdmin()) {
+        // Use policy to check authorization - respects full hierarchy
+        try {
+            $this->authorize('update', $this->viewingUser);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             $this->error = 'You do not have permission to update this profile.';
             return;
         }
