@@ -4,6 +4,9 @@ namespace App\Services\Integration;
 
 use App\Models\VpsServer;
 use App\Models\Site;
+use App\Services\Reliability\CircuitBreaker\CircuitBreakerManager;
+use App\Services\Reliability\Correlation\HasCorrelationId;
+use App\Services\Reliability\Retry\HasRetry;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Crypt;
 use phpseclib3\Net\SSH2;
@@ -11,9 +14,17 @@ use phpseclib3\Crypt\PublicKeyLoader;
 
 class VPSManagerBridge
 {
+    use HasRetry, HasCorrelationId;
+
     private ?SSH2 $ssh = null;
     private string $vpsmanagerPath = '/opt/vpsmanager/bin/vpsmanager';
     private int $timeout = 120; // seconds
+    private CircuitBreakerManager $circuitBreaker;
+
+    public function __construct(CircuitBreakerManager $circuitBreaker)
+    {
+        $this->circuitBreaker = $circuitBreaker;
+    }
 
     /**
      * Connect to a VPS server via SSH.
@@ -69,10 +80,42 @@ class VPSManagerBridge
     }
 
     /**
-     * Execute a VPSManager command on the remote VPS.
+     * Execute a VPSManager command on the remote VPS with circuit breaker and retry.
      */
     public function execute(VpsServer $vps, string $command, array $args = []): array
     {
+        $correlationId = $this->correlationId();
+        $operationName = "vpsmanager-{$command}";
+
+        return $this->circuitBreaker->breaker('vpsmanager')->call(
+            callback: function () use ($vps, $command, $args, $correlationId, $operationName) {
+                return $this->retry('vpsmanager', function () use ($vps, $command, $args, $correlationId) {
+                    return $this->executeCommand($vps, $command, $args, $correlationId);
+                }, $operationName);
+            },
+            fallback: function () use ($vps, $command) {
+                $this->logWithCorrelation('warning', 'VPSManager circuit breaker open', [
+                    'vps' => $vps->hostname,
+                    'command' => $command,
+                ]);
+
+                return [
+                    'success' => false,
+                    'exit_code' => -1,
+                    'output' => 'VPSManager circuit breaker is open - service experiencing failures',
+                    'data' => null,
+                    'error' => 'circuit_breaker_open',
+                ];
+            }
+        );
+    }
+
+    /**
+     * Internal method to execute the actual SSH command.
+     */
+    private function executeCommand(VpsServer $vps, string $command, array $args, ?string $correlationId): array
+    {
+        $startTime = microtime(true);
         $this->connect($vps);
 
         // Build command with arguments - use sudo since we SSH as stilgar
@@ -94,7 +137,7 @@ class VPSManagerBridge
         // Always request JSON output
         $fullCommand .= ' --format=json 2>&1';
 
-        Log::info('VPSManager command', [
+        $this->logWithCorrelation('info', 'VPSManager command', [
             'vps' => $vps->hostname,
             'command' => $command,
             'full_command' => $fullCommand,
@@ -102,6 +145,7 @@ class VPSManagerBridge
 
         $output = $this->ssh->exec($fullCommand);
         $exitCode = $this->ssh->getExitStatus() ?? 0;
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
 
         $this->disconnect();
 
@@ -110,6 +154,7 @@ class VPSManagerBridge
             'exit_code' => $exitCode,
             'output' => $output,
             'data' => null,
+            'duration_ms' => $duration,
         ];
 
         // Try to parse JSON output
@@ -120,12 +165,18 @@ class VPSManagerBridge
             }
         }
 
-        Log::info('VPSManager result', [
+        $this->logWithCorrelation($result['success'] ? 'info' : 'warning', 'VPSManager result', [
             'vps' => $vps->hostname,
             'command' => $command,
             'success' => $result['success'],
             'exit_code' => $exitCode,
+            'duration_ms' => $duration,
         ]);
+
+        // Throw exception on failure to trigger retry
+        if (!$result['success']) {
+            throw new \RuntimeException("VPSManager command failed: {$command} (exit code: {$exitCode})");
+        }
 
         return $result;
     }

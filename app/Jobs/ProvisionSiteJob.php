@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\VpsServer;
 use App\Notifications\SiteProvisioningFailed;
 use App\Services\Integration\VPSManagerBridge;
+use App\Services\Reliability\Correlation\CorrelationId;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -46,6 +47,9 @@ class ProvisionSiteJob implements ShouldQueue
      */
     public function handle(VPSManagerBridge $vpsManager): void
     {
+        // Generate correlation ID for tracking this provisioning operation
+        $correlationId = CorrelationId::generate();
+
         $site = $this->site->fresh();
         $this->healingAttempts = $site->healing_attempts ?? [];
 
@@ -55,10 +59,17 @@ class ProvisionSiteJob implements ShouldQueue
             'last_healing_at' => now(),
         ]);
 
+        Log::withContext([
+            'correlation_id' => $correlationId,
+            'site_id' => $site->id,
+            'domain' => $site->domain,
+        ]);
+
         Log::info('ProvisionSiteJob: Starting site provisioning', [
             'site_id' => $site->id,
             'domain' => $site->domain,
             'attempt' => $site->provision_attempts,
+            'correlation_id' => $correlationId,
         ]);
 
         // Self-healing: Check if VPS is available
