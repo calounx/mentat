@@ -430,7 +430,7 @@ install_vpsmanager() {
 
         # Configure VPSManager with MariaDB credentials
         local vpsmanager_config="/opt/vpsmanager/config/vpsmanager.conf"
-        local mariadb_secrets="${DEPLOY_ROOT}/.mariadb-secrets"
+        local mariadb_secrets="/var/www/chom/shared/.mariadb-secrets"
 
         if [[ -f "$vpsmanager_config" ]] && [[ -f "$mariadb_secrets" ]]; then
             log_info "Configuring VPSManager with MariaDB credentials"

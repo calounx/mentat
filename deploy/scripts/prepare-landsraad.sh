@@ -283,10 +283,11 @@ EOSQL
         sudo sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=\"${mariadb_root_password}\"|" "$vpsmanager_config"
     fi
 
-    # Store in secrets file for reference
-    local secrets_file="${DEPLOY_ROOT}/.mariadb-secrets"
+    # Store in secrets file for reference (accessible by deploy user)
+    local secrets_file="/var/www/chom/shared/.mariadb-secrets"
     echo "MARIADB_ROOT_PASSWORD=${mariadb_root_password}" | sudo tee "$secrets_file" > /dev/null
-    sudo chmod 600 "$secrets_file"
+    sudo chmod 640 "$secrets_file"
+    sudo chown "${DEPLOY_USER}:www-data" "$secrets_file"
 
     log_success "MariaDB installed and secured"
     log_info "MariaDB root password stored in: $secrets_file"
