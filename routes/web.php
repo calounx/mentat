@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Webhooks\StripeWebhookController;
 use App\Livewire\Admin\AdminDashboard;
 use App\Livewire\Admin\OrganizationManagement;
@@ -16,6 +18,7 @@ use App\Livewire\Profile\ProfileSettings;
 use App\Livewire\Sites\SiteCreate;
 use App\Livewire\Sites\SiteList;
 use App\Livewire\Team\TeamManager;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,6 +26,27 @@ use Illuminate\Support\Facades\Route;
 | Web Routes
 |--------------------------------------------------------------------------
 */
+
+// Health Check (must be public and unrestricted)
+Route::get('/health', function () {
+    try {
+        // Test database connection
+        DB::connection()->getPdo();
+        $dbHealthy = true;
+    } catch (\Exception $e) {
+        $dbHealthy = false;
+    }
+
+    $status = $dbHealthy ? 200 : 503;
+
+    return response()->json([
+        'status' => $dbHealthy ? 'healthy' : 'unhealthy',
+        'timestamp' => now()->toIso8601String(),
+        'checks' => [
+            'database' => $dbHealthy,
+        ],
+    ], $status);
+})->name('health');
 
 // Stripe Webhooks (must be before CSRF middleware)
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])
@@ -110,6 +134,19 @@ Route::middleware('guest')->group(function () {
 
         return redirect()->route('dashboard');
     });
+
+    // Password Reset Routes
+    Route::get('/forgot-password', [ForgotPasswordController::class, 'showLinkRequestForm'])
+        ->name('password.request');
+
+    Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLinkEmail'])
+        ->name('password.email');
+
+    Route::get('/reset-password/{token}', [ResetPasswordController::class, 'showResetForm'])
+        ->name('password.reset');
+
+    Route::post('/reset-password', [ResetPasswordController::class, 'reset'])
+        ->name('password.update');
 });
 
 Route::post('/logout', function () {
