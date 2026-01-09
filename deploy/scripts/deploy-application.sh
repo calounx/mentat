@@ -340,6 +340,54 @@ optimize_application() {
     log_success "Application optimized"
 }
 
+# Verify critical routes exist (P1/P2 fix)
+verify_critical_routes() {
+    local release_path="$1"
+
+    log_step "Verifying critical routes exist"
+
+    cd "$release_path"
+
+    # Check password reset routes (P1 fix)
+    if ! php artisan route:list --path=password 2>/dev/null | grep -q "password.request"; then
+        log_error "Password reset routes missing"
+        log_info "Expected routes: password.request, password.email, password.reset, password.update"
+        return 1
+    fi
+    log_success "Password reset routes present"
+
+    # Check health endpoint (P2 fix)
+    if ! php artisan route:list --path=health 2>/dev/null | grep -q "health"; then
+        log_error "Health endpoint route missing"
+        log_info "Expected route: /health or /api/health"
+        return 1
+    fi
+    log_success "Health endpoint route present"
+
+    log_success "All critical routes verified"
+    return 0
+}
+
+# Clear failed queue jobs (prevent job accumulation)
+clear_failed_jobs() {
+    local current_dir="$1"
+
+    log_step "Checking for failed queue jobs"
+
+    cd "$current_dir"
+
+    # Show failed jobs count
+    local failed_count=$(php artisan queue:failed --json 2>/dev/null | jq '. | length' 2>/dev/null || echo "0")
+
+    if [[ "$failed_count" =~ ^[0-9]+$ ]] && [[ "$failed_count" -gt 0 ]]; then
+        log_info "Found ${failed_count} failed jobs, clearing..."
+        php artisan queue:flush 2>&1 | tee -a "$LOG_FILE"
+        log_success "Cleared ${failed_count} failed jobs"
+    else
+        log_success "No failed jobs to clear"
+    fi
+}
+
 # Set proper permissions
 set_permissions() {
     local release_path="$1"
@@ -656,6 +704,7 @@ main() {
     # Pre-switch validation (structural checks only - no HTTP, symlink doesn't exist yet)
     log_section "Pre-Switch Validation"
     validate_release_structure "$RELEASE_PATH"
+    verify_critical_routes "$RELEASE_PATH"
 
     # Switch release
     log_section "Activating New Release"
@@ -667,6 +716,10 @@ main() {
     log_info "Waiting 5 seconds for services to stabilize..."
     sleep 5  # Give services time to reload and stabilize
     run_health_checks "$CURRENT_LINK"
+
+    # Clear failed queue jobs
+    log_section "Queue Maintenance"
+    clear_failed_jobs "$CURRENT_LINK"
 
     # Cleanup
     log_section "Cleanup"

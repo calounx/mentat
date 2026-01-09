@@ -295,6 +295,56 @@ EOSQL
     mariadb --version 2>&1 | tee -a "$LOG_FILE"
 }
 
+# Configure PostgreSQL exporter with proper credentials (P2 fix)
+configure_postgres_exporter() {
+    log_step "Configuring PostgreSQL exporter with proper credentials"
+
+    # Ensure exporters config directory exists
+    sudo mkdir -p /etc/exporters
+
+    # Create postgres_exporter user if doesn't exist
+    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='postgres_exporter'" | grep -q 1; then
+        log_info "Creating postgres_exporter user"
+
+        # Generate secure password
+        local pg_password=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
+
+        sudo -u postgres psql <<-EOSQL
+            CREATE USER postgres_exporter WITH PASSWORD '${pg_password}';
+            GRANT pg_monitor TO postgres_exporter;
+EOSQL
+
+        log_success "postgres_exporter user created"
+    else
+        log_info "postgres_exporter user already exists, regenerating password"
+        local pg_password=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        sudo -u postgres psql -c "ALTER USER postgres_exporter WITH PASSWORD '${pg_password}';"
+    fi
+
+    # URL encode password for connection string
+    local encoded_password=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${pg_password}'))")
+
+    # Save to exporter config
+    echo "DATA_SOURCE_NAME=postgresql://postgres_exporter:${encoded_password}@localhost:5432/postgres?sslmode=disable" | \
+        sudo tee /etc/exporters/postgres_exporter.env > /dev/null
+
+    sudo chmod 600 /etc/exporters/postgres_exporter.env
+
+    # Ensure exporters user exists before changing ownership
+    if ! id -u exporters &>/dev/null; then
+        sudo useradd --system --no-create-home --shell /usr/sbin/nologin exporters
+    fi
+    sudo chown exporters:exporters /etc/exporters/postgres_exporter.env
+
+    # Restart postgres_exporter if it's running
+    if systemctl is-active --quiet postgres_exporter 2>/dev/null; then
+        log_info "Restarting postgres_exporter"
+        sudo systemctl restart postgres_exporter
+    fi
+
+    log_success "PostgreSQL exporter configured with proper authentication"
+}
+
 # Install Redis
 install_redis() {
     log_step "Installing Redis"
@@ -926,6 +976,7 @@ main() {
     install_nodejs
     install_postgresql
     install_mariadb
+    configure_postgres_exporter
     install_redis
     install_nginx
     configure_nginx

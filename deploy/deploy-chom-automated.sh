@@ -600,10 +600,12 @@ phase_prepare_landsraad() {
             "${SCRIPT_DIR}/scripts/setup-ssl.sh" \
             "${SCRIPT_DIR}/scripts/health-check.sh" \
             "${SCRIPT_DIR}/scripts/rollback.sh" \
+            "${SCRIPT_DIR}/scripts/verify-deployment.sh" \
             "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || {
             log_warning "Some deployment scripts not found, copying available ones"
             sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
                 "${SCRIPT_DIR}/scripts/deploy-exporters.sh" \
+                "${SCRIPT_DIR}/scripts/verify-deployment.sh" \
                 "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" || {
                 log_error "Failed to copy prepare-landsraad.sh"
                 return 1
@@ -660,6 +662,7 @@ phase_deploy_application() {
             "${SCRIPT_DIR}/scripts/deploy-exporters.sh" \
             "${SCRIPT_DIR}/scripts/backup-before-deploy.sh" \
             "${SCRIPT_DIR}/scripts/health-check.sh" \
+            "${SCRIPT_DIR}/scripts/verify-deployment.sh" \
             "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/scripts/" 2>/dev/null || true
 
         sudo -u "$DEPLOY_USER" scp -r "${SCRIPT_DIR}/utils/"* \
@@ -998,6 +1001,20 @@ phase_verification() {
             log_success "Grafana is healthy"
         else
             log_warning "Grafana health check failed"
+        fi
+
+        # Run comprehensive verification on landsraad
+        log_step "Running comprehensive deployment verification on landsraad"
+        if sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "bash /tmp/chom-deploy/scripts/verify-deployment.sh" 2>&1 | tee -a "$LOG_FILE"; then
+            log_success "Deployment verification passed on landsraad"
+        else
+            local exit_code=${PIPESTATUS[0]}
+            if [[ $exit_code -eq 2 ]]; then
+                log_warning "Deployment verification completed with warnings on landsraad"
+            else
+                log_error "Deployment verification failed on landsraad"
+                log_warning "Review verification output above for details"
+            fi
         fi
 
     else
