@@ -406,6 +406,44 @@ reload_services() {
     log_success "Services reloaded"
 }
 
+# Install or update VPSManager
+install_vpsmanager() {
+    log_step "Installing/updating VPSManager"
+
+    local vpsmanager_install_script="${DEPLOY_ROOT}/vpsmanager/install.sh"
+
+    if [[ ! -f "$vpsmanager_install_script" ]]; then
+        log_error "VPSManager install script not found: $vpsmanager_install_script"
+        log_warning "Skipping VPSManager installation"
+        return 1
+    fi
+
+    if [[ ! -x "$vpsmanager_install_script" ]]; then
+        log_info "Making VPSManager install script executable"
+        chmod +x "$vpsmanager_install_script"
+    fi
+
+    # Run installation (non-interactive)
+    log_info "Running VPSManager installer..."
+    if sudo bash "$vpsmanager_install_script" install 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "VPSManager installed successfully"
+
+        # Verify installation
+        if command -v vpsmanager &> /dev/null; then
+            local version=$(sudo vpsmanager --version 2>&1 | head -1 || echo "unknown")
+            log_info "VPSManager version: $version"
+        else
+            log_warning "VPSManager command not found in PATH"
+        fi
+
+        return 0
+    else
+        log_error "VPSManager installation failed"
+        log_warning "Site provisioning may not work without VPSManager"
+        return 1
+    fi
+}
+
 # Clean old releases
 clean_old_releases() {
     log_step "Cleaning old releases (keeping last $KEEP_RELEASES)"
@@ -581,6 +619,10 @@ main() {
     sudo chmod 600 "${ssh_key_path}" 2>/dev/null || true
     sudo chmod 644 "${ssh_key_path}.pub" 2>/dev/null || true
     sudo chown ${DEPLOY_USER}:www-data "${ssh_key_path}" "${ssh_key_path}.pub" 2>/dev/null || true
+
+    # Install/Update VPSManager
+    log_section "Installing VPSManager"
+    install_vpsmanager
 
     # Deploy application
     log_section "Deploying Application"
