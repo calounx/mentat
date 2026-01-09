@@ -164,7 +164,8 @@ class ObservabilityHealthService
             callback: function () use ($url) {
                 return $this->retry('loki', function () use ($url) {
                     $startTime = microtime(true);
-                    $response = Http::timeout(self::TIMEOUT)->get("{$url}/ready");
+                    // Use buildinfo endpoint as /ready is not accessible through nginx proxy
+                    $response = Http::timeout(self::TIMEOUT)->get("{$url}/api/v1/status/buildinfo");
                     $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
                     if ($response->successful()) {

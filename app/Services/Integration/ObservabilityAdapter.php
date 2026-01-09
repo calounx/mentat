@@ -401,7 +401,8 @@ class ObservabilityAdapter
     public function isLokiHealthy(): bool
     {
         try {
-            $response = Http::timeout(5)->get("{$this->lokiUrl}/ready");
+            // Use buildinfo endpoint as /ready is not accessible through nginx proxy
+            $response = Http::timeout(5)->get("{$this->lokiUrl}/api/v1/status/buildinfo");
             return $response->successful();
         } catch (\Exception $e) {
             return false;
