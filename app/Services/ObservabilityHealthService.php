@@ -4,14 +4,26 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Services\Reliability\CircuitBreaker\CircuitBreakerManager;
+use App\Services\Reliability\CircuitBreaker\CircuitOpenException;
+use App\Services\Reliability\Retry\HasRetry;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ObservabilityHealthService
 {
+    use HasRetry;
+
     private const CACHE_TTL = 30; // seconds
     private const TIMEOUT = 5; // seconds
+
+    private CircuitBreakerManager $circuitBreaker;
+
+    public function __construct(CircuitBreakerManager $circuitBreaker)
+    {
+        $this->circuitBreaker = $circuitBreaker;
+    }
 
     /**
      * Check overall observability stack health
@@ -40,7 +52,7 @@ class ObservabilityHealthService
     }
 
     /**
-     * Check Prometheus health
+     * Check Prometheus health with circuit breaker and retry
      *
      * @return array
      */
@@ -54,40 +66,40 @@ class ObservabilityHealthService
             ];
         }
 
-        try {
-            $startTime = microtime(true);
-            $response = Http::timeout(self::TIMEOUT)->get("{$url}/-/healthy");
-            $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+        return $this->circuitBreaker->breaker('prometheus')->call(
+            callback: function () use ($url) {
+                return $this->retry('prometheus', function () use ($url) {
+                    $startTime = microtime(true);
+                    $response = Http::timeout(self::TIMEOUT)->get("{$url}/-/healthy");
+                    $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            if ($response->successful()) {
+                    if ($response->successful()) {
+                        return [
+                            'status' => 'healthy',
+                            'response_time_ms' => $responseTime,
+                            'url' => $url,
+                        ];
+                    }
+
+                    return [
+                        'status' => 'unhealthy',
+                        'message' => "HTTP {$response->status()}",
+                        'url' => $url,
+                    ];
+                }, 'prometheus-health-check');
+            },
+            fallback: function () use ($url) {
                 return [
-                    'status' => 'healthy',
-                    'response_time_ms' => $responseTime,
+                    'status' => 'circuit_open',
+                    'message' => 'Circuit breaker is open - service experiencing failures',
                     'url' => $url,
                 ];
             }
-
-            return [
-                'status' => 'unhealthy',
-                'message' => "HTTP {$response->status()}",
-                'url' => $url,
-            ];
-        } catch (\Exception $e) {
-            Log::warning('Prometheus health check failed', [
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'unhealthy',
-                'message' => $e->getMessage(),
-                'url' => $url,
-            ];
-        }
+        );
     }
 
     /**
-     * Check Grafana health
+     * Check Grafana health with circuit breaker and retry
      *
      * @return array
      */
@@ -101,40 +113,40 @@ class ObservabilityHealthService
             ];
         }
 
-        try {
-            $startTime = microtime(true);
-            $response = Http::timeout(self::TIMEOUT)->get("{$url}/api/health");
-            $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+        return $this->circuitBreaker->breaker('grafana')->call(
+            callback: function () use ($url) {
+                return $this->retry('grafana', function () use ($url) {
+                    $startTime = microtime(true);
+                    $response = Http::timeout(self::TIMEOUT)->get("{$url}/api/health");
+                    $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            if ($response->successful()) {
+                    if ($response->successful()) {
+                        return [
+                            'status' => 'healthy',
+                            'response_time_ms' => $responseTime,
+                            'url' => $url,
+                        ];
+                    }
+
+                    return [
+                        'status' => 'unhealthy',
+                        'message' => "HTTP {$response->status()}",
+                        'url' => $url,
+                    ];
+                }, 'grafana-health-check');
+            },
+            fallback: function () use ($url) {
                 return [
-                    'status' => 'healthy',
-                    'response_time_ms' => $responseTime,
+                    'status' => 'circuit_open',
+                    'message' => 'Circuit breaker is open - service experiencing failures',
                     'url' => $url,
                 ];
             }
-
-            return [
-                'status' => 'unhealthy',
-                'message' => "HTTP {$response->status()}",
-                'url' => $url,
-            ];
-        } catch (\Exception $e) {
-            Log::warning('Grafana health check failed', [
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'unhealthy',
-                'message' => $e->getMessage(),
-                'url' => $url,
-            ];
-        }
+        );
     }
 
     /**
-     * Check Loki health
+     * Check Loki health with circuit breaker and retry
      *
      * @return array
      */
@@ -148,40 +160,40 @@ class ObservabilityHealthService
             ];
         }
 
-        try {
-            $startTime = microtime(true);
-            $response = Http::timeout(self::TIMEOUT)->get("{$url}/ready");
-            $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+        return $this->circuitBreaker->breaker('loki')->call(
+            callback: function () use ($url) {
+                return $this->retry('loki', function () use ($url) {
+                    $startTime = microtime(true);
+                    $response = Http::timeout(self::TIMEOUT)->get("{$url}/ready");
+                    $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            if ($response->successful()) {
+                    if ($response->successful()) {
+                        return [
+                            'status' => 'healthy',
+                            'response_time_ms' => $responseTime,
+                            'url' => $url,
+                        ];
+                    }
+
+                    return [
+                        'status' => 'unhealthy',
+                        'message' => "HTTP {$response->status()}",
+                        'url' => $url,
+                    ];
+                }, 'loki-health-check');
+            },
+            fallback: function () use ($url) {
                 return [
-                    'status' => 'healthy',
-                    'response_time_ms' => $responseTime,
+                    'status' => 'circuit_open',
+                    'message' => 'Circuit breaker is open - service experiencing failures',
                     'url' => $url,
                 ];
             }
-
-            return [
-                'status' => 'unhealthy',
-                'message' => "HTTP {$response->status()}",
-                'url' => $url,
-            ];
-        } catch (\Exception $e) {
-            Log::warning('Loki health check failed', [
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'unhealthy',
-                'message' => $e->getMessage(),
-                'url' => $url,
-            ];
-        }
+        );
     }
 
     /**
-     * Check Alertmanager health
+     * Check Alertmanager health with circuit breaker and retry
      *
      * @return array
      */
@@ -195,36 +207,36 @@ class ObservabilityHealthService
             ];
         }
 
-        try {
-            $startTime = microtime(true);
-            $response = Http::timeout(self::TIMEOUT)->get("{$url}/-/healthy");
-            $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+        return $this->circuitBreaker->breaker('alertmanager')->call(
+            callback: function () use ($url) {
+                return $this->retry('alertmanager', function () use ($url) {
+                    $startTime = microtime(true);
+                    $response = Http::timeout(self::TIMEOUT)->get("{$url}/-/healthy");
+                    $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            if ($response->successful()) {
+                    if ($response->successful()) {
+                        return [
+                            'status' => 'healthy',
+                            'response_time_ms' => $responseTime,
+                            'url' => $url,
+                        ];
+                    }
+
+                    return [
+                        'status' => 'unhealthy',
+                        'message' => "HTTP {$response->status()}",
+                        'url' => $url,
+                    ];
+                }, 'alertmanager-health-check');
+            },
+            fallback: function () use ($url) {
                 return [
-                    'status' => 'healthy',
-                    'response_time_ms' => $responseTime,
+                    'status' => 'circuit_open',
+                    'message' => 'Circuit breaker is open - service experiencing failures',
                     'url' => $url,
                 ];
             }
-
-            return [
-                'status' => 'unhealthy',
-                'message' => "HTTP {$response->status()}",
-                'url' => $url,
-            ];
-        } catch (\Exception $e) {
-            Log::warning('Alertmanager health check failed', [
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'unhealthy',
-                'message' => $e->getMessage(),
-                'url' => $url,
-            ];
-        }
+        );
     }
 
     /**
@@ -237,8 +249,8 @@ class ObservabilityHealthService
     {
         $statuses = array_column($components, 'status');
 
-        // If any component is unhealthy, overall is degraded
-        if (in_array('unhealthy', $statuses)) {
+        // If any component is unhealthy or circuit is open, overall is degraded
+        if (in_array('unhealthy', $statuses) || in_array('circuit_open', $statuses)) {
             return 'degraded';
         }
 
