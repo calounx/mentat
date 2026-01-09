@@ -237,6 +237,63 @@ install_postgresql() {
     sudo -u postgres psql --version | tee -a "$LOG_FILE"
 }
 
+# Install MariaDB (for customer site databases)
+install_mariadb() {
+    log_step "Installing MariaDB"
+
+    # Check if MariaDB is already installed
+    if command -v mariadb &>/dev/null || command -v mysql &>/dev/null; then
+        log_success "MariaDB already installed"
+        mariadb --version 2>&1 | tee -a "$LOG_FILE" || mysql --version 2>&1 | tee -a "$LOG_FILE"
+        return 0
+    fi
+
+    # Install MariaDB
+    sudo apt-get install -y mariadb-server mariadb-client
+
+    # Enable and start MariaDB
+    sudo systemctl enable mariadb
+    sudo systemctl start mariadb
+
+    # Secure installation (automated)
+    log_info "Securing MariaDB installation"
+
+    # Generate root password for MariaDB
+    local mariadb_root_password="${MARIADB_ROOT_PASSWORD:-$(openssl rand -base64 32)}"
+
+    # Run mysql_secure_installation steps programmatically
+    sudo mariadb <<-EOSQL
+        -- Set root password
+        ALTER USER 'root'@'localhost' IDENTIFIED BY '${mariadb_root_password}';
+        -- Remove anonymous users
+        DELETE FROM mysql.user WHERE User='';
+        -- Disallow root login remotely
+        DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+        -- Remove test database
+        DROP DATABASE IF EXISTS test;
+        DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+        -- Reload privilege tables
+        FLUSH PRIVILEGES;
+EOSQL
+
+    # Store MariaDB root password in VPSManager config
+    local vpsmanager_config="/opt/vpsmanager/config/vpsmanager.conf"
+    if [[ -f "$vpsmanager_config" ]]; then
+        log_info "Updating VPSManager config with MariaDB credentials"
+        sudo sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=\"${mariadb_root_password}\"|" "$vpsmanager_config"
+    fi
+
+    # Store in secrets file for reference
+    local secrets_file="${DEPLOY_ROOT}/.mariadb-secrets"
+    echo "MARIADB_ROOT_PASSWORD=${mariadb_root_password}" | sudo tee "$secrets_file" > /dev/null
+    sudo chmod 600 "$secrets_file"
+
+    log_success "MariaDB installed and secured"
+    log_info "MariaDB root password stored in: $secrets_file"
+
+    mariadb --version 2>&1 | tee -a "$LOG_FILE"
+}
+
 # Install Redis
 install_redis() {
     log_step "Installing Redis"
@@ -867,6 +924,7 @@ main() {
     install_composer
     install_nodejs
     install_postgresql
+    install_mariadb
     install_redis
     install_nginx
     configure_nginx

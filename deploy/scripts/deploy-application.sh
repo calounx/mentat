@@ -428,6 +428,25 @@ install_vpsmanager() {
     if sudo bash "$vpsmanager_install_script" install 2>&1 | tee -a "$LOG_FILE"; then
         log_success "VPSManager installed successfully"
 
+        # Configure VPSManager with MariaDB credentials
+        local vpsmanager_config="/opt/vpsmanager/config/vpsmanager.conf"
+        local mariadb_secrets="${DEPLOY_ROOT}/.mariadb-secrets"
+
+        if [[ -f "$vpsmanager_config" ]] && [[ -f "$mariadb_secrets" ]]; then
+            log_info "Configuring VPSManager with MariaDB credentials"
+
+            # Source MariaDB secrets
+            # shellcheck source=/dev/null
+            source "$mariadb_secrets"
+
+            # Update VPSManager config
+            sudo sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=\"${MARIADB_ROOT_PASSWORD}\"|" "$vpsmanager_config"
+            log_success "VPSManager configured with MariaDB credentials"
+        elif [[ ! -f "$mariadb_secrets" ]]; then
+            log_warning "MariaDB secrets file not found: $mariadb_secrets"
+            log_warning "VPSManager will use empty MariaDB root password (if MariaDB is secured, sites won't provision)"
+        fi
+
         # Verify installation
         if command -v vpsmanager &> /dev/null; then
             local version=$(sudo vpsmanager --version 2>&1 | head -1 || echo "unknown")
