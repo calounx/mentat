@@ -11,7 +11,8 @@ global:
 
 alerting:
   alertmanagers:
-    - static_configs:
+    - path_prefix: /alertmanager
+      static_configs:
         - targets:
             - localhost:9093
 

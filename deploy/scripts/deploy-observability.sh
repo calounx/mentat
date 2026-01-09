@@ -233,6 +233,38 @@ deploy_configuration() {
     # Copy AlertManager configuration if exists
     if [[ -f "${SRC_CONFIG_DIR}/alertmanager.yml" ]]; then
         sudo cp "${SRC_CONFIG_DIR}/alertmanager.yml" "${CONFIG_DIR}/alertmanager/"
+
+        # Inject SMTP settings from database if CHOM app is available
+        log_step "Configuring AlertManager SMTP from database"
+        CHOM_APP_DIR="/var/www/chom/current"
+        if [[ -f "${CHOM_APP_DIR}/artisan" ]]; then
+            # Get SMTP settings from database
+            SMTP_FROM=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.from_address', 'noreply@example.com');" 2>/dev/null | tail -1)
+            SMTP_HOST=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.host', '127.0.0.1');" 2>/dev/null | tail -1)
+            SMTP_PORT=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.port', '587');" 2>/dev/null | tail -1)
+            SMTP_USERNAME=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.username', '');" 2>/dev/null | tail -1)
+            SMTP_PASSWORD=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.password', '');" 2>/dev/null | tail -1)
+            SMTP_ENCRYPTION=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.encryption', 'tls');" 2>/dev/null | tail -1)
+
+            # Determine if TLS is required
+            SMTP_REQUIRE_TLS="true"
+            if [[ "$SMTP_ENCRYPTION" == "null" ]] || [[ -z "$SMTP_ENCRYPTION" ]]; then
+                SMTP_REQUIRE_TLS="false"
+            fi
+
+            # Substitute placeholders in alertmanager.yml
+            sudo sed -i "s|__SMTP_FROM__|${SMTP_FROM}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
+            sudo sed -i "s|__SMTP_SMARTHOST__|${SMTP_HOST}:${SMTP_PORT}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
+            sudo sed -i "s|__SMTP_USERNAME__|${SMTP_USERNAME}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
+            sudo sed -i "s|__SMTP_PASSWORD__|${SMTP_PASSWORD}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
+            sudo sed -i "s|__SMTP_REQUIRE_TLS__|${SMTP_REQUIRE_TLS}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
+            sudo sed -i "s|__ALERT_EMAIL__|${SMTP_FROM}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
+
+            log_success "AlertManager SMTP configured from database (${SMTP_HOST}:${SMTP_PORT})"
+        else
+            log_warning "CHOM app not found - using placeholder SMTP settings"
+        fi
+
         sudo chown observability:observability "${CONFIG_DIR}/alertmanager/alertmanager.yml"
         log_success "AlertManager configuration deployed"
     else

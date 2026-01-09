@@ -1,12 +1,13 @@
 # AlertManager configuration for CHOM
+# SMTP settings will be injected by deployment script from database
 global:
   resolve_timeout: 5m
-  # SMTP settings - uncomment and configure for email alerts
-  # smtp_from: 'alertmanager@chom.arewel.com'
-  # smtp_smarthost: 'smtp.example.com:587'
-  # smtp_auth_username: 'alerts@example.com'
-  # smtp_auth_password: 'YOUR_SMTP_PASSWORD'
-  # smtp_require_tls: true
+  # SMTP configuration - populated from system_settings table
+  smtp_from: '__SMTP_FROM__'
+  smtp_smarthost: '__SMTP_SMARTHOST__'
+  smtp_auth_username: '__SMTP_USERNAME__'
+  smtp_auth_password: '__SMTP_PASSWORD__'
+  smtp_require_tls: __SMTP_REQUIRE_TLS__
 
 # Route configuration
 route:
@@ -51,22 +52,40 @@ receivers:
   # Default receiver - logs to stdout (visible in journalctl)
   - name: 'default'
 
-  # Critical alerts receiver
+  # Critical alerts receiver - sends email notifications
   - name: 'critical-alerts'
-    # Uncomment and configure for Slack integration:
-    # slack_configs:
-    #   - api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
-    #     channel: '#alerts-critical'
-    #     username: 'AlertManager'
-    #     title: '{{ .GroupLabels.alertname }}'
-    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
-    #     send_resolved: true
+    email_configs:
+      - to: '__ALERT_EMAIL__'
+        headers:
+          Subject: '[CRITICAL] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
+        html: |
+          <h2 style="color: #dc2626;">🚨 Critical Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .GroupLabels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .GroupLabels.severity }}</p>
+          {{ range .Alerts }}
+          <hr>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+          <p><strong>Started:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05" }}</p>
+          {{ end }}
+        send_resolved: true
 
-  # Warning alerts receiver
+  # Warning alerts receiver - sends email notifications
   - name: 'warning-alerts'
-    # Uncomment and configure for email alerts:
-    # email_configs:
-    #   - to: 'ops-team@example.com'
-    #     headers:
-    #       Subject: '[WARNING] {{ .GroupLabels.alertname }}'
-    #     send_resolved: true
+    email_configs:
+      - to: '__ALERT_EMAIL__'
+        headers:
+          Subject: '[WARNING] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
+        html: |
+          <h2 style="color: #f59e0b;">⚠️ Warning Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .GroupLabels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .GroupLabels.severity }}</p>
+          {{ range .Alerts }}
+          <hr>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+          <p><strong>Started:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05" }}</p>
+          {{ end }}
+        send_resolved: true
