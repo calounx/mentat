@@ -2,7 +2,27 @@
 
 A multi-tenant SaaS platform for WordPress hosting management with integrated observability.
 
-## Features
+## New Features (v2.2.0)
+
+**System Health & Self-Healing**
+- Production-ready `/health` endpoint for external monitoring
+- Automated recovery from common failures (database, cache, services)
+- Circuit breakers to prevent cascading failures
+- Graceful degradation when full recovery isn't possible
+
+**VPSManager UI Integration**
+- Manage infrastructure directly from CHOM dashboard
+- Real-time server health monitoring
+- Site deployment and management interface
+- Visual server resource utilization
+
+**Enhanced Observability**
+- Loki multi-tenancy for complete log isolation between organizations
+- New Grafana dashboards: System Health, Multi-Tenancy Isolation, Self-Healing Metrics
+- Per-tenant resource limits and monitoring
+- Blackbox probing for external availability monitoring
+
+## Core Features
 
 - **Multi-tenant Architecture** - Organizations, tenants, and team management with role-based access control
 - **Site Management** - WordPress, HTML, and Laravel site provisioning with SSL certificates
@@ -194,6 +214,23 @@ deploy/                # Infrastructure deployment scripts
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+## Documentation
+
+Comprehensive documentation is available in the `/docs` directory:
+
+- **[Documentation Hub](docs/index.md)** - Start here for all documentation
+- **[Architecture](docs/architecture/)** - System design and multi-tenancy security
+- **[Operations](docs/operations/)** - Health checks, observability, and self-healing
+- **[Development](docs/development/)** - Testing and contribution guidelines
+- **[Deployment](docs/deployment/)** - Production deployment procedures
+
+Quick links:
+- [Multi-Tenancy Security](docs/architecture/multi-tenancy.md)
+- [Testing Guide](docs/development/testing.md)
+- [Observability Stack](docs/operations/observability.md)
+- [Health Checks](docs/operations/health-checks.md)
+- [Self-Healing](docs/operations/self-healing.md)
 
 ## Support
 

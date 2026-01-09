@@ -349,6 +349,184 @@ class MetricsCollector
     }
 
     /**
+     * Record cross-tenant access attempt (security violation).
+     *
+     * @param string $tenantId Requesting tenant ID
+     * @param string $targetTenantId Target tenant ID attempted
+     * @param string $resource Resource type accessed
+     * @return void
+     */
+    public function recordCrossTenantAccessAttempt(string $tenantId, string $targetTenantId, string $resource): void
+    {
+        $labels = [
+            'tenant_id' => $tenantId,
+            'target_tenant_id' => $targetTenantId,
+            'resource' => $resource,
+        ];
+
+        $this->incrementCounter('security_cross_tenant_access_total', $labels);
+
+        // Also log this as a critical security event
+        \Log::critical('Cross-tenant access attempt detected', [
+            'tenant_id' => $tenantId,
+            'target_tenant_id' => $targetTenantId,
+            'resource' => $resource,
+        ]);
+    }
+
+    /**
+     * Record tenant isolation violation.
+     *
+     * @param string $violationType Type of violation (data_leak, query_breach, file_access, etc.)
+     * @param string|null $tenantId Tenant ID if applicable
+     * @param array $context Additional context
+     * @return void
+     */
+    public function recordIsolationViolation(string $violationType, ?string $tenantId = null, array $context = []): void
+    {
+        $labels = ['violation_type' => $violationType];
+
+        if ($tenantId) {
+            $labels['tenant_id'] = $tenantId;
+        }
+
+        $this->incrementCounter('security_isolation_violations_total', $labels);
+
+        // Log critical security event
+        \Log::critical('Tenant isolation violation detected', array_merge([
+            'violation_type' => $violationType,
+            'tenant_id' => $tenantId,
+        ], $context));
+    }
+
+    /**
+     * Record orphaned resources detected by health checks.
+     *
+     * @param string $resourceType Type of orphaned resource (site, user, backup, etc.)
+     * @param int $count Number of orphaned resources
+     * @return void
+     */
+    public function recordOrphanedResources(string $resourceType, int $count): void
+    {
+        $labels = ['resource_type' => $resourceType];
+
+        $this->setGauge('health_orphaned_resources_total', (float)$count, $labels);
+
+        if ($count > 0) {
+            \Log::warning('Orphaned resources detected', [
+                'resource_type' => $resourceType,
+                'count' => $count,
+            ]);
+        }
+    }
+
+    /**
+     * Record self-healing operation result.
+     *
+     * @param string $healingType Type of self-healing operation
+     * @param bool $success Whether operation succeeded
+     * @param string|null $failureReason Reason for failure if applicable
+     * @return void
+     */
+    public function recordSelfHealing(string $healingType, bool $success, ?string $failureReason = null): void
+    {
+        $labels = [
+            'healing_type' => $healingType,
+            'status' => $success ? 'success' : 'failed',
+        ];
+
+        $this->incrementCounter('health_self_healing_total', $labels);
+
+        if (!$success) {
+            $failureLabels = [
+                'failure_type' => $healingType,
+                'reason' => $failureReason ?? 'unknown',
+            ];
+            $this->incrementCounter('health_self_healing_failures_total', $failureLabels);
+
+            \Log::error('Self-healing operation failed', [
+                'healing_type' => $healingType,
+                'reason' => $failureReason,
+            ]);
+        }
+    }
+
+    /**
+     * Record site isolation status.
+     *
+     * @param string $siteId Site ID
+     * @param string $tenantId Tenant ID
+     * @param string $vpsInstance VPS instance hostname
+     * @param bool $userIsolationOk Whether OS-level user isolation is working
+     * @param string $isolationStatus Status: isolated, shared, violation
+     * @return void
+     */
+    public function recordSiteIsolationStatus(
+        string $siteId,
+        string $tenantId,
+        string $vpsInstance,
+        bool $userIsolationOk,
+        string $isolationStatus
+    ): void {
+        $labels = [
+            'site_id' => $siteId,
+            'tenant_id' => $tenantId,
+            'vps_instance' => $vpsInstance,
+        ];
+
+        $this->setGauge('site_user_isolation_ok', $userIsolationOk ? 1.0 : 0.0, $labels);
+        $this->setGauge('site_isolation_status', $this->mapIsolationStatus($isolationStatus), array_merge($labels, [
+            'status' => $isolationStatus,
+        ]));
+    }
+
+    /**
+     * Record VPS capacity metrics.
+     *
+     * @param string $vpsInstance VPS instance hostname
+     * @param int $currentSites Current number of sites
+     * @param int $maxSites Maximum sites capacity
+     * @return void
+     */
+    public function recordVpsCapacity(string $vpsInstance, int $currentSites, int $maxSites): void
+    {
+        $labels = ['vps_instance' => $vpsInstance];
+
+        $this->setGauge('vps_capacity_sites_current', (float)$currentSites, $labels);
+        $this->setGauge('vps_capacity_sites_max', (float)$maxSites, $labels);
+        $this->setGauge('vps_capacity_utilization', $maxSites > 0 ? $currentSites / $maxSites : 0.0, $labels);
+    }
+
+    /**
+     * Record tenant site limit.
+     *
+     * @param string $tenantId Tenant ID
+     * @param int $siteLimit Maximum sites allowed for tenant
+     * @return void
+     */
+    public function recordTenantSiteLimit(string $tenantId, int $siteLimit): void
+    {
+        $labels = ['tenant_id' => $tenantId];
+        $this->setGauge('tenant_site_limit', (float)$siteLimit, $labels);
+    }
+
+    /**
+     * Map isolation status to numeric value for Prometheus.
+     *
+     * @param string $status Status string
+     * @return float Numeric representation
+     */
+    private function mapIsolationStatus(string $status): float
+    {
+        return match ($status) {
+            'isolated' => 1.0,
+            'shared' => 0.5,
+            'violation' => 0.0,
+            default => -1.0,
+        };
+    }
+
+    /**
      * Export all metrics in Prometheus format.
      *
      * @return string Prometheus-formatted metrics

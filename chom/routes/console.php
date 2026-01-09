@@ -20,10 +20,24 @@ use Illuminate\Support\Facades\Schedule;
 Schedule::job(new CoherencyCheckJob(quickCheck: false, autoHeal: true))
     ->hourly()
     ->name('coherency-check-full')
-    ->withoutOverlapping(1800); // 30 minutes max overlap protection
+    ->withoutOverlapping(1800) // 30 minutes max overlap protection
+    ->runInBackground()
+    ->onSuccess(function () {
+        Log::info('Scheduled full coherency check completed successfully');
+    })
+    ->onFailure(function () {
+        Log::error('Scheduled full coherency check failed');
+    });
 
 // Schedule quick health check every 15 minutes (database-only, no disk scans)
 Schedule::job(new CoherencyCheckJob(quickCheck: true, autoHeal: true))
     ->everyFifteenMinutes()
     ->name('coherency-check-quick')
-    ->withoutOverlapping(600); // 10 minutes max overlap protection
+    ->withoutOverlapping(600) // 10 minutes max overlap protection
+    ->runInBackground()
+    ->onSuccess(function () {
+        Log::info('Scheduled quick coherency check completed successfully');
+    })
+    ->onFailure(function () {
+        Log::error('Scheduled quick coherency check failed');
+    });

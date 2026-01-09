@@ -421,7 +421,7 @@ QUEUE_CONNECTION=sync
 - `.github/workflows/security-scan.yml` - Security audit
 
 **Triggers:**
-- Push to main/master/develop
+- Push to main/develop
 - Pull requests
 - Manual dispatch
 

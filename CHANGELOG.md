@@ -2,7 +2,74 @@
 
 All notable changes to the CHOM project will be documented in this file.
 
-## [6.4.0] - 2026-01-03
+## [2.2.0] - 2026-01-10
+
+### Phase 4 - Advanced Features & Production Hardening
+
+This release focuses on enhanced operational capabilities, advanced automation, and production-grade reliability improvements.
+
+#### Added
+
+- **Health Monitoring System**
+  - Comprehensive health check endpoint with liveness and readiness probes
+  - Database connectivity and performance validation
+  - Redis cache health monitoring
+  - Queue system health checks
+  - VPS provider connectivity validation
+  - Storage subsystem health verification
+  - Detailed health metrics for troubleshooting
+
+- **Automated Deployment & Configuration**
+  - Fully automated deployment orchestration scripts
+  - Zero-downtime deployment capabilities
+  - Automated SSL certificate provisioning and renewal
+  - Dynamic observability configuration (Prometheus, Grafana, Loki, Jaeger)
+  - Environment-specific configuration management
+  - Deployment validation and rollback capabilities
+
+- **Enhanced Observability**
+  - Auto-configured observability stack URLs
+  - Dynamic service discovery for monitoring targets
+  - Enhanced metrics collection and aggregation
+  - Distributed tracing improvements
+  - Centralized logging with Loki multi-tenancy support
+
+- **Security Enhancements**
+  - HTTPS enforcement with SSL validation for observability connections
+  - Secrets management automation
+  - Enhanced credential rotation mechanisms
+  - Production-grade security hardening
+
+#### Changed
+
+- **Version Consolidation**: Unified version numbering across package.json, composer.json, and VERSION file
+- **Branch Standardization**: Migrated default branch from master to main across all documentation and scripts
+- **Configuration Management**: Removed hardcoded FQDNs in favor of environment-variable based configuration
+- **Observability URLs**: Made all observability endpoints configurable via .env
+- **Deployment Process**: Streamlined deployment workflow with enhanced automation
+
+#### Removed
+
+- Hardcoded observability endpoints
+- Legacy master branch references
+- Static FQDN configurations in templates
+
+### Technical Improvements
+
+- **Code Quality**: Maintained 90%+ test coverage
+- **Documentation**: Updated all deployment guides and runbooks
+- **Infrastructure**: Enhanced containerization and orchestration
+- **Monitoring**: Improved alert rules and incident response procedures
+
+### Migration Notes
+
+For teams migrating from v2.1.0:
+1. Update `.env` file with new observability URL configurations
+2. Run migration script: `./migrate-to-main.sh` to update local branch references
+3. Review and update any custom deployment scripts that reference the master branch
+4. Verify SSL certificates are properly configured for HTTPS endpoints
+
+## [2.1.0] - 2026-01-03 (formerly 6.4.0)
 
 ### 🔒🎯 Security Hardening & Production Observability - 100% Production Confidence
 
