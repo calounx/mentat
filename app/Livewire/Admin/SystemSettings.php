@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Livewire\Admin;
 
+use App\Models\SystemSetting;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
 
 class SystemSettings extends Component
@@ -22,13 +24,19 @@ class SystemSettings extends Component
     public int $defaultBackupRetentionDays = 30;
     public int $defaultMetricsRetentionDays = 15;
 
-    // Email settings (display only for security)
-    public string $mailDriver = '';
+    // Email settings (editable)
+    public string $mailMailer = 'smtp';
+    public string $mailHost = '127.0.0.1';
+    public int $mailPort = 587;
+    public string $mailUsername = '';
+    public string $mailPassword = '';
+    public string $mailEncryption = 'tls';
     public string $mailFromAddress = '';
     public string $mailFromName = '';
 
     public ?string $error = null;
     public ?string $success = null;
+    public ?string $testEmailResult = null;
 
     public function mount(): void
     {
@@ -47,10 +55,15 @@ class SystemSettings extends Component
         $this->defaultBackupRetentionDays = (int) config('chom.backup_retention_days', 30);
         $this->defaultMetricsRetentionDays = (int) config('chom.metrics_retention_days', 15);
 
-        // Email settings (display only)
-        $this->mailDriver = config('mail.default', 'smtp');
-        $this->mailFromAddress = config('mail.from.address', '');
-        $this->mailFromName = config('mail.from.name', '');
+        // Email settings (from database)
+        $this->mailMailer = SystemSetting::get('mail.mailer', 'smtp');
+        $this->mailHost = SystemSetting::get('mail.host', '127.0.0.1');
+        $this->mailPort = (int) SystemSetting::get('mail.port', 587);
+        $this->mailUsername = SystemSetting::get('mail.username', '');
+        $this->mailPassword = SystemSetting::get('mail.password', '');
+        $this->mailEncryption = SystemSetting::get('mail.encryption', 'tls');
+        $this->mailFromAddress = SystemSetting::get('mail.from_address', 'noreply@example.com');
+        $this->mailFromName = SystemSetting::get('mail.from_name', 'CHOM');
     }
 
     public function clearCache(): void
@@ -92,6 +105,82 @@ class SystemSettings extends Component
         } catch (\Exception $e) {
             Log::error('Migration error', ['error' => $e->getMessage()]);
             $this->error = 'Failed to run migrations: ' . $e->getMessage();
+        }
+    }
+
+    public function saveMailSettings(): void
+    {
+        $this->error = null;
+        $this->success = null;
+        $this->testEmailResult = null;
+
+        // Validate
+        $this->validate([
+            'mailMailer' => 'required|string',
+            'mailHost' => 'required|string',
+            'mailPort' => 'required|integer|min:1|max:65535',
+            'mailUsername' => 'nullable|string',
+            'mailPassword' => 'nullable|string',
+            'mailEncryption' => 'required|in:tls,ssl,null',
+            'mailFromAddress' => 'required|email',
+            'mailFromName' => 'required|string',
+        ]);
+
+        try {
+            // Save to database
+            SystemSetting::set('mail.mailer', $this->mailMailer, 'string', 'Mail driver');
+            SystemSetting::set('mail.host', $this->mailHost, 'string', 'SMTP host');
+            SystemSetting::set('mail.port', (string) $this->mailPort, 'integer', 'SMTP port');
+            SystemSetting::set('mail.username', $this->mailUsername, 'string', 'SMTP username');
+            SystemSetting::set('mail.password', $this->mailPassword, 'encrypted', 'SMTP password');
+            SystemSetting::set('mail.encryption', $this->mailEncryption, 'string', 'SMTP encryption');
+            SystemSetting::set('mail.from_address', $this->mailFromAddress, 'string', 'From email address');
+            SystemSetting::set('mail.from_name', $this->mailFromName, 'string', 'From name');
+
+            // Update runtime config
+            Config::set('mail.default', $this->mailMailer);
+            Config::set('mail.mailers.smtp.host', $this->mailHost);
+            Config::set('mail.mailers.smtp.port', $this->mailPort);
+            Config::set('mail.mailers.smtp.username', $this->mailUsername);
+            Config::set('mail.mailers.smtp.password', $this->mailPassword);
+            Config::set('mail.mailers.smtp.encryption', $this->mailEncryption === 'null' ? null : $this->mailEncryption);
+            Config::set('mail.from.address', $this->mailFromAddress);
+            Config::set('mail.from.name', $this->mailFromName);
+
+            $this->success = 'Mail settings saved successfully.';
+        } catch (\Exception $e) {
+            Log::error('Mail settings save error', ['error' => $e->getMessage()]);
+            $this->error = 'Failed to save mail settings: ' . $e->getMessage();
+        }
+    }
+
+    public function testEmailConnection(): void
+    {
+        $this->error = null;
+        $this->success = null;
+        $this->testEmailResult = null;
+
+        // Update runtime config with current form values
+        Config::set('mail.default', $this->mailMailer);
+        Config::set('mail.mailers.smtp.host', $this->mailHost);
+        Config::set('mail.mailers.smtp.port', $this->mailPort);
+        Config::set('mail.mailers.smtp.username', $this->mailUsername);
+        Config::set('mail.mailers.smtp.password', $this->mailPassword);
+        Config::set('mail.mailers.smtp.encryption', $this->mailEncryption === 'null' ? null : $this->mailEncryption);
+        Config::set('mail.from.address', $this->mailFromAddress);
+        Config::set('mail.from.name', $this->mailFromName);
+
+        try {
+            // Send test email
+            Mail::raw('This is a test email from CHOM system.', function ($message) {
+                $message->to($this->mailFromAddress)
+                    ->subject('CHOM Test Email - ' . now()->format('Y-m-d H:i:s'));
+            });
+
+            $this->testEmailResult = '✓ Test email sent successfully to ' . $this->mailFromAddress;
+        } catch (\Exception $e) {
+            Log::error('Test email failed', ['error' => $e->getMessage()]);
+            $this->testEmailResult = '✗ Failed: ' . $e->getMessage();
         }
     }
 

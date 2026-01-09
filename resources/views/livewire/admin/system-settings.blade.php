@@ -93,24 +93,106 @@
             </div>
         </div>
 
-        <!-- Email Settings -->
-        <div class="bg-gray-800 shadow rounded-lg border border-gray-700">
+        <!-- Email Settings (Editable) -->
+        <div class="bg-gray-800 shadow rounded-lg border border-gray-700 lg:col-span-2">
             <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg leading-6 font-medium text-white mb-4">Email Configuration</h3>
-                <dl class="space-y-3">
-                    <div class="flex justify-between">
-                        <dt class="text-sm text-gray-400">Driver</dt>
-                        <dd class="text-sm text-white">{{ $mailDriver }}</dd>
+                <h3 class="text-lg leading-6 font-medium text-white mb-4">Email Configuration (SMTP)</h3>
+                <p class="text-sm text-gray-400 mb-4">Configure SMTP settings for system emails and Alertmanager notifications.</p>
+
+                <form wire:submit.prevent="saveMailSettings" class="space-y-4">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <!-- Mailer -->
+                        <div>
+                            <label for="mailMailer" class="block text-sm font-medium text-gray-300">Mail Driver</label>
+                            <select wire:model="mailMailer" id="mailMailer" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500">
+                                <option value="smtp">SMTP</option>
+                                <option value="sendmail">Sendmail</option>
+                                <option value="log">Log (Development)</option>
+                            </select>
+                            @error('mailMailer') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <!-- Encryption -->
+                        <div>
+                            <label for="mailEncryption" class="block text-sm font-medium text-gray-300">Encryption</label>
+                            <select wire:model="mailEncryption" id="mailEncryption" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500">
+                                <option value="tls">TLS</option>
+                                <option value="ssl">SSL</option>
+                                <option value="null">None</option>
+                            </select>
+                            @error('mailEncryption') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <!-- Host -->
+                        <div>
+                            <label for="mailHost" class="block text-sm font-medium text-gray-300">SMTP Host</label>
+                            <input wire:model="mailHost" type="text" id="mailHost" placeholder="smtp-relay.brevo.com" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500">
+                            @error('mailHost') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <!-- Port -->
+                        <div>
+                            <label for="mailPort" class="block text-sm font-medium text-gray-300">SMTP Port</label>
+                            <input wire:model="mailPort" type="number" id="mailPort" placeholder="587" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500">
+                            @error('mailPort') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <!-- Username -->
+                        <div>
+                            <label for="mailUsername" class="block text-sm font-medium text-gray-300">SMTP Username</label>
+                            <input wire:model="mailUsername" type="text" id="mailUsername" placeholder="your-email@example.com" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500">
+                            @error('mailUsername') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <!-- Password -->
+                        <div>
+                            <label for="mailPassword" class="block text-sm font-medium text-gray-300">SMTP Password / API Key</label>
+                            <input wire:model="mailPassword" type="password" id="mailPassword" placeholder="••••••••" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500">
+                            @error('mailPassword') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                            <p class="mt-1 text-xs text-gray-500">For Brevo: Use your SMTP API key, not account password</p>
+                        </div>
+
+                        <!-- From Address -->
+                        <div>
+                            <label for="mailFromAddress" class="block text-sm font-medium text-gray-300">From Email Address</label>
+                            <input wire:model="mailFromAddress" type="email" id="mailFromAddress" placeholder="noreply@example.com" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500">
+                            @error('mailFromAddress') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <!-- From Name -->
+                        <div>
+                            <label for="mailFromName" class="block text-sm font-medium text-gray-300">From Name</label>
+                            <input wire:model="mailFromName" type="text" id="mailFromName" placeholder="CHOM System" class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500">
+                            @error('mailFromName') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
                     </div>
-                    <div class="flex justify-between">
-                        <dt class="text-sm text-gray-400">From Address</dt>
-                        <dd class="text-sm text-white">{{ $mailFromAddress ?: 'Not configured' }}</dd>
+
+                    <!-- Test Email Result -->
+                    @if($testEmailResult)
+                        <div class="mt-4 p-3 rounded {{ str_contains($testEmailResult, '✓') ? 'bg-green-900/50 border border-green-600 text-green-200' : 'bg-red-900/50 border border-red-600 text-red-200' }}">
+                            <p class="text-sm">{{ $testEmailResult }}</p>
+                        </div>
+                    @endif
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-between items-center mt-6">
+                        <button type="button" wire:click="testEmailConnection" wire:loading.attr="disabled" wire:target="testEmailConnection"
+                                class="inline-flex items-center px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-600 hover:bg-gray-500 disabled:opacity-50">
+                            <svg wire:loading.class="animate-spin" wire:target="testEmailConnection" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                            </svg>
+                            Test Connection
+                        </button>
+
+                        <button type="submit" wire:loading.attr="disabled" wire:target="saveMailSettings"
+                                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
+                            <svg wire:loading.class="animate-spin" wire:target="saveMailSettings" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H18A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75h1.5m9 0h-9" />
+                            </svg>
+                            Save Settings
+                        </button>
                     </div>
-                    <div class="flex justify-between">
-                        <dt class="text-sm text-gray-400">From Name</dt>
-                        <dd class="text-sm text-white">{{ $mailFromName ?: 'Not configured' }}</dd>
-                    </div>
-                </dl>
+                </form>
             </div>
         </div>
 
