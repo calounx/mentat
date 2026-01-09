@@ -347,6 +347,51 @@ class BackupRepository implements RepositoryInterface
     }
 
     /**
+     * Find a backup by its ID with tenant filtering (SECURE)
+     *
+     * This method ensures tenant isolation by filtering backups at the database level.
+     * Use this instead of findById() when handling user requests to prevent
+     * unauthorized access to backups from other tenants.
+     *
+     * @param string $id
+     * @param string $tenantId
+     * @return SiteBackup|null
+     */
+    public function findByIdAndTenant(string $id, string $tenantId): ?SiteBackup
+    {
+        try {
+            $backup = $this->model
+                ->with('site')
+                ->whereHas('site', function ($query) use ($tenantId) {
+                    $query->where('tenant_id', $tenantId);
+                })
+                ->where('id', $id)
+                ->first();
+
+            if ($backup) {
+                Log::info('Backup found with tenant filter', [
+                    'backup_id' => $id,
+                    'tenant_id' => $tenantId,
+                ]);
+            } else {
+                Log::info('Backup not found or access denied', [
+                    'backup_id' => $id,
+                    'tenant_id' => $tenantId,
+                ]);
+            }
+
+            return $backup;
+        } catch (\Exception $e) {
+            Log::error('Error finding backup by ID and tenant', [
+                'backup_id' => $id,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Update a backup record
      *
      * @param string $id

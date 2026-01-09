@@ -1,0 +1,282 @@
+#!/usr/bin/env bash
+# Migrate existing www-data sites to per-site system users
+# This script implements the security isolation model by creating
+# dedicated system users for each site.
+#
+# BREAKING CHANGE: Sites will be briefly unavailable during migration
+#
+# Usage: sudo /opt/vpsmanager/bin/migrate-sites-to-per-user [--dry-run]
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VPSMANAGER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Source required libraries
+source "${VPSMANAGER_ROOT}/lib/core/logging.sh"
+source "${VPSMANAGER_ROOT}/lib/core/json.sh"
+source "${VPSMANAGER_ROOT}/lib/core/users.sh"
+
+# Configuration
+SITES_REGISTRY="${VPSMANAGER_ROOT}/data/sites.json"
+PHP_FPM_POOL_DIR="${PHP_FPM_POOL_DIR:-/etc/php/8.2/fpm/pool.d}"
+DRY_RUN=false
+
+# Statistics
+TOTAL_SITES=0
+MIGRATED_SITES=0
+FAILED_SITES=0
+SKIPPED_SITES=0
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--dry-run]"
+            echo ""
+            echo "Migrate existing www-data sites to per-site system users."
+            echo ""
+            echo "Options:"
+            echo "  --dry-run    Show what would be done without making changes"
+            echo "  -h, --help   Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Verify running as root
+if [[ $EUID -ne 0 ]]; then
+   log_error "This script must be run as root"
+   exit 1
+fi
+
+# Verify sites registry exists
+if [[ ! -f "$SITES_REGISTRY" ]]; then
+    log_error "Sites registry not found: $SITES_REGISTRY"
+    exit 1
+fi
+
+# Verify jq is installed
+if ! command -v jq &> /dev/null; then
+    log_error "jq is required but not installed. Install with: apt install jq"
+    exit 1
+fi
+
+# Migrate a single site
+migrate_site() {
+    local domain="$1"
+    local site_root="/var/www/sites/${domain}"
+    local site_user
+    site_user=$(domain_to_username "$domain")
+
+    log_info "Migrating site: ${domain} → ${site_user}"
+
+    # Check if site directory exists
+    if [[ ! -d "$site_root" ]]; then
+        log_warning "Site directory does not exist: ${site_root}"
+        ((SKIPPED_SITES++))
+        return 0
+    fi
+
+    # Check current ownership
+    local current_owner
+    current_owner=$(stat -c '%U' "$site_root" 2>/dev/null || echo "unknown")
+
+    if [[ "$current_owner" == "$site_user" ]]; then
+        log_info "Site already migrated: ${domain} (owned by ${site_user})"
+        ((SKIPPED_SITES++))
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[DRY-RUN] Would migrate ${domain}"
+        log_info "[DRY-RUN]   - Create user: ${site_user}"
+        log_info "[DRY-RUN]   - Change ownership: ${site_root} → ${site_user}:${site_user}"
+        log_info "[DRY-RUN]   - Update permissions: 750"
+        log_info "[DRY-RUN]   - Update PHP-FPM pool config"
+        ((MIGRATED_SITES++))
+        return 0
+    fi
+
+    # Step 1: Create site-specific user
+    if ! create_site_user "$domain"; then
+        log_error "Failed to create user for ${domain}"
+        ((FAILED_SITES++))
+        return 1
+    fi
+
+    # Step 2: Change ownership (from www-data to site_user)
+    if ! chown -R "${site_user}:${site_user}" "$site_root"; then
+        log_error "Failed to change ownership for ${domain}"
+        ((FAILED_SITES++))
+        return 1
+    fi
+    log_success "Ownership changed: ${site_root} → ${site_user}:${site_user}"
+
+    # Step 3: Update permissions to 750 (remove world-read)
+    if ! chmod -R 750 "$site_root"; then
+        log_error "Failed to change permissions for ${domain}"
+        ((FAILED_SITES++))
+        return 1
+    fi
+    log_success "Permissions updated: 750 (no world-read)"
+
+    # Step 4: Ensure nginx can read public files
+    if [[ -d "${site_root}/public" ]]; then
+        chgrp -R www-data "${site_root}/public"
+        chmod -R 750 "${site_root}/public"
+    fi
+
+    # Step 5: Update PHP-FPM pool configuration
+    local pool_config="${PHP_FPM_POOL_DIR}/${domain}.conf"
+    if [[ -f "$pool_config" ]]; then
+        # Backup original config
+        cp "$pool_config" "${pool_config}.backup-$(date +%s)"
+
+        # Update user and group
+        sed -i "s/^user = www-data$/user = ${site_user}/" "$pool_config"
+        sed -i "s/^group = www-data$/group = ${site_user}/" "$pool_config"
+
+        # Update open_basedir to remove shared /tmp and /var/lib/php/sessions
+        sed -i "s|php_admin_value\[open_basedir\] = .*|php_admin_value[open_basedir] = ${site_root}:${site_root}/tmp:${site_root}/sessions:/usr/share/php|" "$pool_config"
+
+        log_success "Updated PHP-FPM pool config: ${pool_config}"
+    else
+        log_warning "PHP-FPM pool config not found: ${pool_config}"
+    fi
+
+    log_success "✓ Successfully migrated ${domain}"
+    ((MIGRATED_SITES++))
+    return 0
+}
+
+# Print header
+print_header() {
+    echo ""
+    echo "╔════════════════════════════════════════════════════════════════╗"
+    echo "║   VPSManager: Migrate Sites to Per-User Isolation             ║"
+    echo "╚════════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_warning "DRY-RUN MODE: No changes will be made"
+        echo ""
+    fi
+}
+
+# Print summary
+print_summary() {
+    echo ""
+    echo "╔════════════════════════════════════════════════════════════════╗"
+    echo "║   Migration Summary                                            ║"
+    echo "╚════════════════════════════════════════════════════════════════╝"
+    echo ""
+    log_info "Total sites:    ${TOTAL_SITES}"
+    log_success "Migrated:       ${MIGRATED_SITES}"
+    log_warning "Skipped:        ${SKIPPED_SITES}"
+
+    if [[ $FAILED_SITES -gt 0 ]]; then
+        log_error "Failed:         ${FAILED_SITES}"
+    fi
+
+    echo ""
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "This was a DRY-RUN. No changes were made."
+        log_info "Run without --dry-run to perform the migration."
+    elif [[ $FAILED_SITES -eq 0 ]]; then
+        log_success "Migration completed successfully!"
+        echo ""
+        log_info "Next steps:"
+        log_info "  1. Reload PHP-FPM:  systemctl reload php8.2-fpm"
+        log_info "  2. Reload Nginx:    systemctl reload nginx"
+        log_info "  3. Test sites:      curl https://<domain>/"
+    else
+        log_error "Migration completed with errors."
+        log_info "Review the logs above and fix failed sites manually."
+    fi
+}
+
+# Reload services after migration
+reload_services() {
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[DRY-RUN] Would reload PHP-FPM and Nginx"
+        return 0
+    fi
+
+    log_info "Reloading services..."
+
+    # Reload PHP-FPM
+    if systemctl reload php8.2-fpm 2>/dev/null; then
+        log_success "PHP-FPM reloaded"
+    else
+        log_error "Failed to reload PHP-FPM"
+        return 1
+    fi
+
+    # Reload Nginx
+    if systemctl reload nginx 2>/dev/null; then
+        log_success "Nginx reloaded"
+    else
+        log_error "Failed to reload Nginx"
+        return 1
+    fi
+
+    return 0
+}
+
+# Main execution
+main() {
+    print_header
+
+    # Get all domains from registry
+    log_info "Reading sites from registry: ${SITES_REGISTRY}"
+
+    local domains
+    domains=$(jq -r '.sites[]?.domain // empty' "$SITES_REGISTRY" 2>/dev/null)
+
+    if [[ -z "$domains" ]]; then
+        log_warning "No sites found in registry"
+        exit 0
+    fi
+
+    # Count total sites
+    TOTAL_SITES=$(echo "$domains" | wc -l)
+    log_info "Found ${TOTAL_SITES} site(s) to migrate"
+    echo ""
+
+    # Migrate each site
+    while IFS= read -r domain; do
+        if [[ -n "$domain" ]]; then
+            migrate_site "$domain" || log_error "Failed to migrate: ${domain}"
+            echo ""
+        fi
+    done <<< "$domains"
+
+    # Reload services if not dry-run
+    if [[ "$DRY_RUN" == "false" ]]; then
+        reload_services
+    fi
+
+    # Print summary
+    print_summary
+
+    # Exit with appropriate code
+    if [[ $FAILED_SITES -gt 0 ]]; then
+        exit 1
+    else
+        exit 0
+    fi
+}
+
+# Run main
+main "$@"

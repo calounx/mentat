@@ -85,14 +85,22 @@ create_site_directories() {
     local domain="$1"
     local site_type="$2"
     local site_root="${SITES_ROOT}/${domain}"
+    local site_user
+    site_user=$(domain_to_username "$domain")
 
     log_info "Creating directories for ${domain}"
+
+    # Create site-specific system user for isolation
+    if ! create_site_user "$domain"; then
+        log_error "Failed to create site user for ${domain}"
+        return 1
+    fi
 
     # Create main directories
     mkdir -p "${site_root}/public"
     mkdir -p "${site_root}/logs"
-    mkdir -p "${site_root}/tmp"
-    mkdir -p "${site_root}/sessions"
+    mkdir -p "${site_root}/tmp"        # Per-site /tmp for security
+    mkdir -p "${site_root}/sessions"    # Per-site sessions for security
 
     # Type-specific setup
     case "$site_type" in
@@ -126,10 +134,19 @@ create_site_directories() {
 </html>
 EOFHTML
 
-    # Set ownership (www-data for nginx/php-fpm)
-    chown -R www-data:www-data "$site_root"
-    chmod -R 755 "$site_root"
+    # Set ownership to SITE-SPECIFIC user (NOT www-data)
+    # This ensures file-level isolation between sites
+    chown -R "${site_user}:${site_user}" "$site_root"
 
+    # Set permissions to 750 (owner: rwx, group: r-x, world: none)
+    # Removes world-read to prevent cross-site file access
+    chmod -R 750 "$site_root"
+
+    # Ensure public directory is readable by nginx (www-data group)
+    chgrp -R www-data "${site_root}/public"
+    chmod -R 750 "${site_root}/public"
+
+    log_info "Site directory owned by ${site_user} with 750 permissions"
     echo "$site_root"
 }
 
@@ -216,7 +233,11 @@ create_phpfpm_pool() {
     local pool_config="${PHP_FPM_POOL_DIR}/${domain}.conf"
     local php_socket="/run/php/php${php_version}-fpm-${domain}.sock"
 
-    log_info "Creating PHP-FPM pool for ${domain}"
+    # Get site-specific user for isolation
+    local site_user
+    site_user=$(domain_to_username "$domain")
+
+    log_info "Creating PHP-FPM pool for ${domain} (user: ${site_user})"
 
     # Read template and substitute
     local template="${VPSMANAGER_ROOT}/templates/php-fpm-pool.conf"
@@ -226,13 +247,14 @@ create_phpfpm_pool() {
             -e "s|{{DOMAIN}}|${domain}|g" \
             -e "s|{{PHP_SOCKET}}|${php_socket}|g" \
             -e "s|{{SITE_ROOT}}|${site_root}|g" \
+            -e "s|{{SITE_USER}}|${site_user}|g" \
             "$template" > "$pool_config"
     else
-        # Fallback: generate inline
+        # Fallback: generate inline with site-specific user
         cat > "$pool_config" <<EOFPHP
 [${pool_name}]
-user = www-data
-group = www-data
+user = ${site_user}
+group = ${site_user}
 
 listen = ${php_socket}
 listen.owner = www-data
@@ -250,8 +272,8 @@ pm.max_requests = 500
 php_admin_value[error_log] = ${site_root}/logs/php-error.log
 php_admin_flag[log_errors] = on
 
-; Security
-php_admin_value[open_basedir] = ${site_root}:/tmp:/usr/share/php
+; Security - per-site isolation
+php_admin_value[open_basedir] = ${site_root}:${site_root}/tmp:${site_root}/sessions:/usr/share/php
 php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen
 php_admin_value[upload_tmp_dir] = ${site_root}/tmp
 php_admin_value[session.save_path] = ${site_root}/sessions
@@ -529,6 +551,13 @@ cmd_site_delete() {
     if [[ -n "$site_root" ]] && [[ -d "$site_root" ]]; then
         rm -rf "$site_root"
         log_info "Removed site files: ${site_root}"
+    fi
+
+    # Delete site-specific system user
+    if delete_site_user "$domain"; then
+        log_info "Deleted site-specific user for: ${domain}"
+    else
+        log_warning "Failed to delete site user (may not exist): ${domain}"
     fi
 
     # Remove from registry

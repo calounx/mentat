@@ -230,6 +230,33 @@ verify_queue_workers() {
     fi
 }
 
+# Verify multi-tenancy isolation (P0 CRITICAL fix)
+verify_multi_tenancy_isolation() {
+    log_step "Verifying multi-tenancy isolation"
+
+    if [[ ! -d "${APP_DIR}/current" ]]; then
+        log_warning "Cannot verify multi-tenancy - application directory not found"
+        ((WARNING_CHECKS++))
+        return 0
+    fi
+
+    cd "${APP_DIR}/current"
+
+    # Run BackupTenantIsolationTest to verify the P0 fix
+    log_info "Running backup tenant isolation tests"
+    if sudo -u www-data php artisan test --filter=BackupTenantIsolationTest --stop-on-failure 2>&1 | tee /tmp/tenant-isolation-test.log | grep -q "Tests.*OK"; then
+        log_success "Multi-tenancy isolation tests passed"
+        ((PASSED_CHECKS++))
+        return 0
+    else
+        log_error "Multi-tenancy isolation tests FAILED"
+        log_info "Review test output at /tmp/tenant-isolation-test.log"
+        log_error "CRITICAL: Cross-tenant access may be possible - investigate immediately!"
+        ((FAILED_CHECKS++))
+        return 1
+    fi
+}
+
 # Verify critical services
 verify_services() {
     log_step "Verifying critical services"
@@ -305,6 +332,7 @@ main() {
     verify_vpsmanager
     verify_postgres_exporter
     verify_queue_workers
+    verify_multi_tenancy_isolation
 
     # Print summary and exit with appropriate code
     print_summary

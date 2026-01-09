@@ -128,9 +128,9 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            $backup = $this->backupRepository->findById($id);
+            $backup = $this->backupRepository->findByIdAndTenant($id, $tenant->id);
 
-            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+            if (!$backup) {
                 abort(404, 'Backup not found.');
             }
 
@@ -152,9 +152,9 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            $backup = $this->backupRepository->findById($id);
+            $backup = $this->backupRepository->findByIdAndTenant($id, $tenant->id);
 
-            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+            if (!$backup) {
                 abort(404, 'Backup not found.');
             }
 
@@ -199,9 +199,9 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            $backup = $this->backupRepository->findById($id);
+            $backup = $this->backupRepository->findByIdAndTenant($id, $tenant->id);
 
-            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+            if (!$backup) {
                 abort(404, 'Backup not found.');
             }
 
@@ -228,9 +228,9 @@ class BackupController extends ApiController
         try {
             $tenant = $this->getTenant($request);
 
-            $backup = $this->backupRepository->findById($id);
+            $backup = $this->backupRepository->findByIdAndTenant($id, $tenant->id);
 
-            if (!$backup || $backup->site->tenant_id !== $tenant->id) {
+            if (!$backup) {
                 abort(404, 'Backup not found.');
             }
 

@@ -52,10 +52,10 @@ class StoreBackupRequest extends BaseFormRequest
                 'string',
                 'exists:sites,id',
                 function ($attribute, $value, $fail) use ($tenantId) {
-                    // Verify site belongs to user's tenant
-                    $site = Site::find($value);
-                    if ($site && $site->tenant_id !== $tenantId) {
-                        $fail('You do not have permission to backup this site.');
+                    // Verify site belongs to user's tenant (tenant-scoped query)
+                    $site = Site::where('tenant_id', $tenantId)->find($value);
+                    if (!$site) {
+                        $fail('Site not found or you do not have permission to backup this site.');
                     }
                 },
             ],

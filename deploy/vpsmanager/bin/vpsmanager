@@ -63,6 +63,7 @@ source "${VPSMANAGER_ROOT}/lib/core/json.sh"
 source "${VPSMANAGER_ROOT}/lib/core/logging.sh"
 source "${VPSMANAGER_ROOT}/lib/core/validation.sh"
 source "${VPSMANAGER_ROOT}/lib/core/database.sh"
+source "${VPSMANAGER_ROOT}/lib/core/users.sh"
 
 # Load command modules
 source "${VPSMANAGER_ROOT}/lib/commands/site.sh"
