@@ -135,8 +135,8 @@ database_exists() {
 # Uses only alphanumeric characters to avoid SQL/shell escaping issues
 generate_db_password() {
     local length="${1:-32}"
-    # Use alphanumeric only to avoid any SQL injection or shell escaping issues
-    tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "$length"
+    # Use openssl for reliable random string generation (base64, then clean up)
+    openssl rand -base64 "$((length * 2))" | tr -dc 'A-Za-z0-9' | head -c "$length"
 }
 
 # Dump database to file
