@@ -1,0 +1,214 @@
+# Exporter Health Alert Rules
+# Monitors all CHOM exporters for availability and functionality
+
+groups:
+  - name: exporter_health
+    interval: 30s
+    rules:
+      # Critical: Exporter completely down
+      - alert: ExporterDown
+        expr: up{job=~"node|nginx|postgresql|redis|phpfpm"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Exporter {{ $labels.job }} down on {{ $labels.instance }}"
+          description: |
+            The {{ $labels.job }} exporter on {{ $labels.instance }} has been unreachable for 2 minutes.
+
+            Impact: Metrics collection stopped for this service.
+
+            Troubleshooting:
+            1. SSH to {{ $labels.host }}: ssh stilgar@{{ $labels.host }}.arewel.com
+            2. Check service status: sudo systemctl status {{ $labels.job }}_exporter
+            3. Check logs: sudo journalctl -u {{ $labels.job }}_exporter -n 50
+            4. Restart if needed: sudo systemctl restart {{ $labels.job }}_exporter
+            5. Verify firewall: sudo ufw status | grep {{ $labels.job }}
+
+      # Warning: Exporter scraping slow
+      - alert: ExporterScrapeSlow
+        expr: scrape_duration_seconds{job=~"node|nginx|postgresql|redis|phpfpm"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow scrape for {{ $labels.job }} on {{ $labels.instance }}"
+          description: |
+            The {{ $labels.job }} exporter on {{ $labels.instance }} is taking {{ $value }}s to scrape (threshold: 5s).
+
+            Impact: Delayed metrics, possible performance issue.
+
+            Check:
+            - Exporter CPU/memory usage
+            - Database/service query performance
+            - Network latency
+
+      # Warning: Exporter scrape failures
+      - alert: ExporterScrapeErrors
+        expr: rate(scrape_samples_scraped{job=~"node|nginx|postgresql|redis|phpfpm"}[5m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape errors for {{ $labels.job }} on {{ $labels.instance }}"
+          description: |
+            The {{ $labels.job }} exporter on {{ $labels.instance }} is not returning any samples.
+
+            Possible causes:
+            - Exporter running but returning no data
+            - Target service (nginx, redis, etc.) is down
+            - Permission issues accessing metrics
+
+            Check exporter logs for details.
+
+  - name: service_health
+    interval: 30s
+    rules:
+      # Critical: PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: up{job="postgresql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down on {{ $labels.instance }}"
+          description: |
+            PostgreSQL database is unreachable.
+
+            CRITICAL: Application will fail!
+
+            Immediate action:
+            1. SSH: ssh stilgar@{{ $labels.host }}.arewel.com
+            2. Check: sudo systemctl status postgresql
+            3. Restart: sudo systemctl restart postgresql
+            4. Check disk: df -h
+            5. Check logs: sudo journalctl -u postgresql -n 100
+
+      # Critical: Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down on {{ $labels.instance }}"
+          description: |
+            Redis cache/queue server is unreachable.
+
+            Impact:
+            - Sessions lost (users logged out)
+            - Queue jobs stopped
+            - Cache unavailable (performance degraded)
+
+            Action:
+            1. SSH: ssh stilgar@{{ $labels.host }}.arewel.com
+            2. Check: sudo systemctl status redis-server
+            3. Restart: sudo systemctl restart redis-server
+            4. Check memory: free -h
+            5. Check logs: sudo journalctl -u redis-server -n 100
+
+      # Warning: Nginx down
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx exporter down on {{ $labels.instance }}"
+          description: |
+            Nginx exporter is not responding (Nginx itself may still be running).
+
+            Check:
+            - Nginx exporter status: sudo systemctl status nginx_exporter
+            - Nginx status: sudo systemctl status nginx
+            - Stub status endpoint: curl http://localhost/nginx_status
+
+      # Info: Exporter restarted
+      - alert: ExporterRestarted
+        expr: time() - process_start_time_seconds{job=~"node|nginx|postgresql|redis|phpfpm"} < 300
+        labels:
+          severity: info
+        annotations:
+          summary: "Exporter {{ $labels.job }} restarted on {{ $labels.instance }}"
+          description: |
+            The {{ $labels.job }} exporter was restarted {{ $value | humanizeDuration }} ago.
+
+            This is informational - check if restart was planned.
+
+  - name: observability_stack_health
+    interval: 30s
+    rules:
+      # Critical: Prometheus itself is having issues
+      - alert: PrometheusTargetMissing
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target down"
+          description: "Prometheus is not scraping itself - serious issue!"
+
+      # Warning: Too many failed scrapes
+      - alert: PrometheusTooManyFailedScrapes
+        expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus scraping exceeding sample limit"
+          description: |
+            Prometheus is dropping samples due to exceeding the per-scrape sample limit.
+
+            This indicates an exporter is returning too much data.
+
+            Check prometheus.yml sample_limit configuration.
+
+      # Warning: Alertmanager down
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager is down"
+          description: |
+            Alertmanager is not responding - alerts will not be sent!
+
+            Action:
+            1. SSH: ssh stilgar@mentat.arewel.com
+            2. Check: sudo systemctl status alertmanager
+            3. Restart: sudo systemctl restart alertmanager
+            4. Check config: sudo /opt/observability/bin/amtool check-config /etc/observability/alertmanager/alertmanager.yml
+            5. Check SMTP: Review /etc/observability/alertmanager/alertmanager.yml for SMTP settings
+
+      # Warning: Grafana down
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Grafana is down"
+          description: |
+            Grafana dashboard is unreachable - visualization unavailable.
+
+            Action:
+            1. Check: sudo systemctl status grafana-server
+            2. Restart: sudo systemctl restart grafana-server
+            3. Check logs: sudo journalctl -u grafana-server -n 100
+
+      # Warning: Loki down
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki is down"
+          description: |
+            Loki log aggregation is down - logs not being collected!
+
+            Action:
+            1. Check: sudo systemctl status loki
+            2. Check disk space: df -h /var/lib/observability/loki
+            3. Restart: sudo systemctl restart loki
+            4. Check logs: sudo journalctl -u loki -n 100

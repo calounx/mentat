@@ -234,17 +234,42 @@ deploy_configuration() {
     if [[ -f "${SRC_CONFIG_DIR}/alertmanager.yml" ]]; then
         sudo cp "${SRC_CONFIG_DIR}/alertmanager.yml" "${CONFIG_DIR}/alertmanager/"
 
-        # Inject SMTP settings from database if CHOM app is available
-        log_step "Configuring AlertManager SMTP from database"
-        CHOM_APP_DIR="/var/www/chom/current"
-        if [[ -f "${CHOM_APP_DIR}/artisan" ]]; then
-            # Get SMTP settings from database
-            SMTP_FROM=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.from_address', 'noreply@example.com');" 2>/dev/null | tail -1)
-            SMTP_HOST=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.host', '127.0.0.1');" 2>/dev/null | tail -1)
-            SMTP_PORT=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.port', '587');" 2>/dev/null | tail -1)
-            SMTP_USERNAME=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.username', '');" 2>/dev/null | tail -1)
-            SMTP_PASSWORD=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.password', '');" 2>/dev/null | tail -1)
-            SMTP_ENCRYPTION=$(cd "$CHOM_APP_DIR" && sudo -u stilgar php artisan tinker --execute="echo App\Models\SystemSetting::get('mail.encryption', 'tls');" 2>/dev/null | tail -1)
+        # Inject SMTP settings from CHOM API
+        log_step "Configuring AlertManager SMTP from CHOM API"
+
+        # Determine CHOM API URL (try landsraad first, fallback to localhost if on same server)
+        CHOM_API_URL="${CHOM_API_URL:-https://landsraad.arewel.com}"
+        if [[ "$HOSTNAME" == *"landsraad"* ]] || [[ -d "/var/www/chom" ]]; then
+            CHOM_API_URL="http://localhost"
+        fi
+
+        # Fetch SMTP configuration from API
+        SMTP_CONFIG=$(curl -sf --max-time 10 "${CHOM_API_URL}/api/v1/system/smtp-config" 2>/dev/null)
+
+        if [[ $? -eq 0 ]] && [[ -n "$SMTP_CONFIG" ]]; then
+            # Parse JSON response using jq
+            if command -v jq &> /dev/null; then
+                SMTP_FROM=$(echo "$SMTP_CONFIG" | jq -r '.data.from_address // "noreply@example.com"')
+                SMTP_HOST=$(echo "$SMTP_CONFIG" | jq -r '.data.host // "127.0.0.1"')
+                SMTP_PORT=$(echo "$SMTP_CONFIG" | jq -r '.data.port // "587"')
+                SMTP_USERNAME=$(echo "$SMTP_CONFIG" | jq -r '.data.username // ""')
+                SMTP_PASSWORD=$(echo "$SMTP_CONFIG" | jq -r '.data.password // ""')
+                SMTP_ENCRYPTION=$(echo "$SMTP_CONFIG" | jq -r '.data.encryption // "tls"')
+            else
+                log_warning "jq not installed - trying grep/sed parsing"
+                SMTP_FROM=$(echo "$SMTP_CONFIG" | grep -o '"from_address":"[^"]*"' | cut -d'"' -f4)
+                SMTP_HOST=$(echo "$SMTP_CONFIG" | grep -o '"host":"[^"]*"' | cut -d'"' -f4)
+                SMTP_PORT=$(echo "$SMTP_CONFIG" | grep -o '"port":[0-9]*' | cut -d':' -f2)
+                SMTP_USERNAME=$(echo "$SMTP_CONFIG" | grep -o '"username":"[^"]*"' | cut -d'"' -f4)
+                SMTP_PASSWORD=$(echo "$SMTP_CONFIG" | grep -o '"password":"[^"]*"' | cut -d'"' -f4)
+                SMTP_ENCRYPTION=$(echo "$SMTP_CONFIG" | grep -o '"encryption":"[^"]*"' | cut -d'"' -f4)
+
+                # Fallback to defaults if parsing failed
+                SMTP_FROM="${SMTP_FROM:-noreply@example.com}"
+                SMTP_HOST="${SMTP_HOST:-127.0.0.1}"
+                SMTP_PORT="${SMTP_PORT:-587}"
+                SMTP_ENCRYPTION="${SMTP_ENCRYPTION:-tls}"
+            fi
 
             # Determine if TLS is required
             SMTP_REQUIRE_TLS="true"
@@ -260,9 +285,11 @@ deploy_configuration() {
             sudo sed -i "s|__SMTP_REQUIRE_TLS__|${SMTP_REQUIRE_TLS}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
             sudo sed -i "s|__ALERT_EMAIL__|${SMTP_FROM}|g" "${CONFIG_DIR}/alertmanager/alertmanager.yml"
 
-            log_success "AlertManager SMTP configured from database (${SMTP_HOST}:${SMTP_PORT})"
+            log_success "AlertManager SMTP configured from API (${SMTP_HOST}:${SMTP_PORT})"
         else
-            log_warning "CHOM app not found - using placeholder SMTP settings"
+            log_warning "Failed to fetch SMTP config from API - using placeholder values"
+            log_info "Tried: ${CHOM_API_URL}/api/v1/system/smtp-config"
+            log_info "Configure SMTP settings in CHOM admin UI and re-deploy"
         fi
 
         sudo chown observability:observability "${CONFIG_DIR}/alertmanager/alertmanager.yml"

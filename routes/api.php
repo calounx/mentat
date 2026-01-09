@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\ObservabilityHealthController;
+use App\Http\Controllers\Api\SystemConfigController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -34,6 +36,21 @@ Route::prefix('v1')->group(function () {
         Route::get('/', [HealthController::class, 'index']);
         Route::get('/liveness', [HealthController::class, 'liveness']);
         Route::get('/readiness', [HealthController::class, 'readiness']);
+    });
+
+    // System configuration endpoints (for deployment scripts and observability)
+    Route::prefix('system')->group(function () {
+        // SMTP configuration export for Alertmanager deployment
+        Route::get('/smtp-config', [SystemConfigController::class, 'exportSmtpConfig']);
+        Route::get('/smtp-config/shell', [SystemConfigController::class, 'exportSmtpConfigShell']);
+        Route::get('/smtp-config/yaml', [SystemConfigController::class, 'exportSmtpConfigYaml']);
+    });
+
+    // Observability stack health endpoints (public for monitoring)
+    Route::prefix('observability')->group(function () {
+        Route::get('/health', [ObservabilityHealthController::class, 'index']);
+        Route::get('/health/{component}', [ObservabilityHealthController::class, 'component']);
+        Route::post('/health/clear-cache', [ObservabilityHealthController::class, 'clearCache']);
     });
 
     // =========================================================================
