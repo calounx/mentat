@@ -37,7 +37,7 @@ class BackupRepositoryTest extends TestCase
 
         $this->site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $vpsServer->id,
+            'vps_id' => $vpsServer->id,
         ]);
     }
 
@@ -71,7 +71,7 @@ class BackupRepositoryTest extends TestCase
 
         $otherSite = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => VpsServer::factory()->create()->id,
+            'vps_id' => VpsServer::factory()->create()->id,
         ]);
 
         SiteBackup::factory()->count(3)->create([
@@ -93,7 +93,7 @@ class BackupRepositoryTest extends TestCase
         $otherTenant = Tenant::factory()->create();
         $otherSite = Site::factory()->create([
             'tenant_id' => $otherTenant->id,
-            'vps_server_id' => VpsServer::factory()->create()->id,
+            'vps_id' => VpsServer::factory()->create()->id,
         ]);
 
         SiteBackup::factory()->count(3)->create([
@@ -148,7 +148,7 @@ class BackupRepositoryTest extends TestCase
 
         $otherSite = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => VpsServer::factory()->create()->id,
+            'vps_id' => VpsServer::factory()->create()->id,
         ]);
 
         SiteBackup::factory()->count(3)->create([
@@ -313,7 +313,7 @@ class BackupRepositoryTest extends TestCase
 
         $otherSite = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => VpsServer::factory()->create()->id,
+            'vps_id' => VpsServer::factory()->create()->id,
         ]);
 
         SiteBackup::factory()->count(4)->create([
@@ -412,7 +412,7 @@ class BackupRepositoryTest extends TestCase
 
         $otherSite = Site::factory()->create([
             'tenant_id' => $otherTenant->id,
-            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+            'vps_id' => VpsServer::factory()->create(['status' => 'active'])->id,
         ]);
 
         $otherBackup = SiteBackup::factory()->create([
@@ -457,7 +457,7 @@ class BackupRepositoryTest extends TestCase
         $otherTenant = Tenant::factory()->create(['status' => 'active']);
         $otherSite = Site::factory()->create([
             'tenant_id' => $otherTenant->id,
-            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+            'vps_id' => VpsServer::factory()->create(['status' => 'active'])->id,
         ]);
         $otherBackup = SiteBackup::factory()->create([
             'site_id' => $otherSite->id,
@@ -482,14 +482,14 @@ class BackupRepositoryTest extends TestCase
         $tenant2 = Tenant::factory()->create(['status' => 'active']);
         $site2 = Site::factory()->create([
             'tenant_id' => $tenant2->id,
-            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+            'vps_id' => VpsServer::factory()->create(['status' => 'active'])->id,
         ]);
         $backup2 = SiteBackup::factory()->create(['site_id' => $site2->id]);
 
         $tenant3 = Tenant::factory()->create(['status' => 'active']);
         $site3 = Site::factory()->create([
             'tenant_id' => $tenant3->id,
-            'vps_server_id' => VpsServer::factory()->create(['status' => 'active'])->id,
+            'vps_id' => VpsServer::factory()->create(['status' => 'active'])->id,
         ]);
         $backup3 = SiteBackup::factory()->create(['site_id' => $site3->id]);
 

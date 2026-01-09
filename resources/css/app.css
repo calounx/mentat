@@ -5,12 +5,658 @@
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+/* ============================================
+   CHOM - Refined Technical Elegance Theme
+   A sophisticated design system for infrastructure management
+   ============================================ */
+
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    /* Typography System - Distinctive & Elegant */
+    --font-display: 'Crimson Pro', Georgia, serif;
+    --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Jewel-Tone Color Palette */
+    --color-emerald-50: #f0fdf7;
+    --color-emerald-100: #dcfce8;
+    --color-emerald-200: #bbf7d1;
+    --color-emerald-300: #86efad;
+    --color-emerald-400: #4ade80;
+    --color-emerald-500: #22c55e;
+    --color-emerald-600: #059669;
+    --color-emerald-700: #047857;
+    --color-emerald-800: #065f46;
+    --color-emerald-900: #064e3b;
+    --color-emerald-950: #022c22;
+
+    --color-sapphire-50: #eff6ff;
+    --color-sapphire-100: #dbeafe;
+    --color-sapphire-200: #bfdbfe;
+    --color-sapphire-300: #93c5fd;
+    --color-sapphire-400: #60a5fa;
+    --color-sapphire-500: #3b82f6;
+    --color-sapphire-600: #2563eb;
+    --color-sapphire-700: #1d4ed8;
+    --color-sapphire-800: #1e40af;
+    --color-sapphire-900: #1e3a8a;
+    --color-sapphire-950: #0f172a;
+
+    --color-champagne-50: #fefce8;
+    --color-champagne-100: #fef9c3;
+    --color-champagne-200: #fef08a;
+    --color-champagne-300: #fde047;
+    --color-champagne-400: #facc15;
+    --color-champagne-500: #eab308;
+    --color-champagne-600: #ca8a04;
+    --color-champagne-700: #a16207;
+    --color-champagne-800: #854d0e;
+    --color-champagne-900: #713f12;
+
+    --color-ruby-50: #fef2f2;
+    --color-ruby-100: #fee2e2;
+    --color-ruby-200: #fecaca;
+    --color-ruby-300: #fca5a5;
+    --color-ruby-400: #f87171;
+    --color-ruby-500: #ef4444;
+    --color-ruby-600: #dc2626;
+    --color-ruby-700: #b91c1c;
+    --color-ruby-800: #991b1b;
+    --color-ruby-900: #7f1d1d;
+
+    /* Refined Neutrals - Warm Gray Palette */
+    --color-stone-50: #fafaf9;
+    --color-stone-100: #f5f5f4;
+    --color-stone-200: #e7e5e4;
+    --color-stone-300: #d6d3d1;
+    --color-stone-400: #a8a29e;
+    --color-stone-500: #78716c;
+    --color-stone-600: #57534e;
+    --color-stone-700: #44403c;
+    --color-stone-800: #292524;
+    --color-stone-900: #1c1917;
+    --color-stone-950: #0c0a09;
+
+    /* Spacing & Rhythm - Golden Ratio Inspired */
+    --spacing-base: 0.25rem; /* 4px */
+
+    /* Shadows - Sophisticated Depth */
+    --shadow-soft: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+    --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    --shadow-dramatic: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
+
+    /* Border Radius - Refined Curves */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+
+    /* Animation Timing - Elegant Motion */
+    --ease-elegant: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --duration-fast: 150ms;
+    --duration-base: 300ms;
+    --duration-slow: 500ms;
 }
 
-/* Alpine.js cloak directive - hide elements until Alpine initializes */
+/* ============================================
+   Global Styles & Reset Enhancements
+   ============================================ */
+
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);
+    color: var(--color-stone-900);
+    font-feature-settings: 'liga' 1, 'calt' 1, 'kern' 1;
+}
+
+/* Display Typography - Elegant Serif Headlines */
+h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--color-stone-900);
+}
+
+h1 {
+    font-size: clamp(1.875rem, 4vw, 2.5rem);
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+}
+
+h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.2;
+}
+
+h3 {
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    line-height: 1.3;
+}
+
+/* Monospace for Technical Content */
+code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    font-variant-ligatures: none;
+}
+
+/* ============================================
+   Sophisticated Card System
+   ============================================ */
+
+.card {
+    background: white;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    transition: all var(--duration-base) var(--ease-elegant);
+    position: relative;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--color-emerald-600), var(--color-sapphire-600), var(--color-champagne-600));
+    opacity: 0;
+    transition: opacity var(--duration-base) var(--ease-elegant);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-elevated);
+}
+
+.card:hover::before {
+    opacity: 1;
+}
+
+.card-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--color-stone-200);
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4));
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* ============================================
+   Elegant Buttons & Interactive Elements
+   ============================================ */
+
+.btn {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--radius-lg);
+    transition: all var(--duration-base) var(--ease-elegant);
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width var(--duration-slow) var(--ease-elegant),
+                height var(--duration-slow) var(--ease-elegant);
+}
+
+.btn:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--color-emerald-600), var(--color-emerald-700));
+    color: white;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+}
+
+.btn-secondary {
+    background: white;
+    color: var(--color-stone-700);
+    border: 1.5px solid var(--color-stone-300);
+    box-shadow: var(--shadow-soft);
+}
+
+.btn-secondary:hover {
+    border-color: var(--color-emerald-600);
+    color: var(--color-emerald-700);
+    box-shadow: var(--shadow-card);
+}
+
+/* ============================================
+   Status Indicators - Jewel-Toned
+   ============================================ */
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.status-healthy {
+    background: linear-gradient(135deg, rgba(5, 150, 105, 0.1), rgba(5, 150, 105, 0.05));
+    color: var(--color-emerald-800);
+    border: 1px solid var(--color-emerald-200);
+}
+
+.status-warning {
+    background: linear-gradient(135deg, rgba(202, 138, 4, 0.1), rgba(202, 138, 4, 0.05));
+    color: var(--color-champagne-800);
+    border: 1px solid var(--color-champagne-200);
+}
+
+.status-critical {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(220, 38, 38, 0.05));
+    color: var(--color-ruby-800);
+    border: 1px solid var(--color-ruby-200);
+}
+
+.status-info {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.05));
+    color: var(--color-sapphire-800);
+    border: 1px solid var(--color-sapphire-200);
+}
+
+/* Status Indicator Dots */
+.status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    animation: pulse-elegant 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-dot.healthy {
+    background: var(--color-emerald-500);
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
+}
+
+.status-dot.warning {
+    background: var(--color-champagne-500);
+    box-shadow: 0 0 0 2px rgba(202, 138, 4, 0.2);
+}
+
+.status-dot.critical {
+    background: var(--color-ruby-500);
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+@keyframes pulse-elegant {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+/* ============================================
+   Progress Bars - Sophisticated Gradients
+   ============================================ */
+
+.progress-bar {
+    width: 100%;
+    height: 0.75rem;
+    background: var(--color-stone-200);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    border-radius: var(--radius-md);
+    transition: width var(--duration-slow) var(--ease-elegant);
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.progress-healthy {
+    background: linear-gradient(90deg, var(--color-emerald-500), var(--color-emerald-600));
+}
+
+.progress-warning {
+    background: linear-gradient(90deg, var(--color-champagne-500), var(--color-champagne-600));
+}
+
+.progress-critical {
+    background: linear-gradient(90deg, var(--color-ruby-500), var(--color-ruby-600));
+}
+
+/* ============================================
+   Navigation - Refined & Elegant
+   ============================================ */
+
+.nav-link {
+    position: relative;
+    padding: 0.75rem 1rem;
+    font-weight: 500;
+    color: var(--color-stone-600);
+    transition: color var(--duration-base) var(--ease-elegant);
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--color-emerald-600), var(--color-sapphire-600));
+    transform: translateX(-50%);
+    transition: width var(--duration-base) var(--ease-elegant);
+}
+
+.nav-link:hover {
+    color: var(--color-emerald-700);
+}
+
+.nav-link.active {
+    color: var(--color-emerald-700);
+}
+
+.nav-link.active::after {
+    width: 100%;
+}
+
+/* ============================================
+   Tables - Refined Data Display
+   ============================================ */
+
+.table-refined {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-refined thead {
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.02), transparent);
+}
+
+.table-refined th {
+    padding: 1rem 1.5rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-stone-600);
+    border-bottom: 2px solid var(--color-stone-200);
+}
+
+.table-refined td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-stone-100);
+    transition: background var(--duration-fast) var(--ease-elegant);
+}
+
+.table-refined tbody tr:hover td {
+    background: rgba(5, 150, 105, 0.02);
+}
+
+/* ============================================
+   Forms - Elegant Input Design
+   ============================================ */
+
+.input-refined {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    color: var(--color-stone-900);
+    background: white;
+    border: 1.5px solid var(--color-stone-300);
+    border-radius: var(--radius-lg);
+    transition: all var(--duration-base) var(--ease-elegant);
+    box-shadow: var(--shadow-soft);
+}
+
+.input-refined:focus {
+    outline: none;
+    border-color: var(--color-emerald-500);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1), var(--shadow-card);
+}
+
+.input-refined::placeholder {
+    color: var(--color-stone-400);
+    font-style: italic;
+}
+
+/* ============================================
+   Charts & Data Visualization
+   ============================================ */
+
+.chart-container {
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-stone-200);
+    backdrop-filter: blur(10px);
+}
+
+/* ============================================
+   Loading States - Sophisticated Animation
+   ============================================ */
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--color-stone-200) 0%,
+        var(--color-stone-100) 50%,
+        var(--color-stone-200) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+    border-radius: var(--radius-md);
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.spinner-elegant {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid var(--color-stone-200);
+    border-top-color: var(--color-emerald-600);
+    border-radius: 50%;
+    animation: spin-elegant 0.8s linear infinite;
+}
+
+@keyframes spin-elegant {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================
+   Modals & Overlays - Dramatic Presentation
+   ============================================ */
+
+.modal-overlay {
+    background: rgba(28, 25, 23, 0.6);
+    backdrop-filter: blur(8px);
+    animation: fade-in var(--duration-base) var(--ease-elegant);
+}
+
+.modal-content {
+    background: white;
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-dramatic);
+    animation: slide-up var(--duration-base) var(--ease-elegant);
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(2rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   Micro-Interactions - Delightful Details
+   ============================================ */
+
+.hover-lift {
+    transition: transform var(--duration-base) var(--ease-elegant);
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+}
+
+.hover-glow {
+    transition: box-shadow var(--duration-base) var(--ease-elegant);
+}
+
+.hover-glow:hover {
+    box-shadow: 0 0 20px rgba(5, 150, 105, 0.3);
+}
+
+/* Staggered Reveal Animation */
+.stagger-item {
+    opacity: 0;
+    animation: reveal var(--duration-slow) var(--ease-elegant) forwards;
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0ms; }
+.stagger-item:nth-child(2) { animation-delay: 50ms; }
+.stagger-item:nth-child(3) { animation-delay: 100ms; }
+.stagger-item:nth-child(4) { animation-delay: 150ms; }
+.stagger-item:nth-child(5) { animation-delay: 200ms; }
+.stagger-item:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes reveal {
+    from {
+        opacity: 0;
+        transform: translateY(1rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   Alpine.js Utilities
+   ============================================ */
+
 [x-cloak] {
     display: none !important;
+}
+
+/* ============================================
+   Accessibility Enhancements
+   ============================================ */
+
+:focus-visible {
+    outline: 2px solid var(--color-emerald-600);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+    body {
+        background: white;
+    }
+
+    .card {
+        box-shadow: none;
+        border: 1px solid var(--color-stone-300);
+    }
 }

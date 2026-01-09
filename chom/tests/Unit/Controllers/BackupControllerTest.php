@@ -55,13 +55,13 @@ class BackupControllerTest extends TestCase
 
         $this->user = User::factory()->create([
             'organization_id' => $org->id,
-            'current_tenant_id' => $this->tenant->id,
         ]);
+        $this->user->tenants()->attach($this->tenant);
 
         $vps = VpsServer::factory()->create(['status' => 'active']);
         $this->site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $vps->id,
+            'vps_id' => $vps->id,
         ]);
 
         // Other tenant
@@ -74,7 +74,7 @@ class BackupControllerTest extends TestCase
         $otherVps = VpsServer::factory()->create(['status' => 'active']);
         $this->otherSite = Site::factory()->create([
             'tenant_id' => $this->otherTenant->id,
-            'vps_server_id' => $otherVps->id,
+            'vps_id' => $otherVps->id,
         ]);
 
         // Initialize repositories and services

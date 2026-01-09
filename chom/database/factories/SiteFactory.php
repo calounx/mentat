@@ -17,7 +17,7 @@ class SiteFactory extends Factory
         return [
             'id' => Str::uuid()->toString(),
             'tenant_id' => Tenant::factory(),
-            'vps_server_id' => VpsServer::factory(),
+            'vps_id' => VpsServer::factory(),
             'domain' => $this->faker->domainName(),
             'name' => $this->faker->company() . ' Site',
             'site_type' => 'wordpress',

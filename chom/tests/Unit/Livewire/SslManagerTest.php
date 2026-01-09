@@ -47,8 +47,8 @@ class SslManagerTest extends TestCase
         // Create user
         $this->user = User::factory()->create([
             'organization_id' => $this->organization->id,
-            'current_tenant_id' => $this->tenant->id,
         ]);
+        $this->user->tenants()->attach($this->tenant);
 
         // Create VPS server
         $this->vps = VpsServer::factory()->create([

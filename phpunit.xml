@@ -11,6 +11,12 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="CHOM Unit">
+            <directory>chom/tests/Unit</directory>
+        </testsuite>
+        <testsuite name="CHOM Feature">
+            <directory>chom/tests/Feature</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

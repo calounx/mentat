@@ -40,7 +40,7 @@ class SiteRepositoryTest extends TestCase
     {
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'domain' => 'example.com',
         ]);
 
@@ -64,12 +64,12 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->count(5)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         Site::factory()->count(3)->create([
             'tenant_id' => Tenant::factory()->create()->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         $result = $this->repository->findByTenant($this->tenant->id, [], 10);
@@ -83,13 +83,13 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->count(3)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'status' => 'active',
         ]);
 
         Site::factory()->count(2)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'status' => 'disabled',
         ]);
 
@@ -102,13 +102,13 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->count(2)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'site_type' => 'wordpress',
         ]);
 
         Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'site_type' => 'laravel',
         ]);
 
@@ -121,14 +121,14 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'domain' => 'example.com',
             'name' => 'Example Site',
         ]);
 
         Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'domain' => 'test.com',
             'name' => 'Test Site',
         ]);
@@ -143,7 +143,7 @@ class SiteRepositoryTest extends TestCase
     {
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         $found = $this->repository->findByIdAndTenant($site->id, $this->tenant->id);
@@ -159,7 +159,7 @@ class SiteRepositoryTest extends TestCase
         $otherTenant = Tenant::factory()->create();
         $site = Site::factory()->create([
             'tenant_id' => $otherTenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         $this->repository->findByIdAndTenant($site->id, $this->tenant->id);
@@ -169,7 +169,7 @@ class SiteRepositoryTest extends TestCase
     {
         $data = [
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'domain' => 'newsite.com',
             'site_type' => 'wordpress',
             'php_version' => '8.2',
@@ -194,7 +194,7 @@ class SiteRepositoryTest extends TestCase
     {
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'domain' => 'original.com',
             'status' => 'creating',
         ]);
@@ -224,11 +224,11 @@ class SiteRepositoryTest extends TestCase
 
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $oldVps->id,
+            'vps_id' => $oldVps->id,
         ]);
 
         $this->repository->update($site->id, [
-            'vps_server_id' => $newVps->id,
+            'vps_id' => $newVps->id,
         ]);
 
         $oldVps->refresh();
@@ -242,7 +242,7 @@ class SiteRepositoryTest extends TestCase
     {
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         $backups = \App\Models\SiteBackup::factory()->count(3)->create([
@@ -265,7 +265,7 @@ class SiteRepositoryTest extends TestCase
 
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $vps->id,
+            'vps_id' => $vps->id,
         ]);
 
         $this->repository->delete($site->id);
@@ -285,12 +285,12 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->count(7)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         Site::factory()->count(3)->create([
             'tenant_id' => Tenant::factory()->create()->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         $count = $this->repository->countByTenant($this->tenant->id);
@@ -302,13 +302,13 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->count(3)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'status' => 'active',
         ]);
 
         Site::factory()->count(2)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'status' => 'disabled',
         ]);
 
@@ -324,7 +324,7 @@ class SiteRepositoryTest extends TestCase
     {
         $site = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
             'status' => 'active',
         ]);
 
@@ -345,7 +345,7 @@ class SiteRepositoryTest extends TestCase
     {
         Site::factory()->count(25)->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vpsServer->id,
+            'vps_id' => $this->vpsServer->id,
         ]);
 
         $result = $this->repository->findAll(15);

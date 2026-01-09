@@ -27,9 +27,9 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "app/",
-            "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
+            "App\\": ["app/", "chom/app/"],
+            "Database\\Factories\\": ["database/factories/", "chom/database/factories/"],
+            "Database\\Seeders\\": ["database/seeders/", "chom/database/seeders/"]
         }
     },
     "autoload-dev": {

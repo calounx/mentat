@@ -47,34 +47,34 @@ class SiteTenantMappingsTest extends TestCase
         // Create users with different roles
         $this->ownerUser = User::factory()->create([
             'organization_id' => $this->org->id,
-            'current_tenant_id' => $this->tenant->id,
             'role' => 'owner',
         ]);
+        $this->ownerUser->tenants()->attach($this->tenant);
 
         $this->adminUser = User::factory()->create([
             'organization_id' => $this->org->id,
-            'current_tenant_id' => $this->tenant->id,
             'role' => 'admin',
         ]);
+        $this->adminUser->tenants()->attach($this->tenant);
 
         $this->memberUser = User::factory()->create([
             'organization_id' => $this->org->id,
-            'current_tenant_id' => $this->tenant->id,
             'role' => 'member',
         ]);
+        $this->memberUser->tenants()->attach($this->tenant);
 
         // Create VPS server and sites
         $this->vps = VpsServer::factory()->create(['status' => 'active']);
 
         $this->site1 = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vps->id,
+            'vps_id' => $this->vps->id,
             'domain' => 'site1.example.com',
         ]);
 
         $this->site2 = Site::factory()->create([
             'tenant_id' => $this->tenant->id,
-            'vps_server_id' => $this->vps->id,
+            'vps_id' => $this->vps->id,
             'domain' => 'site2.example.com',
         ]);
     }
@@ -183,7 +183,7 @@ class SiteTenantMappingsTest extends TestCase
 
         $site3 = Site::factory()->create([
             'tenant_id' => $tenant2->id,
-            'vps_server_id' => $this->vps->id,
+            'vps_id' => $this->vps->id,
             'domain' => 'site3.example.com',
         ]);
 

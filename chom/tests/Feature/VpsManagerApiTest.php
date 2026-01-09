@@ -50,9 +50,9 @@ class VpsManagerApiTest extends TestCase
         ]);
         $this->userA = User::factory()->create([
             'organization_id' => $this->orgA->id,
-            'current_tenant_id' => $this->tenantA->id,
             'role' => 'member',
         ]);
+        $this->userA->tenants()->attach($this->tenantA);
 
         $this->vpsA = VpsServer::factory()->create([
             'status' => 'active',
@@ -77,9 +77,9 @@ class VpsManagerApiTest extends TestCase
         ]);
         $this->userB = User::factory()->create([
             'organization_id' => $this->orgB->id,
-            'current_tenant_id' => $this->tenantB->id,
             'role' => 'member',
         ]);
+        $this->userB->tenants()->attach($this->tenantB);
 
         $this->vpsB = VpsServer::factory()->create([
             'status' => 'active',

@@ -43,9 +43,9 @@ class VpsHealthMonitorTest extends TestCase
         // Create user with member role (minimum required)
         $this->user = User::factory()->create([
             'organization_id' => $this->org->id,
-            'current_tenant_id' => $this->tenant->id,
             'role' => 'member',
         ]);
+        $this->user->tenants()->attach($this->tenant);
 
         // Create VPS server
         $this->vps = VpsServer::factory()->create([
@@ -79,9 +79,9 @@ class VpsHealthMonitorTest extends TestCase
         // Create a user without permission (viewer role)
         $viewer = User::factory()->create([
             'organization_id' => $this->org->id,
-            'current_tenant_id' => $this->tenant->id,
             'role' => 'viewer',
         ]);
+        $viewer->tenants()->attach($this->tenant);
 
         $this->actingAs($viewer);
 

@@ -56,9 +56,9 @@ class VpsManagerControllerTest extends TestCase
 
         $this->user = User::factory()->create([
             'organization_id' => $org->id,
-            'current_tenant_id' => $this->tenant->id,
             'role' => 'member',
         ]);
+        $this->user->tenants()->attach($this->tenant);
 
         // Create VPS and site
         $this->vps = VpsServer::factory()->create([

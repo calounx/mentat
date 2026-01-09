@@ -50,13 +50,13 @@ class BackupTenantIsolationTest extends TestCase
         ]);
         $this->userA = User::factory()->create([
             'organization_id' => $this->orgA->id,
-            'current_tenant_id' => $this->tenantA->id,
         ]);
+        $this->userA->tenants()->attach($this->tenantA);
 
         $vpsA = VpsServer::factory()->create(['status' => 'active']);
         $this->siteA = Site::factory()->create([
             'tenant_id' => $this->tenantA->id,
-            'vps_server_id' => $vpsA->id,
+            'vps_id' => $vpsA->id,
             'domain' => 'site-a.example.com',
         ]);
         $this->backupA = SiteBackup::factory()->create([
@@ -73,13 +73,13 @@ class BackupTenantIsolationTest extends TestCase
         ]);
         $this->userB = User::factory()->create([
             'organization_id' => $this->orgB->id,
-            'current_tenant_id' => $this->tenantB->id,
         ]);
+        $this->userB->tenants()->attach($this->tenantB);
 
         $vpsB = VpsServer::factory()->create(['status' => 'active']);
         $this->siteB = Site::factory()->create([
             'tenant_id' => $this->tenantB->id,
-            'vps_server_id' => $vpsB->id,
+            'vps_id' => $vpsB->id,
             'domain' => 'site-b.example.com',
         ]);
         $this->backupB = SiteBackup::factory()->create([
