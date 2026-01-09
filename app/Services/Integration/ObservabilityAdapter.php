@@ -4,19 +4,25 @@ namespace App\Services\Integration;
 
 use App\Models\Tenant;
 use App\Models\VpsServer;
+use App\Services\Reliability\CircuitBreaker\CircuitBreakerManager;
+use App\Services\Reliability\Retry\HasRetry;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 
 class ObservabilityAdapter
 {
+    use HasRetry;
+
     private string $prometheusUrl;
     private string $lokiUrl;
     private string $grafanaUrl;
     private ?string $grafanaApiKey;
+    private CircuitBreakerManager $circuitBreaker;
 
-    public function __construct()
+    public function __construct(CircuitBreakerManager $circuitBreaker)
     {
+        $this->circuitBreaker = $circuitBreaker;
         $this->prometheusUrl = config('chom.observability.prometheus_url');
         $this->lokiUrl = config('chom.observability.loki_url');
         $this->grafanaUrl = config('chom.observability.grafana_url');
@@ -36,38 +42,35 @@ class ObservabilityAdapter
     // =========================================================================
 
     /**
-     * Query Prometheus metrics with tenant scoping.
+     * Query Prometheus metrics with tenant scoping, circuit breaker, and retry.
      */
     public function queryMetrics(Tenant $tenant, string $query, array $options = []): array
     {
         // Inject tenant_id label into query for isolation
         $scopedQuery = $this->injectTenantScope($query, $tenant->id);
 
-        try {
-            $response = Http::timeout(30)->get("{$this->prometheusUrl}/api/v1/query", [
-                'query' => $scopedQuery,
-                'time' => $options['time'] ?? null,
-            ]);
+        return $this->circuitBreaker->breaker('prometheus')->call(
+            callback: function () use ($scopedQuery, $options) {
+                return $this->retryOrDefault('prometheus', function () use ($scopedQuery, $options) {
+                    $response = Http::timeout(30)->get("{$this->prometheusUrl}/api/v1/query", [
+                        'query' => $scopedQuery,
+                        'time' => $options['time'] ?? null,
+                    ]);
 
-            if ($response->successful()) {
-                return $response->json();
-            }
+                    if ($response->successful()) {
+                        return $response->json();
+                    }
 
-            Log::warning('Prometheus query failed', [
-                'query' => $scopedQuery,
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
+                    Log::warning('Prometheus query failed', [
+                        'query' => $scopedQuery,
+                        'status' => $response->status(),
+                    ]);
 
-            return ['status' => 'error', 'error' => $response->body()];
-        } catch (\Exception $e) {
-            Log::error('Prometheus query exception', [
-                'query' => $scopedQuery,
-                'error' => $e->getMessage(),
-            ]);
-
-            return ['status' => 'error', 'error' => $e->getMessage()];
-        }
+                    return ['status' => 'error', 'error' => $response->body()];
+                }, ['status' => 'error', 'error' => 'Prometheus unavailable'], 'prometheus-query');
+            },
+            fallback: fn() => ['status' => 'error', 'error' => 'Prometheus circuit breaker open']
+        );
     }
 
     /**
@@ -212,7 +215,7 @@ class ObservabilityAdapter
     // =========================================================================
 
     /**
-     * Query Loki logs with tenant isolation.
+     * Query Loki logs with tenant isolation, circuit breaker, and retry.
      */
     public function queryLogs(Tenant $tenant, string $query, array $options = []): array
     {
@@ -220,28 +223,26 @@ class ObservabilityAdapter
         $end = $options['end'] ?? (now()->timestamp * 1000000000);
         $limit = $options['limit'] ?? 1000;
 
-        try {
-            // Loki uses X-Loki-Org-Id header for tenant isolation
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'X-Loki-Org-Id' => (string) $tenant->id,
-                ])
-                ->get("{$this->lokiUrl}/loki/api/v1/query_range", [
-                    'query' => $query,
-                    'start' => (string) $start,
-                    'end' => (string) $end,
-                    'limit' => $limit,
-                ]);
+        return $this->circuitBreaker->breaker('loki')->call(
+            callback: function () use ($tenant, $query, $start, $end, $limit) {
+                return $this->retryOrDefault('loki', function () use ($tenant, $query, $start, $end, $limit) {
+                    // Loki uses X-Loki-Org-Id header for tenant isolation
+                    $response = Http::timeout(30)
+                        ->withHeaders([
+                            'X-Loki-Org-Id' => (string) $tenant->id,
+                        ])
+                        ->get("{$this->lokiUrl}/loki/api/v1/query_range", [
+                            'query' => $query,
+                            'start' => (string) $start,
+                            'end' => (string) $end,
+                            'limit' => $limit,
+                        ]);
 
-            return $response->json();
-        } catch (\Exception $e) {
-            Log::error('Loki query exception', [
-                'query' => $query,
-                'error' => $e->getMessage(),
-            ]);
-
-            return ['status' => 'error', 'error' => $e->getMessage()];
-        }
+                    return $response->json();
+                }, ['status' => 'error', 'error' => 'Loki unavailable'], 'loki-query');
+            },
+            fallback: fn() => ['status' => 'error', 'error' => 'Loki circuit breaker open']
+        );
     }
 
     /**
