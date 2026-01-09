@@ -590,7 +590,7 @@ phase_prepare_landsraad() {
         log_info "Copying deployment files to $LANDSRAAD_HOST as $DEPLOY_USER"
 
         # Clean up and create fresh directory structure (idempotent)
-        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "rm -rf /tmp/chom-deploy && mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils"
+        sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" "rm -rf /tmp/chom-deploy && mkdir -p /tmp/chom-deploy/scripts /tmp/chom-deploy/utils /tmp/chom-deploy/vpsmanager"
 
         # Copy files maintaining structure (using stilgar's SSH)
         sudo -u "$DEPLOY_USER" scp "${SCRIPT_DIR}/scripts/prepare-landsraad.sh" \
@@ -614,6 +614,12 @@ phase_prepare_landsraad() {
             "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/utils/" || {
             log_error "Failed to copy utils"
             return 1
+        }
+
+        # Copy VPSManager directory
+        sudo -u "$DEPLOY_USER" scp -r "${SCRIPT_DIR}/vpsmanager" \
+            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/" || {
+            log_warning "Failed to copy VPSManager (site provisioning may not work)"
         }
 
         # Ensure scripts are executable
@@ -658,6 +664,10 @@ phase_deploy_application() {
 
         sudo -u "$DEPLOY_USER" scp -r "${SCRIPT_DIR}/utils/"* \
             "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/utils/" 2>/dev/null || true
+
+        # Copy VPSManager directory
+        sudo -u "$DEPLOY_USER" scp -r "${SCRIPT_DIR}/vpsmanager" \
+            "$DEPLOY_USER@$LANDSRAAD_HOST:/tmp/chom-deploy/" 2>/dev/null || true
 
         # Ensure scripts are executable
         sudo -u "$DEPLOY_USER" ssh "$DEPLOY_USER@$LANDSRAAD_HOST" \
