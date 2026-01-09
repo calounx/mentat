@@ -28,6 +28,13 @@ return [
     |--------------------------------------------------------------------------
     */
 
+    // Top-level URLs for direct access
+    'prometheus_url' => env('CHOM_PROMETHEUS_URL'),
+    'loki_url' => env('CHOM_LOKI_URL'),
+    'grafana_url' => env('CHOM_GRAFANA_URL'),
+    'alertmanager_url' => env('CHOM_ALERTMANAGER_URL'),
+
+    // Nested observability config for backward compatibility
     'observability' => [
         'prometheus_url' => env('CHOM_PROMETHEUS_URL'),
         'loki_url' => env('CHOM_LOKI_URL'),
