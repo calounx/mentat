@@ -30,15 +30,53 @@ class SitePolicy
 
     /**
      * Determine whether the user can create sites.
-     * Only owner, admin, and member roles can create sites.
+     * Requires user approval, organization approval, tenant approval,
+     * plan selection, active tenant status, and proper role permissions.
      */
     public function create(User $user): Response
     {
-        if ($user->canManageSites()) {
-            return Response::allow();
+        $tenant = $user->currentTenant();
+
+        if (! $tenant) {
+            return Response::deny('You must be associated with a tenant to create sites.');
         }
 
-        return Response::deny('You do not have permission to create sites.');
+        // Check user approval
+        if (! $user->isApproved()) {
+            return Response::deny('Your account is pending approval.');
+        }
+
+        // Check organization approval
+        if ($user->organization && ! $user->organization->isApproved()) {
+            return Response::deny('Your organization is pending approval.');
+        }
+
+        // Check tenant approval
+        if (! $tenant->isApproved()) {
+            return Response::deny('Your tenant account is pending approval.');
+        }
+
+        // Check plan selection
+        if (! $tenant->hasPlanSelected()) {
+            return Response::deny('You must select a plan before creating sites.');
+        }
+
+        // Check tenant status
+        if (! $tenant->isActive()) {
+            return Response::deny('Your account is currently suspended.');
+        }
+
+        // Check role permission
+        if (! $user->canManageSites()) {
+            return Response::deny('You do not have permission to create sites.');
+        }
+
+        // Check quota
+        if (! $tenant->canCreateSite()) {
+            return Response::deny("You have reached your plan's site limit.");
+        }
+
+        return Response::allow();
     }
 
     /**
