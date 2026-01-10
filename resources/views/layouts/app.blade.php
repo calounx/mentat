@@ -83,6 +83,7 @@
                                 </svg>
                                 Sites
                             </a>
+                            @if(!auth()->user()->isSuperAdmin() || auth()->user()->currentTenant())
                             <a href="{{ route('backups.index') }}"
                                class="nav-link {{ request()->routeIs('backups.*') ? 'active' : '' }} inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-300
                                       {{ request()->routeIs('backups.*') ? 'text-emerald-700 bg-emerald-50/80' : 'text-stone-600 hover:text-emerald-700 hover:bg-stone-50' }}">
@@ -107,6 +108,7 @@
                                 </svg>
                                 Team
                             </a>
+                            @endif
                         </div>
                     </div>
 
@@ -211,6 +213,7 @@
                     <a href="{{ route('sites.index') }}" class="block px-3 py-2.5 rounded-lg text-base font-medium {{ request()->routeIs('sites.*') ? 'text-emerald-700 bg-emerald-50' : 'text-stone-600 hover:text-emerald-700 hover:bg-stone-50' }} transition-colors duration-200">
                         Sites
                     </a>
+                    @if(!auth()->user()->isSuperAdmin() || auth()->user()->currentTenant())
                     <a href="{{ route('backups.index') }}" class="block px-3 py-2.5 rounded-lg text-base font-medium {{ request()->routeIs('backups.*') ? 'text-emerald-700 bg-emerald-50' : 'text-stone-600 hover:text-emerald-700 hover:bg-stone-50' }} transition-colors duration-200">
                         Backups
                     </a>
@@ -220,6 +223,7 @@
                     <a href="{{ route('team.index') }}" class="block px-3 py-2.5 rounded-lg text-base font-medium {{ request()->routeIs('team.*') ? 'text-emerald-700 bg-emerald-50' : 'text-stone-600 hover:text-emerald-700 hover:bg-stone-50' }} transition-colors duration-200">
                         Team
                     </a>
+                    @endif
                 </div>
                 @auth
                     <div class="pt-4 pb-3 border-t border-stone-200">
