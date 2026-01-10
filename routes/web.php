@@ -101,38 +101,81 @@ Route::middleware('guest')->group(function () {
     })->name('register');
 
     Route::post('/register', function () {
+        // Check for rejected email first
+        $email = request()->input('email');
+        if (\App\Models\RejectedEmail::isRejected($email)) {
+            return back()->withErrors([
+                'email' => 'This email address is not eligible for registration.',
+            ])->onlyInput('email');
+        }
+
         $validated = request()->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'username' => ['required', 'string', 'max:50', 'unique:users', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'confirmed', 'min:8'],
-            'organization_name' => ['required', 'string', 'max:255'],
+            'organization_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $organization = \App\Models\Organization::create([
-            'name' => $validated['organization_name'],
-            'slug' => \Illuminate\Support\Str::slug($validated['organization_name']) . '-' . \Illuminate\Support\Str::random(6),
-            'billing_email' => $validated['email'],
-        ]);
+        \DB::transaction(function () use ($validated) {
+            // Determine organization
+            if (!empty($validated['organization_name'])) {
+                $organization = \App\Models\Organization::create([
+                    'name' => $validated['organization_name'],
+                    'slug' => \Illuminate\Support\Str::slug($validated['organization_name']) . '-' . \Illuminate\Support\Str::random(6),
+                    'is_fictive' => false,
+                    'is_approved' => false,
+                    'status' => 'active',
+                    'billing_email' => $validated['email'],
+                ]);
+            } else {
+                // Create fictive organization
+                $organization = \App\Models\Organization::create([
+                    'name' => "Personal - {$validated['first_name']} {$validated['last_name']}",
+                    'slug' => 'fictive-' . \Illuminate\Support\Str::random(12),
+                    'is_fictive' => true,
+                    'is_approved' => false,
+                    'status' => 'active',
+                    'billing_email' => $validated['email'],
+                ]);
+            }
 
-        $tenant = \App\Models\Tenant::create([
-            'organization_id' => $organization->id,
-            'name' => 'Default',
-            'slug' => 'default',
-            'tier' => 'starter',
-            'status' => 'active',
-        ]);
+            // Create tenant (NOT approved, NO tier assigned yet)
+            $tenant = \App\Models\Tenant::create([
+                'organization_id' => $organization->id,
+                'name' => $organization->name,
+                'slug' => $organization->slug,
+                'status' => 'active',
+                'is_approved' => false,
+                'requires_plan_selection' => true,
+                'tier' => null,
+            ]);
 
-        $user = \App\Models\User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'organization_id' => $organization->id,
-            'role' => 'owner',
-        ]);
+            // Create user (pending approval)
+            $user = \App\Models\User::create([
+                'username' => $validated['username'],
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'password' => \Hash::make($validated['password']),
+                'organization_id' => $organization->id,
+                'role' => 'owner',
+                'approval_status' => 'pending',
+            ]);
 
-        auth()->login($user);
+            // Send verification email (Laravel built-in)
+            $user->sendEmailVerificationNotification();
 
-        return redirect()->route('dashboard');
+            // Notify admins
+            $admins = \App\Models\User::where('is_super_admin', true)->get();
+            \Notification::send($admins, new \App\Notifications\NewUserRegistered($user, $organization));
+        });
+
+        // DO NOT log in the user
+        return redirect()->route('login')->with('status',
+            'Registration successful! Please check your email to verify your account. Once verified, an administrator will review your application.'
+        );
     });
 
     // Password Reset Routes

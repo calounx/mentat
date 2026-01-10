@@ -40,35 +40,51 @@
                 @csrf
 
                 <div class="mb-4">
-                    <label for="organization_name" class="block text-sm font-medium text-gray-700 mb-1">
-                        Organization Name
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-1">
+                        Username
                     </label>
                     <input type="text"
-                           id="organization_name"
-                           name="organization_name"
-                           value="{{ old('organization_name') }}"
+                           id="username"
+                           name="username"
+                           value="{{ old('username') }}"
                            required
                            autofocus
-                           placeholder="My Company"
+                           pattern="[a-zA-Z0-9_-]+"
+                           placeholder="johndoe"
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">Letters, numbers, hyphens, and underscores only</p>
                 </div>
 
-                <div class="mb-4">
-                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
-                        Your Name
-                    </label>
-                    <input type="text"
-                           id="name"
-                           name="name"
-                           value="{{ old('name') }}"
-                           required
-                           placeholder="John Doe"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="first_name" class="block text-sm font-medium text-gray-700 mb-1">
+                            First Name
+                        </label>
+                        <input type="text"
+                               id="first_name"
+                               name="first_name"
+                               value="{{ old('first_name') }}"
+                               required
+                               placeholder="John"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="last_name" class="block text-sm font-medium text-gray-700 mb-1">
+                            Last Name
+                        </label>
+                        <input type="text"
+                               id="last_name"
+                               name="last_name"
+                               value="{{ old('last_name') }}"
+                               required
+                               placeholder="Doe"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
                 </div>
 
                 <div class="mb-4">
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-                        Email address
+                        Email Address
                     </label>
                     <input type="email"
                            id="email"
@@ -77,6 +93,19 @@
                            required
                            placeholder="you@example.com"
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <div class="mb-4">
+                    <label for="organization_name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Organization Name <span class="text-gray-500 font-normal">(Optional)</span>
+                    </label>
+                    <input type="text"
+                           id="organization_name"
+                           name="organization_name"
+                           value="{{ old('organization_name') }}"
+                           placeholder="Leave blank if you don't have an organization"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">If you're signing up as an individual, leave this blank</p>
                 </div>
 
                 <div class="mb-4">
@@ -118,7 +147,7 @@
         </div>
 
         <p class="mt-4 text-center text-xs text-gray-500">
-            Start with Starter plan (5 sites, 10GB storage) - Upgrade anytime
+            After verification and approval, you'll select a plan to get started
         </p>
     </div>
 </body>
