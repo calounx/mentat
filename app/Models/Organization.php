@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -20,7 +21,23 @@ class Organization extends Model
         'billing_email',
         'stripe_customer_id',
         'status',
+        'is_fictive',
+        'is_approved',
+        'approved_at',
+        'approved_by',
+        'approval_notes',
+        'rejected_by',
+        'rejection_reason',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_fictive' => 'boolean',
+            'is_approved' => 'boolean',
+            'approved_at' => 'datetime',
+        ];
+    }
 
     protected $hidden = [
         'stripe_customer_id',
@@ -154,6 +171,65 @@ class Organization extends Model
         }
 
         return $blockers;
+    }
+
+    /**
+     * Check if organization is fictive (auto-created placeholder).
+     */
+    public function isFictive(): bool
+    {
+        return $this->is_fictive === true;
+    }
+
+    /**
+     * Check if organization is approved.
+     */
+    public function isApproved(): bool
+    {
+        return $this->is_approved === true;
+    }
+
+    /**
+     * Approve this organization.
+     */
+    public function approve(User $approver, ?string $notes = null): void
+    {
+        $this->update([
+            'is_approved' => true,
+            'approved_at' => now(),
+            'approved_by' => $approver->id,
+            'approval_notes' => $notes,
+        ]);
+    }
+
+    /**
+     * Reject this organization.
+     */
+    public function reject(User $rejector, string $reason): void
+    {
+        $this->update([
+            'is_approved' => false,
+            'approved_at' => null,
+            'approved_by' => null,
+            'rejection_reason' => $reason,
+            'rejected_by' => $rejector->id,
+        ]);
+    }
+
+    /**
+     * Get the user who approved this organization.
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Get the user who rejected this organization.
+     */
+    public function rejector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 
     /**

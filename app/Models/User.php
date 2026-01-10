@@ -19,7 +19,9 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasFactory, Notifiable, HasApiTokens, HasUuids;
 
     protected $fillable = [
-        'name',
+        'username',
+        'first_name',
+        'last_name',
         'email',
         'password',
         'organization_id',
@@ -29,6 +31,12 @@ class User extends Authenticatable implements MustVerifyEmail
         'two_factor_secret',
         'settings',
         'must_reset_password',
+        'approval_status',
+        'approved_at',
+        'approved_by',
+        'rejected_at',
+        'rejected_by',
+        'rejection_reason',
     ];
 
     protected $hidden = [
@@ -46,6 +54,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'two_factor_enabled' => 'boolean',
             'settings' => 'array',
             'must_reset_password' => 'boolean',
+            'approval_status' => 'string',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
     }
 
@@ -112,6 +123,84 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isSuperAdmin(): bool
     {
         return $this->is_super_admin === true;
+    }
+
+    /**
+     * Check if user approval is pending.
+     */
+    public function isPending(): bool
+    {
+        return $this->approval_status === 'pending';
+    }
+
+    /**
+     * Check if user is approved.
+     */
+    public function isApproved(): bool
+    {
+        return $this->approval_status === 'approved';
+    }
+
+    /**
+     * Check if user was rejected.
+     */
+    public function isRejected(): bool
+    {
+        return $this->approval_status === 'rejected';
+    }
+
+    /**
+     * Approve this user.
+     */
+    public function approve(User $approver): void
+    {
+        $this->update([
+            'approval_status' => 'approved',
+            'approved_at' => now(),
+            'approved_by' => $approver->id,
+        ]);
+    }
+
+    /**
+     * Reject this user with reason and track in spam database.
+     */
+    public function reject(User $rejector, string $reason): void
+    {
+        \DB::transaction(function () use ($rejector, $reason) {
+            $this->update([
+                'approval_status' => 'rejected',
+                'rejected_at' => now(),
+                'rejected_by' => $rejector->id,
+                'rejection_reason' => $reason,
+            ]);
+
+            // Track in spam database
+            RejectedEmail::trackRejection($this->email, $this->id, $reason, $rejector->id);
+        });
+    }
+
+    /**
+     * Get user's full name.
+     */
+    public function fullName(): string
+    {
+        return trim("{$this->first_name} {$this->last_name}");
+    }
+
+    /**
+     * Get the user who approved this user.
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Get the user who rejected this user.
+     */
+    public function rejector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 
     /**

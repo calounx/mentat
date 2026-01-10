@@ -24,6 +24,8 @@ class Tenant extends Model
         'is_approved',
         'approved_at',
         'approved_by',
+        'requires_plan_selection',
+        'plan_selected_at',
         'settings',
         'metrics_retention_days',
     ];
@@ -32,6 +34,8 @@ class Tenant extends Model
         'settings' => 'array',
         'is_approved' => 'boolean',
         'approved_at' => 'datetime',
+        'requires_plan_selection' => 'boolean',
+        'plan_selected_at' => 'datetime',
     ];
 
     /**
@@ -96,6 +100,22 @@ class Tenant extends Model
     {
         return $this->belongsToMany(User::class, 'tenant_user')
                     ->withTimestamps();
+    }
+
+    /**
+     * Get all plan change requests for this tenant.
+     */
+    public function planChangeRequests(): HasMany
+    {
+        return $this->hasMany(PlanChangeRequest::class);
+    }
+
+    /**
+     * Get pending plan change requests.
+     */
+    public function pendingPlanChangeRequests(): HasMany
+    {
+        return $this->planChangeRequests()->where('status', 'pending');
     }
 
     /**
@@ -188,8 +208,48 @@ class Tenant extends Model
     }
 
     /**
+     * Check if tenant requires plan selection.
+     */
+    public function requiresPlanSelection(): bool
+    {
+        return $this->requires_plan_selection === true;
+    }
+
+    /**
+     * Check if tenant has a plan selected.
+     */
+    public function hasPlanSelected(): bool
+    {
+        return $this->tier !== null && $this->plan_selected_at !== null;
+    }
+
+    /**
+     * Select a plan for this tenant.
+     */
+    public function selectPlan(string $tier): void
+    {
+        $this->update([
+            'tier' => $tier,
+            'plan_selected_at' => now(),
+            'requires_plan_selection' => false,
+        ]);
+    }
+
+    /**
+     * Check if tenant can create sites.
+     * Tenant must be active, approved, and have a plan selected.
+     */
+    public function canCreateSites(): bool
+    {
+        return $this->isActive()
+            && $this->isApproved()
+            && $this->hasPlanSelected();
+    }
+
+    /**
      * Check if tenant can have sites created.
      * Tenant must be both active and approved.
+     * @deprecated Use canCreateSites() instead
      */
     public function canHaveSites(): bool
     {
