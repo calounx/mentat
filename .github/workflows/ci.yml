@@ -1,0 +1,400 @@
+name: CHOM CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PHP_VERSION: '8.2'
+  NODE_VERSION: '20'
+
+jobs:
+  #############################################################################
+  # Code Quality & Linting
+  #############################################################################
+  lint:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, ctype, json, curl, zip, pdo, pdo_pgsql, redis
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-suggest --no-interaction
+
+      - name: Run Laravel Pint (Code Formatter)
+        run: vendor/bin/pint --test
+
+      - name: Check PHP syntax errors
+        run: find app tests -name "*.php" -exec php -l {} \;
+
+  #############################################################################
+  # Unit & Feature Tests
+  #############################################################################
+  test:
+    name: Unit & Feature Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: chom_test
+          POSTGRES_USER: chom_user
+          POSTGRES_PASSWORD: chom_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, ctype, json, curl, zip, pdo, pdo_pgsql, redis, bcmath, gd, intl
+          coverage: xdebug
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Set environment variables
+        run: |
+          echo "DB_CONNECTION=pgsql" >> .env
+          echo "DB_HOST=127.0.0.1" >> .env
+          echo "DB_PORT=5432" >> .env
+          echo "DB_DATABASE=chom_test" >> .env
+          echo "DB_USERNAME=chom_user" >> .env
+          echo "DB_PASSWORD=chom_password" >> .env
+          echo "REDIS_HOST=127.0.0.1" >> .env
+          echo "CACHE_DRIVER=redis" >> .env
+          echo "QUEUE_CONNECTION=redis" >> .env
+          echo "SESSION_DRIVER=redis" >> .env
+
+      - name: Run database migrations
+        run: php artisan migrate --force
+
+      - name: Run tests with coverage
+        run: php artisan test --coverage --min=70
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  #############################################################################
+  # Multi-Tenancy Isolation Tests
+  #############################################################################
+  multi-tenancy:
+    name: Multi-Tenancy Isolation Tests
+    runs-on: ubuntu-latest
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: chom_test
+          POSTGRES_USER: chom_user
+          POSTGRES_PASSWORD: chom_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, ctype, json, curl, zip, pdo, pdo_pgsql
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Configure database
+        run: |
+          echo "DB_CONNECTION=pgsql" >> .env
+          echo "DB_HOST=127.0.0.1" >> .env
+          echo "DB_DATABASE=chom_test" >> .env
+          echo "DB_USERNAME=chom_user" >> .env
+          echo "DB_PASSWORD=chom_password" >> .env
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: Run multi-tenancy isolation tests
+        run: php artisan test --filter=BackupTenantIsolation --stop-on-failure
+
+      - name: Scan for multi-tenancy violations
+        run: |
+          echo "Scanning for unfiltered queries..."
+          ! grep -r "::all()" app/Repositories/ || (echo "Found unfiltered queries in repositories!" && exit 1)
+          echo "Multi-tenancy scan passed!"
+
+  #############################################################################
+  # Security Scan
+  #############################################################################
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, xml, ctype, json
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Check for security vulnerabilities
+        run: composer audit
+
+      - name: Scan for sensitive data
+        run: |
+          echo "Scanning for potential secrets..."
+          ! grep -r "sk_live_" . --exclude-dir=vendor --exclude-dir=.git || (echo "Found live Stripe keys!" && exit 1)
+          ! grep -r "password.*=.*['\"][^'\"]{8,}" .env* --exclude=.env.example || (echo "Found hardcoded passwords!" && exit 1)
+          echo "No sensitive data found!"
+
+      - name: Check SSH key permissions
+        run: |
+          echo "Checking for SSH keys with wrong permissions..."
+          find . -name "id_rsa" -o -name "*.pem" -o -name "*_key" | while read file; do
+            if [ -f "$file" ]; then
+              echo "WARNING: SSH key found in repository: $file"
+              exit 1
+            fi
+          done
+          echo "No SSH keys found in repository!"
+
+  #############################################################################
+  # Build Frontend Assets
+  #############################################################################
+  build:
+    name: Build Frontend Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Check for build errors
+        run: |
+          if [ ! -d "public/build" ]; then
+            echo "Build directory not found!"
+            exit 1
+          fi
+          echo "Build successful!"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-assets
+          path: public/build/
+          retention-days: 7
+
+  #############################################################################
+  # Deployment Validation Tests
+  #############################################################################
+  deployment-tests:
+    name: Deployment Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate deployment scripts
+        run: |
+          echo "Running shellcheck on deployment scripts..."
+          find deploy -name "*.sh" -type f -exec shellcheck -x {} \;
+
+      - name: Test deployment script syntax
+        run: |
+          echo "Testing deployment script syntax..."
+          bash -n deploy/deploy-chom-automated.sh
+          bash -n deploy/deploy-chom.sh
+
+      - name: Validate VPSManager scripts
+        run: |
+          echo "Validating VPSManager scripts..."
+          find deploy/vpsmanager -name "*.sh" -type f -exec bash -n {} \;
+
+      - name: Check deployment documentation
+        run: |
+          echo "Checking for required documentation..."
+          test -f deploy/README.md || (echo "deploy/README.md missing!" && exit 1)
+          test -f deploy/QUICK-START-AUTOMATED.md || (echo "Quick start guide missing!" && exit 1)
+          echo "Documentation checks passed!"
+
+  #############################################################################
+  # Integration Test Summary
+  #############################################################################
+  integration-summary:
+    name: Integration Test Summary
+    runs-on: ubuntu-latest
+    needs: [lint, test, multi-tenancy, security, build, deployment-tests]
+    if: always()
+
+    steps:
+      - name: Check job results
+        run: |
+          echo "=== CI/CD Pipeline Summary ==="
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Tests: ${{ needs.test.result }}"
+          echo "Multi-Tenancy: ${{ needs.multi-tenancy.result }}"
+          echo "Security: ${{ needs.security.result }}"
+          echo "Build: ${{ needs.build.result }}"
+          echo "Deployment: ${{ needs.deployment-tests.result }}"
+
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.multi-tenancy.result }}" != "success" ] || \
+             [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.deployment-tests.result }}" != "success" ]; then
+            echo "❌ Pipeline FAILED"
+            exit 1
+          fi
+
+          echo "✅ All checks passed!"
+
+      - name: Post status comment (on PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `
+            ## CI/CD Pipeline Results
+
+            | Check | Status |
+            |-------|--------|
+            | Code Quality | ${{ needs.lint.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+            | Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+            | Multi-Tenancy | ${{ needs.multi-tenancy.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+            | Security | ${{ needs.security.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+            | Build | ${{ needs.build.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+            | Deployment | ${{ needs.deployment-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+
+            ${{ needs.lint.result == 'success' && needs.test.result == 'success' && needs.multi-tenancy.result == 'success' && needs.security.result == 'success' && needs.build.result == 'success' && needs.deployment-tests.result == 'success' && '### ✅ All checks passed! Ready to merge.' || '### ❌ Some checks failed. Please review the results above.' }}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
