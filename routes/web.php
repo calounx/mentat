@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Webhooks\StripeWebhookController;
 use App\Livewire\Admin\AdminDashboard;
 use App\Livewire\Admin\OrganizationManagement;
+use App\Livewire\Admin\PendingApprovals;
 use App\Livewire\Admin\PlanManagement;
 use App\Livewire\Admin\SiteOverview;
 use App\Livewire\Admin\SystemSettings;
@@ -244,6 +245,9 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'super-admin'])->prefix('admin')->name('admin.')->group(function () {
     // Admin Dashboard
     Route::get('/', AdminDashboard::class)->name('dashboard');
+
+    // Pending Approvals
+    Route::get('/pending-approvals', PendingApprovals::class)->name('pending-approvals');
 
     // VPS Management
     Route::get('/vps', VpsManagement::class)->name('vps.index');
