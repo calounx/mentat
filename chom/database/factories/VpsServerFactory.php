@@ -30,6 +30,8 @@ class VpsServerFactory extends Factory
             'vpsmanager_version' => '2.0.0',
             'observability_configured' => true,
             'ssh_key_id' => null,
+            'ssh_user' => 'root',
+            'ssh_port' => 22,
             'last_health_check_at' => now(),
             'health_status' => 'healthy',
             'health_error' => null,

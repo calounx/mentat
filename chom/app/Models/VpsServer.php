@@ -23,12 +23,31 @@ class VpsServer extends Model
     protected $fillable = [
         'hostname',
         'ip_address',
+        'provider',
+        'provider_id',
+        'region',
+        'spec_cpu',
+        'spec_memory_mb',
+        'spec_disk_gb',
         'status',
-        'site_count',
+        'allocation_type',
+        'vpsmanager_version',
+        'observability_configured',
+        'ssh_key_id',
+        'ssh_user',
+        'ssh_port',
+        'last_health_check_at',
+        'health_status',
+        'health_error',
     ];
 
     protected $casts = [
-        'site_count' => 'integer',
+        'spec_cpu' => 'integer',
+        'spec_memory_mb' => 'integer',
+        'spec_disk_gb' => 'integer',
+        'ssh_port' => 'integer',
+        'observability_configured' => 'boolean',
+        'last_health_check_at' => 'datetime',
     ];
 
     /**
