@@ -18,39 +18,97 @@
 
     <!-- Flash Messages -->
     @if($success)
-        <div class="mb-4 bg-green-900/50 border-l-4 border-green-500 p-4 rounded">
-            <p class="text-sm text-green-200">{{ $success }}</p>
+        <div class="mb-6 rounded-md bg-green-800/50 border border-green-700 p-4">
+            <div class="flex">
+                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                </svg>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-green-300">{{ $success }}</p>
+                </div>
+            </div>
         </div>
     @endif
 
     @if($error)
-        <div class="mb-4 bg-red-900/50 border-l-4 border-red-500 p-4 rounded">
-            <p class="text-sm text-red-200">{{ $error }}</p>
+        <div class="mb-6 rounded-md bg-red-800/50 border border-red-700 p-4">
+            <div class="flex">
+                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                </svg>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-red-300">{{ $error }}</p>
+                </div>
+            </div>
         </div>
     @endif
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-8">
         <div class="bg-gray-800 border border-gray-700 rounded-lg shadow p-5">
-            <div class="text-sm font-medium text-gray-400">Total Organizations</div>
-            <div class="mt-1 text-2xl font-semibold text-white">{{ $stats['total'] }}</div>
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-400 truncate">Total Organizations</dt>
+                        <dd class="text-lg font-semibold text-white">{{ $stats['total'] }}</dd>
+                    </dl>
+                </div>
+            </div>
         </div>
         <div class="bg-gray-800 border border-gray-700 rounded-lg shadow p-5">
-            <div class="text-sm font-medium text-gray-400">Active</div>
-            <div class="mt-1 text-2xl font-semibold text-green-400">{{ $stats['active'] }}</div>
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-400 truncate">Active</dt>
+                        <dd class="text-lg font-semibold text-green-400">{{ $stats['active'] }}</dd>
+                    </dl>
+                </div>
+            </div>
         </div>
         <div class="bg-gray-800 border border-gray-700 rounded-lg shadow p-5">
-            <div class="text-sm font-medium text-gray-400">Suspended</div>
-            <div class="mt-1 text-2xl font-semibold text-yellow-400">{{ $stats['suspended'] }}</div>
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-8 w-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-400 truncate">Suspended</dt>
+                        <dd class="text-lg font-semibold text-yellow-400">{{ $stats['suspended'] }}</dd>
+                    </dl>
+                </div>
+            </div>
         </div>
         <div class="bg-gray-800 border border-gray-700 rounded-lg shadow p-5">
-            <div class="text-sm font-medium text-gray-400">Cancelled</div>
-            <div class="mt-1 text-2xl font-semibold text-red-400">{{ $stats['cancelled'] }}</div>
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-400 truncate">Cancelled</dt>
+                        <dd class="text-lg font-semibold text-red-400">{{ $stats['cancelled'] }}</dd>
+                    </dl>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Filters -->
-    <div class="bg-gray-800 rounded-lg shadow border border-gray-700 p-4 mb-6">
+    <div class="bg-gray-800 rounded-lg shadow border border-gray-700 p-6 mb-6">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div class="sm:col-span-2">
                 <label for="search" class="block text-sm font-medium text-gray-400">Search</label>
@@ -203,8 +261,15 @@
 
                         <div class="px-6 py-4 space-y-4">
                             @if($error)
-                                <div class="bg-red-900/50 border-l-4 border-red-500 p-4 rounded">
-                                    <p class="text-sm text-red-200">{{ $error }}</p>
+                                <div class="rounded-md bg-red-800/50 border border-red-700 p-4">
+                                    <div class="flex">
+                                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                        </svg>
+                                        <div class="ml-3">
+                                            <p class="text-sm font-medium text-red-300">{{ $error }}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             @endif
 
@@ -253,8 +318,15 @@
 
                         <div class="px-6 py-4 space-y-4">
                             @if($error)
-                                <div class="bg-red-900/50 border-l-4 border-red-500 p-4 rounded">
-                                    <p class="text-sm text-red-200">{{ $error }}</p>
+                                <div class="rounded-md bg-red-800/50 border border-red-700 p-4">
+                                    <div class="flex">
+                                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                        </svg>
+                                        <div class="ml-3">
+                                            <p class="text-sm font-medium text-red-300">{{ $error }}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             @endif
 
@@ -336,7 +408,7 @@
                                         <tbody class="divide-y divide-gray-600">
                                             @foreach($viewingOrganization->users as $user)
                                                 <tr>
-                                                    <td class="px-4 py-2 text-sm text-white">{{ $user->name }}</td>
+                                                    <td class="px-4 py-2 text-sm text-white">{{ $user->fullName() }}</td>
                                                     <td class="px-4 py-2 text-sm text-gray-300">{{ $user->email }}</td>
                                                     <td class="px-4 py-2">
                                                         <x-user-badge :role="$user->role" />
@@ -403,13 +475,20 @@
                         <h3 class="text-lg font-medium text-white mb-4">Delete Organization</h3>
 
                         @if(count($deleteBlockers) > 0)
-                            <div class="bg-red-900/50 border-l-4 border-red-500 p-4 rounded mb-4">
-                                <p class="text-sm text-red-200 font-medium mb-2">Cannot delete organization with:</p>
-                                <ul class="list-disc list-inside text-sm text-red-200 space-y-1">
-                                    @foreach($deleteBlockers as $blocker)
-                                        <li>{{ $blocker }}</li>
-                                    @endforeach
-                                </ul>
+                            <div class="rounded-md bg-red-800/50 border border-red-700 p-4 mb-4">
+                                <div class="flex">
+                                    <svg class="h-5 w-5 text-red-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                    </svg>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-red-300 mb-2">Cannot delete organization with:</p>
+                                        <ul class="list-disc list-inside text-sm text-red-300 space-y-1">
+                                            @foreach($deleteBlockers as $blocker)
+                                                <li>{{ $blocker }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
                             <p class="text-sm text-gray-300">Please remove all active resources before deleting this organization.</p>
                         @else

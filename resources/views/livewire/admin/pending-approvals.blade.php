@@ -2,7 +2,7 @@
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
         <!-- Header -->
         <div class="mb-8">
-            <h2 class="text-3xl font-bold text-white">Pending Approvals</h2>
+            <h2 class="text-2xl font-bold text-white">Pending Approvals</h2>
             <p class="mt-1 text-sm text-gray-400">Review and approve or reject new user registrations</p>
         </div>
 
@@ -131,12 +131,12 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                     <label for="search" class="block text-sm font-medium text-gray-300 mb-1">Search</label>
-                    <input type="text" id="search" wire:model.live.debounce.300ms="search" placeholder="Username, name, or email..." class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                    <input type="text" id="search" wire:model.live.debounce.300ms="search" placeholder="Username, name, or email..." class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                 </div>
 
                 <div>
                     <label for="filter" class="block text-sm font-medium text-gray-300 mb-1">Email Status</label>
-                    <select id="filter" wire:model.live="filter" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                    <select id="filter" wire:model.live="filter" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         <option value="all">All</option>
                         <option value="verified">Email Verified</option>
                         <option value="unverified">Email Unverified</option>
@@ -243,7 +243,7 @@
             </div>
 
             <!-- Pagination -->
-            <div class="px-6 py-4 border-t border-gray-700">
+            <div class="bg-gray-700 px-6 py-4 border-t border-gray-600">
                 {{ $pendingUsers->links() }}
             </div>
         </div>

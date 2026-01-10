@@ -6,8 +6,8 @@
             <p class="mt-1 text-sm text-gray-400">Manage all tenants and their subscriptions.</p>
         </div>
         <button wire:click="openCreateModal"
-                class="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                class="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
             Add Tenant
@@ -16,14 +16,28 @@
 
     <!-- Flash Messages -->
     @if($success)
-        <div class="mb-4 bg-green-900/50 border-l-4 border-green-500 p-4 rounded">
-            <p class="text-sm text-green-200">{{ $success }}</p>
+        <div class="mb-6 rounded-md bg-green-800/50 border border-green-700 p-4">
+            <div class="flex">
+                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                </svg>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-green-300">{{ $success }}</p>
+                </div>
+            </div>
         </div>
     @endif
 
     @if($error)
-        <div class="mb-4 bg-red-900/50 border-l-4 border-red-500 p-4 rounded">
-            <p class="text-sm text-red-200">{{ $error }}</p>
+        <div class="mb-6 rounded-md bg-red-800/50 border border-red-700 p-4">
+            <div class="flex">
+                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                </svg>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-red-300">{{ $error }}</p>
+                </div>
+            </div>
         </div>
     @endif
 
@@ -31,38 +45,93 @@
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-5 mb-8">
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
             <div class="p-5">
-                <div class="text-sm font-medium text-gray-400">Total Tenants</div>
-                <div class="mt-1 text-2xl font-semibold text-white">{{ $stats['total'] }}</div>
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-400 truncate">Total Tenants</dt>
+                            <dd class="text-lg font-semibold text-white">{{ $stats['total'] }}</dd>
+                        </dl>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
             <div class="p-5">
-                <div class="text-sm font-medium text-gray-400">Active</div>
-                <div class="mt-1 text-2xl font-semibold text-green-400">{{ $stats['active'] }}</div>
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-400 truncate">Active</dt>
+                            <dd class="text-lg font-semibold text-green-400">{{ $stats['active'] }}</dd>
+                        </dl>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700 {{ ($stats['pending_approval'] ?? 0) > 0 ? 'ring-2 ring-yellow-500' : '' }}">
             <div class="p-5">
-                <div class="text-sm font-medium text-gray-400">Pending Approval</div>
-                <div class="mt-1 text-2xl font-semibold {{ ($stats['pending_approval'] ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-400' }}">{{ $stats['pending_approval'] ?? 0 }}</div>
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 {{ ($stats['pending_approval'] ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-400' }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-400 truncate">Pending Approval</dt>
+                            <dd class="text-lg font-semibold {{ ($stats['pending_approval'] ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-400' }}">{{ $stats['pending_approval'] ?? 0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
             <div class="p-5">
-                <div class="text-sm font-medium text-gray-400">Pro Tier</div>
-                <div class="mt-1 text-2xl font-semibold text-purple-400">{{ $stats['by_tier']['pro'] ?? 0 }}</div>
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-400 truncate">Pro Tier</dt>
+                            <dd class="text-lg font-semibold text-purple-400">{{ $stats['by_tier']['pro'] ?? 0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-700">
             <div class="p-5">
-                <div class="text-sm font-medium text-gray-400">Enterprise</div>
-                <div class="mt-1 text-2xl font-semibold text-orange-400">{{ $stats['by_tier']['enterprise'] ?? 0 }}</div>
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-orange-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35m0 0a6.772 6.772 0 01-3.044 0" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-400 truncate">Enterprise</dt>
+                            <dd class="text-lg font-semibold text-orange-400">{{ $stats['by_tier']['enterprise'] ?? 0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Filters -->
-    <div class="bg-gray-800 rounded-lg shadow border border-gray-700 p-4 mb-6">
+    <div class="bg-gray-800 rounded-lg shadow border border-gray-700 p-6 mb-6">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <!-- Search -->
             <div>
