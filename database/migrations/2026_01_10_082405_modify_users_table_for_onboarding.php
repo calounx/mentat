@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            // Add new name fields
-            $table->string('username', 50)->unique()->after('id');
-            $table->string('first_name', 100)->after('username');
-            $table->string('last_name', 100)->after('first_name');
+            // Add new name fields (nullable initially, will be populated by next migration)
+            $table->string('username', 50)->nullable()->unique()->after('id');
+            $table->string('first_name', 100)->nullable()->after('username');
+            $table->string('last_name', 100)->nullable()->after('first_name');
 
             // Add approval workflow fields
             $table->enum('approval_status', ['pending', 'approved', 'rejected'])
