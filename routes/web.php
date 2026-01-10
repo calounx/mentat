@@ -15,6 +15,7 @@ use App\Livewire\Admin\VpsManagement;
 use App\Livewire\Backups\BackupList;
 use App\Livewire\Dashboard\Overview;
 use App\Livewire\Observability\MetricsDashboard;
+use App\Livewire\PlanSelection;
 use App\Livewire\Profile\ProfileSettings;
 use App\Livewire\Sites\SiteCreate;
 use App\Livewire\Sites\SiteList;
@@ -200,8 +201,13 @@ Route::post('/logout', function () {
     return redirect('/');
 })->name('logout');
 
-// Protected routes (require authentication)
-Route::middleware('auth')->group(function () {
+// Plan selection (requires auth and approval, but not plan-selected to avoid loop)
+Route::middleware(['auth', 'approved'])->group(function () {
+    Route::get('/plan-selection', PlanSelection::class)->name('plan-selection');
+});
+
+// Protected routes (require authentication, approval, and plan selection)
+Route::middleware(['auth', 'approved', 'plan-selected'])->group(function () {
     // Dashboard (super admin redirect handled in Overview component)
     Route::get('/dashboard', Overview::class)->name('dashboard');
 
