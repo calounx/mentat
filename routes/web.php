@@ -84,9 +84,19 @@ Route::middleware('guest')->group(function () {
         if (auth()->attempt($credentials, request()->boolean('remember'))) {
             request()->session()->regenerate();
 
-            // Super admins without tenant go to admin dashboard
             $user = auth()->user();
-            if ($user->isSuperAdmin() && !$user->currentTenant()) {
+
+            // Check email verification (except for super admins)
+            if (! $user->isSuperAdmin() && ! $user->hasVerifiedEmail()) {
+                auth()->logout();
+
+                return back()->withErrors([
+                    'email' => 'You must verify your email address before logging in. Please check your inbox.',
+                ])->onlyInput('email');
+            }
+
+            // Super admins without tenant go to admin dashboard
+            if ($user->isSuperAdmin() && ! $user->currentTenant()) {
                 return redirect()->intended(route('admin.dashboard'));
             }
 
