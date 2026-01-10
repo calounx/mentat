@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\CheckPlanSelection;
+use App\Http\Middleware\CheckUserApprovalStatus;
 use App\Http\Middleware\EnsureHasTenant;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -29,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureUserIsAdmin::class,
             'super-admin' => EnsureSuperAdmin::class,
             'has-tenant' => EnsureHasTenant::class,
+            'approved' => CheckUserApprovalStatus::class,
+            'plan-selected' => CheckPlanSelection::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
