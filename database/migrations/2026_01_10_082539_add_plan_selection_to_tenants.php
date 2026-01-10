@@ -18,10 +18,11 @@ return new class extends Migration
 
             // Add plan selected timestamp
             $table->timestamp('plan_selected_at')->nullable()->after('tier');
-
-            // Make tier nullable (will be set after plan selection)
-            $table->enum('tier', ['starter', 'pro', 'enterprise'])->nullable()->change();
         });
+
+        // Make tier nullable using raw SQL (PostgreSQL compatible)
+        DB::statement('ALTER TABLE tenants ALTER COLUMN tier DROP NOT NULL');
+        DB::statement('ALTER TABLE tenants ALTER COLUMN tier DROP DEFAULT');
 
         // Grandfather existing tenants: they already have plans selected
         DB::table('tenants')->update([
@@ -35,13 +36,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('tenants', function (Blueprint $table) {
-            // Restore tier as NOT NULL with default 'starter'
-            $table->enum('tier', ['starter', 'pro', 'enterprise'])
-                  ->default('starter')
-                  ->nullable(false)
-                  ->change();
+        // Restore tier as NOT NULL with default 'starter' using raw SQL
+        DB::statement("ALTER TABLE tenants ALTER COLUMN tier SET DEFAULT 'starter'");
+        DB::statement('ALTER TABLE tenants ALTER COLUMN tier SET NOT NULL');
 
+        Schema::table('tenants', function (Blueprint $table) {
             // Drop plan selection columns
             $table->dropColumn(['requires_plan_selection', 'plan_selected_at']);
         });
