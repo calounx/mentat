@@ -15,11 +15,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Change columns to NOT NULL using raw SQL
-        // (Laravel doesn't support changing nullable to not null via Blueprint)
-        DB::statement('ALTER TABLE users ALTER COLUMN username SET NOT NULL');
-        DB::statement('ALTER TABLE users ALTER COLUMN first_name SET NOT NULL');
-        DB::statement('ALTER TABLE users ALTER COLUMN last_name SET NOT NULL');
+        // Change columns to NOT NULL using Schema builder (handles SQLite vs PostgreSQL)
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('username')->nullable(false)->change();
+            $table->string('first_name')->nullable(false)->change();
+            $table->string('last_name')->nullable(false)->change();
+        });
     }
 
     /**
@@ -28,8 +29,10 @@ return new class extends Migration
     public function down(): void
     {
         // Revert columns to nullable
-        DB::statement('ALTER TABLE users ALTER COLUMN username DROP NOT NULL');
-        DB::statement('ALTER TABLE users ALTER COLUMN first_name DROP NOT NULL');
-        DB::statement('ALTER TABLE users ALTER COLUMN last_name DROP NOT NULL');
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('username')->nullable()->change();
+            $table->string('first_name')->nullable()->change();
+            $table->string('last_name')->nullable()->change();
+        });
     }
 };
