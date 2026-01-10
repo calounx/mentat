@@ -142,7 +142,7 @@ class Organization extends Model
         }
 
         // Cannot delete if has active subscription
-        if ($this->subscribed()) {
+        if ($this->subscription && $this->subscription->isActive()) {
             return false;
         }
 
@@ -166,7 +166,7 @@ class Organization extends Model
             $blockers[] = "{$activeSites} active site(s)";
         }
 
-        if ($this->subscribed()) {
+        if ($this->subscription && $this->subscription->isActive()) {
             $blockers[] = "Active subscription";
         }
 
