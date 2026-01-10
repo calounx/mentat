@@ -3,10 +3,13 @@
         <!-- Header -->
         <div class="mb-8 flex items-center justify-between">
             <div>
-                <h2 class="text-3xl font-bold text-white">User Management</h2>
+                <h2 class="text-2xl font-bold text-white">User Management</h2>
                 <p class="mt-1 text-sm text-gray-400">Manage all users across all organizations</p>
             </div>
-            <button wire:click="openCreateModal" class="inline-flex items-center px-4 py-2 bg-orange-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-orange-600 active:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition ease-in-out duration-150">
+            <button wire:click="openCreateModal" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
                 Create User
             </button>
         </div>
@@ -44,7 +47,7 @@
                 <div class="p-5">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
                         </div>
@@ -62,7 +65,7 @@
                 <div class="p-5">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                             </svg>
                         </div>
@@ -80,7 +83,7 @@
                 <div class="p-5">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                             </svg>
                         </div>
@@ -98,7 +101,7 @@
                 <div class="p-5">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                             </svg>
                         </div>
@@ -118,12 +121,12 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div>
                     <label for="search" class="block text-sm font-medium text-gray-300 mb-1">Search</label>
-                    <input type="text" id="search" wire:model.live.debounce.300ms="search" placeholder="Name or email..." class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                    <input type="text" id="search" wire:model.live.debounce.300ms="search" placeholder="Name or email..." class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                 </div>
 
                 <div>
                     <label for="organizationFilter" class="block text-sm font-medium text-gray-300 mb-1">Organization</label>
-                    <select id="organizationFilter" wire:model.live="organizationFilter" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                    <select id="organizationFilter" wire:model.live="organizationFilter" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         <option value="">All Organizations</option>
                         @foreach($organizations as $org)
                             <option value="{{ $org->id }}">{{ $org->name }}</option>
@@ -133,7 +136,7 @@
 
                 <div>
                     <label for="roleFilter" class="block text-sm font-medium text-gray-300 mb-1">Role</label>
-                    <select id="roleFilter" wire:model.live="roleFilter" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                    <select id="roleFilter" wire:model.live="roleFilter" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         <option value="">All Roles</option>
                         <option value="owner">Owner</option>
                         <option value="admin">Admin</option>
@@ -143,7 +146,7 @@
                 </div>
 
                 <div class="flex items-end">
-                    <button wire:click="clearFilters" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                    <button wire:click="clearFilters" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         Clear Filters
                     </button>
                 </div>
@@ -248,25 +251,25 @@
                         <div class="space-y-4">
                             <div>
                                 <label for="create-name" class="block text-sm font-medium text-gray-300 mb-1">Name</label>
-                                <input type="text" id="create-name" wire:model="formData.name" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <input type="text" id="create-name" wire:model="formData.name" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                 @error('formData.name') <p class="mt-1 text-sm text-red-400">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
                                 <label for="create-email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-                                <input type="email" id="create-email" wire:model="formData.email" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <input type="email" id="create-email" wire:model="formData.email" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                 @error('formData.email') <p class="mt-1 text-sm text-red-400">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
                                 <label for="create-password" class="block text-sm font-medium text-gray-300 mb-1">Password</label>
-                                <input type="password" id="create-password" wire:model="formData.password" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <input type="password" id="create-password" wire:model="formData.password" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                 @error('formData.password') <p class="mt-1 text-sm text-red-400">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
                                 <label for="create-organization" class="block text-sm font-medium text-gray-300 mb-1">Organization</label>
-                                <select id="create-organization" wire:model="formData.organization_id" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <select id="create-organization" wire:model="formData.organization_id" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                     <option value="">Select organization...</option>
                                     @foreach($organizations as $org)
                                         <option value="{{ $org->id }}">{{ $org->name }}</option>
@@ -277,7 +280,7 @@
 
                             <div>
                                 <label for="create-role" class="block text-sm font-medium text-gray-300 mb-1">Role</label>
-                                <select id="create-role" wire:model="formData.role" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <select id="create-role" wire:model="formData.role" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                     <option value="member">Member</option>
                                     <option value="admin">Admin</option>
                                     <option value="owner">Owner</option>
@@ -289,10 +292,10 @@
                     </div>
 
                     <div class="bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button wire:click="createUser" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-500 text-base font-medium text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        <button wire:click="createUser" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
                             Create User
                         </button>
-                        <button wire:click="closeCreateModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:w-auto sm:text-sm">
+                        <button wire:click="closeCreateModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm">
                             Cancel
                         </button>
                     </div>
@@ -321,19 +324,19 @@
                         <div class="space-y-4">
                             <div>
                                 <label for="edit-name" class="block text-sm font-medium text-gray-300 mb-1">Name</label>
-                                <input type="text" id="edit-name" wire:model="formData.name" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <input type="text" id="edit-name" wire:model="formData.name" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                 @error('formData.name') <p class="mt-1 text-sm text-red-400">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
                                 <label for="edit-email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-                                <input type="email" id="edit-email" wire:model="formData.email" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <input type="email" id="edit-email" wire:model="formData.email" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                 @error('formData.email') <p class="mt-1 text-sm text-red-400">{{ $message }}</p> @enderror
                             </div>
 
                             <div>
                                 <label for="edit-organization" class="block text-sm font-medium text-gray-300 mb-1">Organization</label>
-                                <select id="edit-organization" wire:model="formData.organization_id" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <select id="edit-organization" wire:model="formData.organization_id" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                     <option value="">Select organization...</option>
                                     @foreach($organizations as $org)
                                         <option value="{{ $org->id }}">{{ $org->name }}</option>
@@ -344,7 +347,7 @@
 
                             <div>
                                 <label for="edit-role" class="block text-sm font-medium text-gray-300 mb-1">Role</label>
-                                <select id="edit-role" wire:model="formData.role" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                <select id="edit-role" wire:model="formData.role" class="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                     <option value="member">Member</option>
                                     <option value="admin">Admin</option>
                                     <option value="owner">Owner</option>
@@ -356,10 +359,10 @@
                     </div>
 
                     <div class="bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button wire:click="saveUser" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-500 text-base font-medium text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        <button wire:click="saveUser" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
                             Save Changes
                         </button>
-                        <button wire:click="closeEditModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:w-auto sm:text-sm">
+                        <button wire:click="closeEditModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm">
                             Cancel
                         </button>
                     </div>
@@ -388,7 +391,7 @@
                         <!-- User Info -->
                         <div class="mb-6">
                             <div class="flex items-center mb-4">
-                                <div class="h-16 w-16 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                                <div class="h-16 w-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
                                     <span class="text-white font-bold text-xl">{{ strtoupper(substr($viewingUser->name, 0, 1)) }}</span>
                                 </div>
                                 <div class="ml-4">
@@ -440,7 +443,7 @@
                     </div>
 
                     <div class="bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button wire:click="closeDetailsModal" type="button" class="w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:w-auto sm:text-sm">
+                        <button wire:click="closeDetailsModal" type="button" class="w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm">
                             Close
                         </button>
                     </div>
@@ -477,7 +480,7 @@
                         <button wire:click="deleteUser" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
                             Delete
                         </button>
-                        <button wire:click="cancelDelete" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        <button wire:click="cancelDelete" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                             Cancel
                         </button>
                     </div>
