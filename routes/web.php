@@ -51,7 +51,7 @@ Route::get('/health', function () {
 })->name('health');
 
 // Prometheus Metrics Endpoint (must be public for Prometheus scraping)
-Route::get('/metrics', [App\Http\Controllers\MetricsController::class, 'index'])
+Route::get('/prometheus/metrics', [App\Http\Controllers\MetricsController::class, 'index'])
     ->name('prometheus.metrics');
 
 // Stripe Webhooks (must be before CSRF middleware)
