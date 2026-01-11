@@ -674,11 +674,16 @@ class MetricsCollector
      */
     private function parseMetricKey(string $key): ?array
     {
-        if (!str_starts_with($key, self::REDIS_PREFIX)) {
+        // Handle Laravel Redis connection prefix (e.g., "chom-database-")
+        // Redis::keys() returns full keys including the connection prefix
+        $redisPrefix = config('database.redis.options.prefix', '');
+        $fullPrefix = $redisPrefix . self::REDIS_PREFIX;
+
+        if (!str_starts_with($key, $fullPrefix)) {
             return null;
         }
 
-        $key = substr($key, strlen(self::REDIS_PREFIX));
+        $key = substr($key, strlen($fullPrefix));
 
         // Extract type suffix
         $type = 'counter';
