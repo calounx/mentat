@@ -5,6 +5,7 @@ use App\Http\Middleware\CheckUserApprovalStatus;
 use App\Http\Middleware\EnsureHasTenant;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\PrometheusMetricsMiddleware;
 use App\Http\Middleware\RequestCorrelationId;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Add correlation ID tracking to all requests
         $middleware->append(RequestCorrelationId::class);
+
+        // Add Prometheus metrics collection to all requests
+        $middleware->append(PrometheusMetricsMiddleware::class);
 
         // Exclude Stripe webhook from CSRF verification
         $middleware->validateCsrfTokens(except: [
