@@ -636,14 +636,19 @@ class MetricsCollector
     private function groupMetricsByName(array $keys): array
     {
         $metrics = [];
+        // Redis::keys() returns full keys with Laravel prefix,
+        // but Redis::get() adds the prefix automatically, so we need to strip it
+        $redisPrefix = config('database.redis.options.prefix', '');
 
         foreach ($keys as $key) {
-            $value = Redis::get($key);
+            // Strip Laravel prefix before calling get()
+            $keyWithoutPrefix = $redisPrefix ? substr($key, strlen($redisPrefix)) : $key;
+            $value = Redis::get($keyWithoutPrefix);
             if ($value === null) {
                 continue;
             }
 
-            // Parse metric key
+            // Parse metric key (expects full key with prefix)
             $parsed = $this->parseMetricKey($key);
             if ($parsed === null) {
                 continue;
